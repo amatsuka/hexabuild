@@ -45,7 +45,18 @@ namespace Game.Tests.EditMode
         [Test]
         public void Triangles_FaceTheCamera_LookingAlongPositiveZ()
         {
-            var mesh = HexMeshBuilder.Shared;
+            AssertFacesCamera(HexMeshBuilder.Shared);
+        }
+
+        [Test]
+        public void DecorShapes_FaceTheCameraToo()
+        {
+            AssertFacesCamera(ShapeMeshes.Triangle);
+            AssertFacesCamera(ShapeMeshes.Bar);
+        }
+
+        static void AssertFacesCamera(Mesh mesh)
+        {
             var vertices = mesh.vertices;
             var triangles = mesh.triangles;
 
@@ -56,7 +67,8 @@ namespace Game.Tests.EditMode
                 var c = vertices[triangles[i + 2]];
                 var signedArea = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
 
-                Assert.Less(signedArea, 0f, $"треугольник {i / 3} обходится против часовой и будет срезан backface culling");
+                Assert.Less(signedArea, 0f,
+                    $"{mesh.name}: треугольник {i / 3} обходится против часовой и будет срезан backface culling");
             }
         }
     }

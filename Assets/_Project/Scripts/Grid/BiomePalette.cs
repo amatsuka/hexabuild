@@ -1,0 +1,57 @@
+using System;
+using UnityEngine;
+
+namespace Game.Grid
+{
+    /// <summary>Цвета ландшафта. Живёт на префабе плитки как `[SerializeField]`, не в `GameConfig`.</summary>
+    [Serializable]
+    public sealed class BiomePalette
+    {
+        [SerializeField] Color water = new(0.24f, 0.44f, 0.62f);
+        [SerializeField] Color sand = new(0.85f, 0.78f, 0.55f);
+        [SerializeField] Color meadow = new(0.55f, 0.70f, 0.40f);
+        [SerializeField] Color forest = new(0.35f, 0.56f, 0.34f);
+        [SerializeField] Color rocks = new(0.55f, 0.54f, 0.52f);
+
+        [Header("Декор")]
+        [SerializeField] Color waterDecor = new(0.45f, 0.65f, 0.82f);
+        [SerializeField] Color sandDecor = new(0.72f, 0.63f, 0.40f);
+        [SerializeField] Color meadowDecor = new(0.47f, 0.62f, 0.33f);
+        [SerializeField] Color forestDecor = new(0.18f, 0.34f, 0.20f);
+        [SerializeField] Color rocksDecor = new(0.38f, 0.37f, 0.36f);
+
+        public Color Ground(BiomeType biome)
+        {
+            switch (biome)
+            {
+                case BiomeType.Water:
+                    return water;
+                case BiomeType.Sand:
+                    return sand;
+                case BiomeType.Forest:
+                    return forest;
+                case BiomeType.Rocks:
+                    return rocks;
+                default:
+                    return meadow;
+            }
+        }
+
+        public Color Decor(BiomeType biome)
+        {
+            switch (biome)
+            {
+                case BiomeType.Water:
+                    return waterDecor;
+                case BiomeType.Sand:
+                    return sandDecor;
+                case BiomeType.Forest:
+                    return forestDecor;
+                case BiomeType.Rocks:
+                    return rocksDecor;
+                default:
+                    return meadowDecor;
+            }
+        }
+    }
+}

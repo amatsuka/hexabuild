@@ -11,11 +11,18 @@ namespace Game.Grid
 
         int nextDeposit;
 
-        public TileData(HexCoord coord, bool isMetropolis, IReadOnlyList<Deposit> deposits = null)
+        public TileData(
+            HexCoord coord,
+            bool isMetropolis,
+            IReadOnlyList<Deposit> deposits = null,
+            BiomeType biome = BiomeType.Meadow,
+            float shade = 0f)
         {
             Coord = coord;
             IsMetropolis = isMetropolis;
             Deposits = deposits ?? NoDeposits;
+            Biome = biome;
+            Shade = shade;
         }
 
         public HexCoord Coord { get; }
@@ -23,6 +30,12 @@ namespace Game.Grid
         public bool IsMetropolis { get; }
 
         public IReadOnlyList<Deposit> Deposits { get; }
+
+        /// <summary>Ландшафт плитки: только внешний вид.</summary>
+        public BiomeType Biome { get; }
+
+        /// <summary>Отклонение тона от −1 до 1, чтобы соседи одного биома не сливались в пятно.</summary>
+        public float Shade { get; }
 
         public TileState State { get; private set; } = TileState.Hidden;
 

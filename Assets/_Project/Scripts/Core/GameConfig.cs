@@ -19,6 +19,7 @@ namespace Game.Core
         [SerializeField] float singleDepositWeight = 45f;
         [SerializeField] float twoDepositsWeight = 20f;
         [SerializeField] float threeDepositsWeight = 5f;
+        [SerializeField] float biomeNoiseScale = 0.18f;
         [SerializeField] int minDepositReserve = 8;
         [SerializeField] int maxDepositReserve = 20;
 
@@ -63,6 +64,7 @@ namespace Game.Core
             twoDepositsWeight,
             threeDepositsWeight,
             minDepositReserve,
-            maxDepositReserve);
+            maxDepositReserve,
+            biomeNoiseScale);
     }
 }

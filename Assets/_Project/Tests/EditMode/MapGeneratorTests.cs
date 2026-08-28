@@ -100,6 +100,61 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void EveryTile_GetsALandscape()
+        {
+            var biomes = new HashSet<BiomeType>();
+
+            foreach (var tile in MapGenerator.Generate(Settings(5)).Tiles.Values)
+            {
+                biomes.Add(tile.Biome);
+                Assert.GreaterOrEqual(tile.Shade, -1f);
+                Assert.LessOrEqual(tile.Shade, 1f);
+            }
+
+            Assert.Greater(biomes.Count, 1, "поле из одного биома выглядит однотонным пятном");
+        }
+
+        [Test]
+        public void Landscape_IsCoherent_NeighboursShareTheBiomeMoreOftenThanNot()
+        {
+            var map = MapGenerator.Generate(Settings(9));
+            var pairs = 0;
+            var same = 0;
+
+            foreach (var tile in map.Tiles.Values)
+            foreach (var neighbor in map.NeighborsOf(tile.Coord))
+            {
+                pairs++;
+                if (neighbor.Biome == tile.Biome)
+                    same++;
+            }
+
+            Assert.Greater(same / (float)pairs, 0.5f, "шум должен давать пятна, а не мозаику вразнобой");
+        }
+
+        [Test]
+        public void Landscape_FollowsTheSeed()
+        {
+            var first = MapGenerator.Generate(Settings(3));
+            var second = MapGenerator.Generate(Settings(3));
+            var other = MapGenerator.Generate(Settings(4));
+
+            var sameSeedDiffers = 0;
+            var otherSeedDiffers = 0;
+            foreach (var coord in HexMap.CoordsInFlare(Rows))
+            {
+                first.TryGetTile(coord, out var a);
+                second.TryGetTile(coord, out var b);
+                other.TryGetTile(coord, out var c);
+                if (a.Biome != b.Biome) sameSeedDiffers++;
+                if (a.Biome != c.Biome) otherSeedDiffers++;
+            }
+
+            Assert.AreEqual(0, sameSeedDiffers, "один и тот же seed должен давать тот же ландшафт");
+            Assert.Greater(otherSeedDiffers, 0, "разные seed должны давать разный ландшафт");
+        }
+
+        [Test]
         public void SameSeed_ProducesSameMap()
         {
             Assert.AreEqual(Signature(MapGenerator.Generate(Settings(42))), Signature(MapGenerator.Generate(Settings(42))));
@@ -121,7 +176,7 @@ namespace Game.Tests.EditMode
             foreach (var coord in HexMap.CoordsInFlare(Rows))
             {
                 map.TryGetTile(coord, out var tile);
-                builder.Append(coord).Append(':');
+                builder.Append(coord).Append(':').Append(tile.Biome).Append(':');
                 foreach (var deposit in tile.Deposits)
                     builder.Append(deposit.Type).Append(deposit.Reserve).Append(',');
                 builder.Append('|');

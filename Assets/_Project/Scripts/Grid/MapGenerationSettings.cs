@@ -11,7 +11,8 @@ namespace Game.Grid
             float twoDepositsWeight,
             float threeDepositsWeight,
             int minReserve,
-            int maxReserve)
+            int maxReserve,
+            float biomeNoiseScale = 0.18f)
         {
             Rows = rows;
             Seed = seed;
@@ -21,6 +22,7 @@ namespace Game.Grid
             ThreeDepositsWeight = threeDepositsWeight;
             MinReserve = minReserve;
             MaxReserve = maxReserve;
+            BiomeNoiseScale = biomeNoiseScale;
         }
 
         public int Rows { get; }
@@ -39,5 +41,8 @@ namespace Game.Grid
         public int MinReserve { get; }
 
         public int MaxReserve { get; }
+
+        /// <summary>Частота шума ландшафта: меньше — крупнее пятна биомов.</summary>
+        public float BiomeNoiseScale { get; }
     }
 }
