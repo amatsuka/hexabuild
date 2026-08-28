@@ -8,20 +8,11 @@ namespace Game.Grid
     {
         readonly Dictionary<HexCoord, TileData> tiles = new();
 
-        public HexMap(int radius)
+        public HexMap(int radius, IEnumerable<TileData> tiles)
         {
             Radius = radius;
-
-            for (var q = -radius; q <= radius; q++)
-            {
-                var minR = Mathf.Max(-radius, -q - radius);
-                var maxR = Mathf.Min(radius, -q + radius);
-                for (var r = minR; r <= maxR; r++)
-                {
-                    var coord = new HexCoord(q, r);
-                    tiles.Add(coord, new TileData(coord, coord == HexCoord.Zero));
-                }
-            }
+            foreach (var tile in tiles)
+                this.tiles.Add(tile.Coord, tile);
         }
 
         public int Radius { get; }
@@ -32,8 +23,28 @@ namespace Game.Grid
 
         public TileData Metropolis => tiles[HexCoord.Zero];
 
+        /// <summary>Координаты поля-гекса радиуса <paramref name="radius"/> вокруг центра.</summary>
+        public static IEnumerable<HexCoord> CoordsInRadius(int radius)
+        {
+            for (var q = -radius; q <= radius; q++)
+            {
+                var minR = Mathf.Max(-radius, -q - radius);
+                var maxR = Mathf.Min(radius, -q + radius);
+                for (var r = minR; r <= maxR; r++)
+                    yield return new HexCoord(q, r);
+            }
+        }
+
         public bool Contains(HexCoord coord) => tiles.ContainsKey(coord);
 
         public bool TryGetTile(HexCoord coord, out TileData tile) => tiles.TryGetValue(coord, out tile);
+
+        /// <summary>Существующие на поле соседи плитки.</summary>
+        public IEnumerable<TileData> NeighborsOf(HexCoord coord)
+        {
+            foreach (var neighbor in coord.Neighbors())
+                if (tiles.TryGetValue(neighbor, out var tile))
+                    yield return tile;
+        }
     }
 }

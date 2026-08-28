@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 868a10e73af6f4d4f9aaad9847fa2569, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game.Runtime::Game.Core.GameSession
-  fieldRadius: 6
+  config: {fileID: 11400000, guid: 4a9b81eec4b7d45dda885b961574386f, type: 2}
   tilePrefab: {fileID: 4650383412994097573, guid: 215bfe1e9cbb047f68e2cb0fde07caa8, type: 3}
   tilesRoot: {fileID: 1314927477}
   input: {fileID: 127816812}
