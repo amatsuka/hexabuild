@@ -32,3 +32,6 @@
 # Crash reports
 sysinfo.txt
 crashlytics-build.properties
+
+# Артефакты Burst от сборок
+/Data/
