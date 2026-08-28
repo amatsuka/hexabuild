@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Economy;
 using Game.Storage;
 using NUnit.Framework;
@@ -134,6 +135,31 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(storage.TryRemoveAt(0));
             Assert.IsFalse(storage.TryRemoveAt(-1));
             Assert.IsFalse(storage.TryRemoveAt(99));
+        }
+
+        [Test]
+        public void TryRemove_CollectsTheCellsItEmptied()
+        {
+            var storage = new StorageGrid(25);
+            storage.TryStore(ResourceType.Stone);
+            Fill(storage, ResourceType.Wood, 2);
+            storage.TryStore(ResourceType.Stone);
+            var removed = new List<int>();
+
+            Assert.IsTrue(storage.TryRemove(ResourceType.Wood, 2, removed));
+
+            Assert.AreEqual(new[] { 1, 2 }, removed);
+        }
+
+        [Test]
+        public void TryRemove_WhenRefused_CollectsNothing()
+        {
+            var storage = new StorageGrid(25);
+            storage.TryStore(ResourceType.Wood);
+            var removed = new List<int>();
+
+            Assert.IsFalse(storage.TryRemove(ResourceType.Wood, 2, removed));
+            Assert.IsEmpty(removed);
         }
 
         [Test]

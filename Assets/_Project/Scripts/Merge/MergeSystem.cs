@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Game.Economy;
 using Game.Storage;
 
@@ -21,7 +22,7 @@ namespace Game.Merge
         /// <summary>Слияние не состоялось: текст для HUD.</summary>
         public event Action<string> Refused;
 
-        public event Action<MergeOutcome> Merged;
+        public event Action<MergeReport> Merged;
 
         /// <summary>Крафтовый ресурс превращён в очки.</summary>
         public event Action<ResourceType, int> Converted;
@@ -40,11 +41,15 @@ namespace Game.Merge
                 return false;
             }
 
-            storage.TryRemove(outcome.Source, outcome.Consumed);
-            for (var i = 0; i < outcome.Produced; i++)
-                storage.TryStore(outcome.Result);
+            var consumedCells = new List<int>(outcome.Consumed);
+            storage.TryRemove(outcome.Source, outcome.Consumed, consumedCells);
 
-            Merged?.Invoke(outcome);
+            var resultCells = new List<int>(outcome.Produced);
+            for (var i = 0; i < outcome.Produced; i++)
+                if (storage.TryStore(outcome.Result, out var cell))
+                    resultCells.Add(cell);
+
+            Merged?.Invoke(new MergeReport(outcome, consumedCells, resultCells));
             return true;
         }
 

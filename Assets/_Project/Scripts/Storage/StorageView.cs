@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using Game.Economy;
 using UnityEngine;
 using UnityEngine.UI;
@@ -18,6 +20,12 @@ namespace Game.Storage
         [SerializeField] float spacing = 6f;
         [SerializeField] float padding = 10f;
 
+        [Header("Анимация слияния")]
+        [SerializeField] float flySeconds = 0.28f;
+        [SerializeField] float popSeconds = 0.18f;
+        [SerializeField] float popScale = 1.3f;
+        [SerializeField] float flyEndScale = 0.45f;
+
         Image panel;
         Image[] cells;
         StorageGrid grid;
@@ -33,11 +41,86 @@ namespace Game.Storage
             Refresh();
         }
 
+        /// <summary>
+        /// Слияние: копии списанных ресурсов слетаются в клетку результата, затем сам результат
+        /// выскакивает масштабом. Чистый визуал — склад к этому моменту уже пересчитан.
+        /// </summary>
+        public void PlayMerge(IReadOnlyList<int> consumedCells, IReadOnlyList<int> resultCells, ResourceType movedType)
+        {
+            if (resultCells.Count == 0 || !isActiveAndEnabled)
+                return;
+
+            StartCoroutine(AnimateMerge(consumedCells, resultCells, movedType));
+        }
+
+        IEnumerator AnimateMerge(IReadOnlyList<int> consumedCells, IReadOnlyList<int> resultCells, ResourceType movedType)
+        {
+            var target = cells[resultCells[0]].rectTransform.position;
+            var flying = new List<RectTransform>(consumedCells.Count);
+            var origins = new List<Vector3>(consumedCells.Count);
+            foreach (var index in consumedCells)
+            {
+                var origin = cells[index].rectTransform.position;
+                origins.Add(origin);
+                flying.Add(CreateFlyingCopy(origin, movedType));
+            }
+
+            foreach (var index in resultCells)
+                cells[index].rectTransform.localScale = Vector3.zero;
+
+            for (var elapsed = 0f; elapsed < flySeconds; elapsed += Time.deltaTime)
+            {
+                var progress = Mathf.SmoothStep(0f, 1f, elapsed / flySeconds);
+                for (var i = 0; i < flying.Count; i++)
+                {
+                    flying[i].position = Vector3.Lerp(origins[i], target, progress);
+                    flying[i].localScale = Vector3.one * Mathf.Lerp(1f, flyEndScale, progress);
+                }
+
+                yield return null;
+            }
+
+            foreach (var copy in flying)
+                Destroy(copy.gameObject);
+
+            for (var elapsed = 0f; elapsed < popSeconds; elapsed += Time.deltaTime)
+            {
+                var progress = elapsed / popSeconds;
+                var scale = progress < 0.5f
+                    ? Mathf.Lerp(0f, popScale, progress * 2f)
+                    : Mathf.Lerp(popScale, 1f, (progress - 0.5f) * 2f);
+
+                foreach (var index in resultCells)
+                    cells[index].rectTransform.localScale = Vector3.one * scale;
+
+                yield return null;
+            }
+
+            foreach (var index in resultCells)
+                cells[index].rectTransform.localScale = Vector3.one;
+        }
+
+        /// <summary>
+        /// Летящая копия висит на канвасе, а не на панели: у панели `GridLayoutGroup`, он бы
+        /// растащил её обратно по клеткам сетки.
+        /// </summary>
+        RectTransform CreateFlyingCopy(Vector3 position, ResourceType type)
+        {
+            var copy = new GameObject("MergeFly", typeof(RectTransform), typeof(Image));
+            var rect = (RectTransform)copy.transform;
+            rect.SetParent(transform.parent, false);
+            rect.SetAsLastSibling();
+            rect.sizeDelta = Vector2.one * cellSize;
+            rect.position = position;
+            copy.GetComponent<Image>().color = palette.Get(type);
+            return rect;
+        }
+
         /// <summary>Клетка склада под экранной точкой: панель сама разбирает клики по себе.</summary>
         public bool TryGetCellIndex(Vector2 screenPosition, out int index)
         {
             for (index = 0; index < cells.Length; index++)
-                if (RectTransformUtility.RectangleContainsScreenPoint((RectTransform)cells[index].transform, screenPosition))
+                if (RectTransformUtility.RectangleContainsScreenPoint(cells[index].rectTransform, screenPosition))
                     return true;
 
             index = -1;
@@ -47,7 +130,7 @@ namespace Game.Storage
         /// <summary>Мировая точка клетки: туда прыгает доехавший до Метрополии ресурс.</summary>
         public Vector3 CellWorldPoint(int index, Camera worldCamera)
         {
-            var screenPoint = RectTransformUtility.WorldToScreenPoint(null, cells[index].transform.position);
+            var screenPoint = RectTransformUtility.WorldToScreenPoint(null, cells[index].rectTransform.position);
             var world = worldCamera.ScreenToWorldPoint(
                 new Vector3(screenPoint.x, screenPoint.y, -worldCamera.transform.position.z));
             return new Vector3(world.x, world.y, 0f);

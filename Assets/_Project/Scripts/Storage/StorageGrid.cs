@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Game.Economy;
 
 namespace Game.Storage
@@ -71,7 +72,10 @@ namespace Game.Storage
             return count;
         }
 
-        public bool TryRemove(ResourceType type, int amount)
+        public bool TryRemove(ResourceType type, int amount) => TryRemove(type, amount, null);
+
+        /// <summary>Убирает ресурсы и, если попросили, складывает номера опустевших клеток в список.</summary>
+        public bool TryRemove(ResourceType type, int amount, List<int> removedCells)
         {
             if (CountOf(type) < amount)
                 return false;
@@ -85,6 +89,7 @@ namespace Game.Storage
                 cells[i] = null;
                 Count--;
                 left--;
+                removedCells?.Add(i);
             }
 
             Changed?.Invoke();

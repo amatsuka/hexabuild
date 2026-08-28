@@ -171,14 +171,42 @@ namespace Game.Tests.EditMode
         public void Merged_ReportsWhatWasProduced()
         {
             Fill(ResourceType.Ore, 5);
-            MergeOutcome reported = default;
-            merges.Merged += outcome => reported = outcome;
+            MergeReport reported = default;
+            merges.Merged += report => reported = report;
 
             merges.TryMerge(ResourceType.Ore);
 
-            Assert.AreEqual(ResourceType.Ore, reported.Source);
-            Assert.AreEqual(ResourceType.Ingot, reported.Result);
-            Assert.AreEqual(2, reported.Produced);
+            Assert.AreEqual(ResourceType.Ore, reported.Outcome.Source);
+            Assert.AreEqual(ResourceType.Ingot, reported.Outcome.Result);
+            Assert.AreEqual(2, reported.Outcome.Produced);
+        }
+
+        [Test]
+        public void Merged_ReportsTheCellsTheAnimationNeeds()
+        {
+            Fill(ResourceType.Wood, 5);
+            MergeReport reported = default;
+            merges.Merged += report => reported = report;
+
+            merges.TryMerge(ResourceType.Wood);
+
+            Assert.AreEqual(new[] { 0, 1, 2, 3, 4 }, reported.ConsumedCells);
+            Assert.AreEqual(new[] { 0, 1 }, reported.ResultCells);
+        }
+
+        [Test]
+        public void Merged_ReportsScatteredCellsInStorageOrder()
+        {
+            storage.TryStore(ResourceType.Gravel);
+            Fill(ResourceType.Wood, 3);
+            storage.TryStore(ResourceType.Gravel);
+            MergeReport reported = default;
+            merges.Merged += report => reported = report;
+
+            merges.TryMerge(ResourceType.Wood);
+
+            Assert.AreEqual(new[] { 1, 2, 3 }, reported.ConsumedCells, "списываются клетки слева направо");
+            Assert.AreEqual(new[] { 1 }, reported.ResultCells, "крафт ложится в первую освободившуюся");
         }
     }
 }

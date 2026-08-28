@@ -67,6 +67,7 @@ namespace Game.Core
             deliveries.Started += OnDeliveryStarted;
             deliveries.Arrived += OnDeliveryArrived;
             merges.Refused += hudView.ShowMessage;
+            merges.Merged += OnMerged;
         }
 
         void OnDisable()
@@ -82,6 +83,7 @@ namespace Game.Core
             deliveries.Started -= OnDeliveryStarted;
             deliveries.Arrived -= OnDeliveryArrived;
             merges.Refused -= hudView.ShowMessage;
+            merges.Merged -= OnMerged;
         }
 
         void Start()
@@ -204,6 +206,9 @@ namespace Game.Core
             mover.Bind(delivery);
             movers.Add(delivery, mover);
         }
+
+        void OnMerged(MergeReport report) =>
+            storageView.PlayMerge(report.ConsumedCells, report.ResultCells, report.Outcome.Source);
 
         /// <summary>Доехавший ресурс перепрыгивает с Метрополии в свою клетку склада.</summary>
         void OnDeliveryArrived(Delivery delivery)
