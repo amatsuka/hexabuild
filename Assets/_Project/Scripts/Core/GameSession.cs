@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Game.Economy;
 using Game.Grid;
+using Game.Roads;
 using Game.UI;
 using UnityEngine;
 
@@ -11,11 +12,15 @@ namespace Game.Core
     {
         [SerializeField] GameConfig config;
         [SerializeField] TileView tilePrefab;
+        [SerializeField] RoadView roadPrefab;
         [SerializeField] Transform tilesRoot;
         [SerializeField] GameInput input;
         [SerializeField] CameraRig cameraRig;
 
+        const float RoadDepth = -0.06f;
+
         readonly Dictionary<HexCoord, TileView> views = new();
+        readonly Dictionary<HexCoord, RoadView> roadViews = new();
 
         GameState state;
 
@@ -23,7 +28,7 @@ namespace Game.Core
         {
             var map = MapGenerator.Generate(config.MapGenerationSettings);
             var wallet = new Wallet(config.StartingPoints, config.StartingGravel);
-            state = new GameState(map, wallet, config.TileOpenCost);
+            state = new GameState(map, wallet, config.TileOpenCost, config.RoadCost);
 
             SpawnTiles(map);
             cameraRig.SetFieldHalfExtents(FieldHalfExtents(map));
@@ -36,6 +41,7 @@ namespace Game.Core
             input.Zoomed += cameraRig.Zoom;
             state.TileChanged += OnTileChanged;
             state.ActionRefused += OnActionRefused;
+            state.Roads.Changed += OnRoadsChanged;
         }
 
         void OnDisable()
@@ -45,6 +51,7 @@ namespace Game.Core
             input.Zoomed -= cameraRig.Zoom;
             state.TileChanged -= OnTileChanged;
             state.ActionRefused -= OnActionRefused;
+            state.Roads.Changed -= OnRoadsChanged;
         }
 
         void Start() => state.Begin();
@@ -73,12 +80,42 @@ namespace Game.Core
             return halfExtents;
         }
 
-        void OnTileClicked(HexCoord coord) => state.TryRevealTile(coord);
+        void OnTileClicked(HexCoord coord) => state.HandleTileClick(coord);
 
         void OnTileChanged(TileData tile)
         {
             if (views.TryGetValue(tile.Coord, out var view))
                 view.Apply(tile);
+        }
+
+        /// <summary>Дороги перерисовываются целиком: их немного, а связность меняется всей цепочкой.</summary>
+        void OnRoadsChanged()
+        {
+            foreach (var coord in state.Roads.Roads)
+            {
+                if (!roadViews.TryGetValue(coord, out var roadView))
+                {
+                    roadView = Instantiate(roadPrefab, views[coord].transform);
+                    roadView.transform.localPosition = new Vector3(0f, 0f, RoadDepth);
+                    roadViews.Add(coord, roadView);
+                }
+
+                roadView.Show(state.Roads.IsConnected(coord), LinkMask(coord));
+            }
+        }
+
+        /// <summary>Биты направлений, в которых есть соседняя дорога или сама Метрополия.</summary>
+        int LinkMask(HexCoord coord)
+        {
+            var mask = 0;
+            for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+            {
+                var neighbor = coord.Neighbor(direction);
+                if (neighbor == HexCoord.Zero || state.Roads.HasRoad(neighbor))
+                    mask |= 1 << direction;
+            }
+
+            return mask;
         }
 
         // HUD появится в M4, до тех пор отказ виден в Console.

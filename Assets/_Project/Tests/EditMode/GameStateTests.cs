@@ -9,11 +9,12 @@ namespace Game.Tests.EditMode
     public sealed class GameStateTests
     {
         const int OpenCost = 20;
+        const int RoadCost = 1;
 
-        static GameState NewGame(int points = 40)
+        static GameState NewGame(int points = 40, int gravel = 3)
         {
             var map = MapGenerator.Generate(new MapGenerationSettings(6, 11, 30f, 45f, 20f, 5f, 8, 20));
-            return new GameState(map, new Wallet(points, 3), OpenCost);
+            return new GameState(map, new Wallet(points, gravel), OpenCost, RoadCost);
         }
 
         [Test]
@@ -105,6 +106,88 @@ namespace Game.Tests.EditMode
 
             Assert.IsFalse(state.TryRevealTile(new HexCoord(9, 9)));
             Assert.AreEqual(40, state.Wallet.Points);
+        }
+
+        [Test]
+        public void TryBuildRoad_OnRevealedTile_SpendsGravelAndConnectsIt()
+        {
+            var state = NewGame();
+            state.Begin();
+            state.TryRevealTile(new HexCoord(1, 0));
+
+            Assert.IsTrue(state.TryBuildRoad(new HexCoord(1, 0)));
+
+            Assert.IsTrue(state.Roads.HasRoad(new HexCoord(1, 0)));
+            Assert.IsTrue(state.Roads.IsConnected(new HexCoord(1, 0)));
+            Assert.AreEqual(2, state.Wallet.GetMaterial(ResourceType.Gravel));
+        }
+
+        [Test]
+        public void TryBuildRoad_OnUnopenedTile_IsRefused()
+        {
+            var state = NewGame();
+            state.Begin();
+            var refusals = new List<string>();
+            state.ActionRefused += refusals.Add;
+
+            Assert.IsFalse(state.TryBuildRoad(new HexCoord(1, 0)));
+
+            Assert.IsFalse(state.Roads.HasRoad(new HexCoord(1, 0)));
+            Assert.AreEqual(3, state.Wallet.GetMaterial(ResourceType.Gravel));
+            Assert.AreEqual(1, refusals.Count);
+        }
+
+        [Test]
+        public void TryBuildRoad_WithoutGravel_IsRefusedAndBuildsNothing()
+        {
+            var state = NewGame(gravel: 0);
+            state.Begin();
+            state.TryRevealTile(new HexCoord(1, 0));
+            var refusals = new List<string>();
+            state.ActionRefused += refusals.Add;
+
+            Assert.IsFalse(state.TryBuildRoad(new HexCoord(1, 0)));
+
+            Assert.IsFalse(state.Roads.HasRoad(new HexCoord(1, 0)));
+            Assert.AreEqual(1, refusals.Count);
+        }
+
+        [Test]
+        public void TryBuildRoad_TwiceOnTheSameTile_SpendsGravelOnlyOnce()
+        {
+            var state = NewGame();
+            state.Begin();
+            state.TryRevealTile(new HexCoord(1, 0));
+            state.TryBuildRoad(new HexCoord(1, 0));
+
+            Assert.IsFalse(state.TryBuildRoad(new HexCoord(1, 0)));
+            Assert.AreEqual(2, state.Wallet.GetMaterial(ResourceType.Gravel));
+        }
+
+        [Test]
+        public void TryBuildRoad_OnMetropolis_IsRejected()
+        {
+            var state = NewGame();
+            state.Begin();
+
+            Assert.IsFalse(state.TryBuildRoad(HexCoord.Zero));
+            Assert.AreEqual(3, state.Wallet.GetMaterial(ResourceType.Gravel));
+        }
+
+        [Test]
+        public void HandleTileClick_OpensAvailableTileThenBuildsRoadOnIt()
+        {
+            var state = NewGame();
+            state.Begin();
+
+            state.HandleTileClick(new HexCoord(1, 0));
+            state.HandleTileClick(new HexCoord(1, 0));
+
+            state.Map.TryGetTile(new HexCoord(1, 0), out var tile);
+            Assert.AreEqual(TileState.Revealed, tile.State);
+            Assert.IsTrue(state.Roads.HasRoad(new HexCoord(1, 0)));
+            Assert.AreEqual(20, state.Wallet.Points);
+            Assert.AreEqual(2, state.Wallet.GetMaterial(ResourceType.Gravel));
         }
 
         [Test]
