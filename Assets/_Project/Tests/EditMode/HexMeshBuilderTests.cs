@@ -53,6 +53,24 @@ namespace Game.Tests.EditMode
         {
             AssertFacesCamera(ShapeMeshes.Triangle);
             AssertFacesCamera(ShapeMeshes.Bar);
+            AssertFacesCamera(ShapeMeshes.HexRing);
+        }
+
+        [Test]
+        public void HexRing_HugsTheTileBorderFromOutside()
+        {
+            var vertices = ShapeMeshes.HexRing.vertices;
+
+            Assert.AreEqual(12, vertices.Length);
+
+            for (var i = 0; i < 6; i++)
+            {
+                var inner = new Vector2(vertices[i].x, vertices[i].y).magnitude;
+                var outer = new Vector2(vertices[i + 6].x, vertices[i + 6].y).magnitude;
+
+                Assert.AreEqual(HexCoord.Size, inner, 1e-4f, "внутренний край ободка лежит на границе плитки");
+                Assert.Greater(outer, inner, "внешний край ободка выходит за плитку");
+            }
         }
 
         static void AssertFacesCamera(Mesh mesh)

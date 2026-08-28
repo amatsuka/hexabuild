@@ -4,6 +4,7 @@ using Game.Grid;
 using Game.Merge;
 using Game.Roads;
 using Game.Storage;
+using Game.Tutorial;
 using Game.UI;
 using UnityEngine;
 
@@ -25,6 +26,7 @@ namespace Game.Core
         [SerializeField] CameraRig cameraRig;
         [SerializeField] StorageView storageView;
         [SerializeField] HudView hudView;
+        [SerializeField] TutorialView tutorialView;
 
         readonly Dictionary<HexCoord, TileView> views = new();
         readonly Dictionary<HexCoord, RoadView> roadViews = new();
@@ -35,6 +37,7 @@ namespace Game.Core
         ProductionSystem production;
         DeliverySystem deliveries;
         MergeSystem merges;
+        TutorialSystem tutorial;
 
         void Awake()
         {
@@ -47,9 +50,12 @@ namespace Game.Core
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
             merges = new MergeSystem(storage, wallet, mergeRules);
 
+            tutorial = new TutorialSystem(map, storage, state.Roads, mergeRules);
+
             SpawnTiles(map);
             storageView.Bind(storage);
             hudView.Bind(wallet, storage);
+            tutorialView.Bind(tutorial, views, storageView);
             cameraRig.SetFieldBounds(FieldBounds(map));
             cameraRig.FocusOnBottom();
         }
@@ -68,6 +74,8 @@ namespace Game.Core
             deliveries.Arrived += OnDeliveryArrived;
             merges.Refused += hudView.ShowMessage;
             merges.Merged += OnMerged;
+            merges.Converted += OnConverted;
+            state.Storage.Changed += tutorial.Refresh;
         }
 
         void OnDisable()
@@ -84,6 +92,8 @@ namespace Game.Core
             deliveries.Arrived -= OnDeliveryArrived;
             merges.Refused -= hudView.ShowMessage;
             merges.Merged -= OnMerged;
+            merges.Converted -= OnConverted;
+            state.Storage.Changed -= tutorial.Refresh;
         }
 
         void Start()
@@ -137,6 +147,12 @@ namespace Game.Core
         /// <summary>Клик разбирается по слоям: сначала склад, потом поле под ним.</summary>
         void OnClicked(Vector2 screenPosition)
         {
+            if (tutorialView.ContainsSkipPoint(screenPosition))
+            {
+                tutorial.Skip();
+                return;
+            }
+
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
                 var content = state.Storage[cell];
@@ -162,6 +178,12 @@ namespace Game.Core
         {
             if (views.TryGetValue(tile.Coord, out var view))
                 view.Apply(tile);
+
+            // Открытая плитка закрывает шаг обучения, любая другая правка поля — только двигает цель.
+            if (tile.State == TileState.Revealed && !tile.IsMetropolis)
+                tutorial.Notify(TutorialTrigger.TileRevealed);
+            else
+                tutorial.Refresh();
         }
 
         /// <summary>Дороги перерисовываются целиком: их немного, а связность меняется всей цепочкой.</summary>
@@ -178,6 +200,8 @@ namespace Game.Core
 
                 roadView.Show(state.Roads.IsConnected(coord), LinkMask(coord));
             }
+
+            tutorial.Notify(TutorialTrigger.RoadBuilt);
         }
 
         /// <summary>
@@ -209,8 +233,13 @@ namespace Game.Core
             movers.Add(delivery, mover);
         }
 
-        void OnMerged(MergeReport report) =>
+        void OnMerged(MergeReport report)
+        {
             storageView.PlayMerge(report.ConsumedCells, report.ResultCells, report.Outcome.Source);
+            tutorial.Notify(TutorialTrigger.Merged);
+        }
+
+        void OnConverted(ResourceType type, int points) => tutorial.Notify(TutorialTrigger.Converted);
 
         /// <summary>Доехавший ресурс перепрыгивает с Метрополии в свою клетку склада.</summary>
         void OnDeliveryArrived(Delivery delivery)
@@ -230,7 +259,14 @@ namespace Game.Core
             // Клетка занята сразу, иначе её перехватит следующая доставка, но показываем её
             // только когда кружок долетит.
             storageView.HoldCell(cell);
-            mover.HopTo(storageView.CellWorldPoint(cell, Camera.main), () => storageView.ReleaseCell(cell));
+            mover.HopTo(storageView.CellWorldPoint(cell, Camera.main), () => OnResourceLanded(cell));
+        }
+
+        /// <summary>Кружок долетел: клетка проявляется, обучение засчитывает шаг с доставкой.</summary>
+        void OnResourceLanded(int cell)
+        {
+            storageView.ReleaseCell(cell);
+            tutorial.Notify(TutorialTrigger.ResourceLanded);
         }
     }
 }

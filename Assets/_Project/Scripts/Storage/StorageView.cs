@@ -26,7 +26,12 @@ namespace Game.Storage
         [SerializeField] float popScale = 1.3f;
         [SerializeField] float flyEndScale = 0.45f;
 
+        [Header("Подсветка обучения")]
+        [SerializeField] float highlightScale = 0.12f;
+        [SerializeField] float highlightSpeed = 3.2f;
+
         readonly HashSet<int> pendingCells = new();
+        readonly List<int> highlightedCells = new();
 
         Image panel;
         Image[] cells;
@@ -148,6 +153,16 @@ namespace Game.Storage
             return rect;
         }
 
+        /// <summary>Клетки, на которые указывает обучение: они дышат масштабом.</summary>
+        public void Highlight(IReadOnlyList<int> indices)
+        {
+            foreach (var index in highlightedCells)
+                cells[index].rectTransform.localScale = Vector3.one;
+
+            highlightedCells.Clear();
+            highlightedCells.AddRange(indices);
+        }
+
         /// <summary>Клетка склада под экранной точкой: панель сама разбирает клики по себе.</summary>
         public bool TryGetCellIndex(Vector2 screenPosition, out int index)
         {
@@ -194,11 +209,18 @@ namespace Game.Storage
 
         void Update()
         {
-            if (flashTimer <= 0f)
+            if (flashTimer > 0f)
+            {
+                flashTimer = Mathf.Max(0f, flashTimer - Time.deltaTime);
+                panel.color = Color.Lerp(panelColor, lossFlashColor, flashTimer / flashSeconds);
+            }
+
+            if (highlightedCells.Count == 0)
                 return;
 
-            flashTimer = Mathf.Max(0f, flashTimer - Time.deltaTime);
-            panel.color = Color.Lerp(panelColor, lossFlashColor, flashTimer / flashSeconds);
+            var pulse = 1f + highlightScale * (Mathf.Sin(Time.time * highlightSpeed) + 1f) * 0.5f;
+            foreach (var index in highlightedCells)
+                cells[index].rectTransform.localScale = Vector3.one * pulse;
         }
 
         void BuildPanel()

@@ -9,6 +9,7 @@ namespace Game.Grid
     public sealed class TileView : MonoBehaviour
     {
         const float OutlineDepth = 0.01f;
+        const float HighlightDepth = -0.08f;
         const float DecorDepth = -0.03f;
         const float DotDepth = -0.05f;
 
@@ -41,6 +42,7 @@ namespace Game.Grid
 
         MeshRenderer meshRenderer;
         MeshRenderer outline;
+        MeshRenderer highlight;
         MaterialPropertyBlock propertyBlock;
 
         public HexCoord Coord { get; private set; }
@@ -72,6 +74,24 @@ namespace Game.Grid
                 SetColor(part, decorColor);
 
             ApplyDeposits(tile);
+        }
+
+        /// <summary>Ободок подсветки обучения поверх плитки. Прозрачный цвет прячет его.</summary>
+        public void SetHighlight(Color color)
+        {
+            if (color.a <= 0f)
+            {
+                if (highlight != null)
+                    highlight.gameObject.SetActive(false);
+
+                return;
+            }
+
+            highlight ??= CreatePart(
+                "Highlight", ShapeMeshes.HexRing, new Vector3(0f, 0f, HighlightDepth), Vector3.one);
+
+            highlight.gameObject.SetActive(true);
+            SetColor(highlight, color);
         }
 
         MeshRenderer Renderer => meshRenderer != null ? meshRenderer : meshRenderer = GetComponent<MeshRenderer>();
