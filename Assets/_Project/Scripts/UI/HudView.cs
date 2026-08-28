@@ -81,7 +81,7 @@ namespace Game.UI
             rect.sizeDelta = new Vector2(1000f, fontSize * 1.3f);
 
             var text = line.GetComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.font = UiFont.Shared;
             text.fontSize = fontSize;
             text.color = color;
             text.alignment = TextAnchor.UpperLeft;

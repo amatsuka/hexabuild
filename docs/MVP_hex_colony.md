@@ -209,6 +209,9 @@
 
 **HUD, обычный текст без дизайна:** очки · щебень · доски · слитки · потеряно · заполненность склада `18/25`.
 
+Весь текст рисуется шрифтом `Inter-Regular` из `Resources`. Встроенный `LegacyRuntime.ttf` не годится:
+он опирается на системный Arial, которого в веб-сборке нет, и кириллица не рисуется.
+
 ---
 
 ## 5. Архитектура
@@ -229,6 +232,7 @@ Assets/_Project/
     EditMode/                Game.Tests.EditMode.asmdef
   Prefabs/
   ScriptableObjects/
+  Resources/               Inter-Regular.ttf — шрифт UI
   Scenes/
 ```
 

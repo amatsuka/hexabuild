@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Game.Grid;
 using Game.Storage;
+using Game.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -154,7 +155,7 @@ namespace Game.Tutorial
             line.transform.SetParent(parent, false);
 
             var text = line.GetComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.font = UiFont.Shared;
             text.fontSize = size;
             text.color = color;
             text.alignment = anchor;
