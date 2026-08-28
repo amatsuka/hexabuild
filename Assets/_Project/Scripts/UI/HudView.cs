@@ -10,10 +10,11 @@ namespace Game.UI
     {
         [SerializeField] Color textColor = new(0.92f, 0.92f, 0.94f);
         [SerializeField] Color messageColor = new(0.95f, 0.55f, 0.45f);
-        [SerializeField] int fontSize = 18;
+        [SerializeField] int fontSize = 40;
         [SerializeField] float messageSeconds = 2f;
 
-        Text stats;
+        Text points;
+        Text resources;
         Text message;
         float messageTimer;
         Wallet wallet;
@@ -24,8 +25,9 @@ namespace Game.UI
             wallet = boundWallet;
             storage = boundStorage;
 
-            stats = CreateLine("Stats", new Vector2(20f, -20f), textColor);
-            message = CreateLine("Message", new Vector2(20f, -20f - fontSize * 1.6f), messageColor);
+            points = CreateLine("Stats", new Vector2(24f, -24f), textColor);
+            resources = CreateLine("Resources", new Vector2(24f, -24f - fontSize * 1.35f), textColor);
+            message = CreateLine("Message", new Vector2(24f, -24f - fontSize * 2.7f), messageColor);
             message.text = string.Empty;
 
             wallet.Changed += Refresh;
@@ -58,14 +60,13 @@ namespace Game.UI
                 message.text = string.Empty;
         }
 
+        /// <summary>Две строки: на узком экране одна не помещается.</summary>
         void Refresh()
         {
-            stats.text = $"Очки: {wallet.Points}" +
-                         $"   Щебень: {storage.CountOf(ResourceType.Gravel)}" +
-                         $"   Доски: {storage.CountOf(ResourceType.Board)}" +
-                         $"   Слитки: {storage.CountOf(ResourceType.Ingot)}" +
-                         $"   Потеряно: {storage.LostCount}" +
-                         $"   Склад: {storage.Count}/{storage.Capacity}";
+            points.text = $"Очки: {wallet.Points}   Склад: {storage.Count}/{storage.Capacity}   Потеряно: {storage.LostCount}";
+            resources.text = $"Щебень: {storage.CountOf(ResourceType.Gravel)}" +
+                             $"   Доски: {storage.CountOf(ResourceType.Board)}" +
+                             $"   Слитки: {storage.CountOf(ResourceType.Ingot)}";
         }
 
         Text CreateLine(string lineName, Vector2 position, Color color)
@@ -77,7 +78,7 @@ namespace Game.UI
             rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
             rect.anchoredPosition = position;
-            rect.sizeDelta = new Vector2(900f, fontSize * 1.6f);
+            rect.sizeDelta = new Vector2(1000f, fontSize * 1.3f);
 
             var text = line.GetComponent<Text>();
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");

@@ -16,9 +16,9 @@ namespace Game.Storage
         [SerializeField] Color lossFlashColor = new(0.75f, 0.15f, 0.15f, 0.95f);
         [SerializeField] float flashSeconds = 0.4f;
         [SerializeField] int columns = 5;
-        [SerializeField] float cellSize = 40f;
-        [SerializeField] float spacing = 6f;
-        [SerializeField] float padding = 10f;
+        [SerializeField] float cellSize = 120f;
+        [SerializeField] float spacing = 12f;
+        [SerializeField] float padding = 16f;
 
         [Header("Анимация слияния")]
         [SerializeField] float flySeconds = 0.28f;
@@ -210,7 +210,7 @@ namespace Game.Storage
 
             var rect = (RectTransform)transform;
             rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0.5f, 0f);
-            rect.anchoredPosition = new Vector2(0f, 16f);
+            rect.anchoredPosition = new Vector2(0f, 24f);
             rect.sizeDelta = new Vector2(
                 columns * cellSize + (columns - 1) * spacing + padding * 2f,
                 rows * cellSize + (rows - 1) * spacing + padding * 2f);

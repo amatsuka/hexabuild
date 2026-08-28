@@ -6,9 +6,10 @@ namespace Game.UI
     [RequireComponent(typeof(Camera))]
     public sealed class CameraRig : MonoBehaviour
     {
-        [SerializeField] float minZoom = 2f;
-        [SerializeField] float maxZoom = 8f;
-        [SerializeField] float zoomStepPerScroll = 0.5f;
+        // Портрет узкий: на максимальном зуме поле влезает по высоте, ширину проходим паном.
+        [SerializeField] float minZoom = 2.5f;
+        [SerializeField] float maxZoom = 8.5f;
+        [SerializeField] float zoomStepPerScroll = 0.6f;
 
         Camera cameraComponent;
         Rect fieldBounds = new(-1000f, -1000f, 2000f, 2000f);
@@ -38,10 +39,10 @@ namespace Game.UI
             ClampPosition();
         }
 
-        public void Zoom(float scroll)
+        /// <summary>Шаг зума: ±1 от колеса мыши, дробное значение от щипка пальцами.</summary>
+        public void Zoom(float steps)
         {
-            Cam.orthographicSize =
-                Mathf.Clamp(Cam.orthographicSize - Mathf.Sign(scroll) * zoomStepPerScroll, minZoom, maxZoom);
+            Cam.orthographicSize = Mathf.Clamp(Cam.orthographicSize - steps * zoomStepPerScroll, minZoom, maxZoom);
             ClampPosition();
         }
 

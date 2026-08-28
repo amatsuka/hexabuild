@@ -125,9 +125,11 @@ namespace Game.Core
                 max = Vector2.Max(max, center + new Vector2(HexCoord.Width * 0.5f, HexCoord.Size));
             }
 
+            // Доля панели от высоты экрана, зажатая на случай узкого или непортретного окна:
+            // без ограничения панель выше экрана утащила бы камеру под поле.
             var camera = Camera.main;
-            var panelWorldHeight = storageView.PanelHeightPixels / Screen.height * camera.orthographicSize * 2f;
-            min.y -= panelWorldHeight;
+            var panelShare = Mathf.Clamp(storageView.PanelHeightPixels / Screen.height, 0f, 0.4f);
+            min.y -= panelShare * camera.orthographicSize * 2f;
 
             return new Rect(min, max - min);
         }
