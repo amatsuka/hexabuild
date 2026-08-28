@@ -16,5 +16,8 @@ namespace Game.Grid
         public int Reserve { get; private set; }
 
         public bool IsExhausted => Reserve <= 0;
+
+        /// <summary>Списать единицу запаса.</summary>
+        public void Extract() => Reserve--;
     }
 }

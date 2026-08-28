@@ -2,6 +2,7 @@ using System;
 using Game.Economy;
 using Game.Grid;
 using Game.Roads;
+using Game.Storage;
 
 namespace Game.Core
 {
@@ -11,10 +12,11 @@ namespace Game.Core
         readonly int tileOpenCost;
         readonly int roadCost;
 
-        public GameState(HexMap map, Wallet wallet, int tileOpenCost, int roadCost)
+        public GameState(HexMap map, Wallet wallet, StorageGrid storage, int tileOpenCost, int roadCost)
         {
             Map = map;
             Wallet = wallet;
+            Storage = storage;
             this.tileOpenCost = tileOpenCost;
             this.roadCost = roadCost;
             Roads = new RoadNetwork(map);
@@ -29,6 +31,8 @@ namespace Game.Core
         public HexMap Map { get; }
 
         public Wallet Wallet { get; }
+
+        public StorageGrid Storage { get; }
 
         public RoadNetwork Roads { get; }
 
@@ -93,7 +97,7 @@ namespace Game.Core
             if (Roads.HasRoad(coord))
                 return false;
 
-            if (!Wallet.TrySpendMaterial(ResourceType.Gravel, roadCost))
+            if (!Storage.TryRemove(ResourceType.Gravel, roadCost))
             {
                 ActionRefused?.Invoke($"Не хватает щебня: нужно {roadCost}");
                 return false;

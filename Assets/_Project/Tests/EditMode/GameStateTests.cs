@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Game.Core;
 using Game.Economy;
 using Game.Grid;
+using Game.Storage;
 using NUnit.Framework;
 
 namespace Game.Tests.EditMode
@@ -14,7 +15,11 @@ namespace Game.Tests.EditMode
         static GameState NewGame(int points = 40, int gravel = 3)
         {
             var map = MapGenerator.Generate(new MapGenerationSettings(6, 11, 30f, 45f, 20f, 5f, 8, 20));
-            return new GameState(map, new Wallet(points, gravel), OpenCost, RoadCost);
+            var storage = new StorageGrid(25);
+            for (var i = 0; i < gravel; i++)
+                storage.TryStore(ResourceType.Gravel);
+
+            return new GameState(map, new Wallet(points), storage, OpenCost, RoadCost);
         }
 
         [Test]
@@ -119,7 +124,7 @@ namespace Game.Tests.EditMode
 
             Assert.IsTrue(state.Roads.HasRoad(new HexCoord(1, 0)));
             Assert.IsTrue(state.Roads.IsConnected(new HexCoord(1, 0)));
-            Assert.AreEqual(2, state.Wallet.GetMaterial(ResourceType.Gravel));
+            Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
         }
 
         [Test]
@@ -133,7 +138,7 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(state.TryBuildRoad(new HexCoord(1, 0)));
 
             Assert.IsFalse(state.Roads.HasRoad(new HexCoord(1, 0)));
-            Assert.AreEqual(3, state.Wallet.GetMaterial(ResourceType.Gravel));
+            Assert.AreEqual(3, state.Storage.CountOf(ResourceType.Gravel));
             Assert.AreEqual(1, refusals.Count);
         }
 
@@ -161,7 +166,7 @@ namespace Game.Tests.EditMode
             state.TryBuildRoad(new HexCoord(1, 0));
 
             Assert.IsFalse(state.TryBuildRoad(new HexCoord(1, 0)));
-            Assert.AreEqual(2, state.Wallet.GetMaterial(ResourceType.Gravel));
+            Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
         }
 
         [Test]
@@ -171,7 +176,7 @@ namespace Game.Tests.EditMode
             state.Begin();
 
             Assert.IsFalse(state.TryBuildRoad(HexCoord.Zero));
-            Assert.AreEqual(3, state.Wallet.GetMaterial(ResourceType.Gravel));
+            Assert.AreEqual(3, state.Storage.CountOf(ResourceType.Gravel));
         }
 
         [Test]
@@ -187,7 +192,7 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(TileState.Revealed, tile.State);
             Assert.IsTrue(state.Roads.HasRoad(new HexCoord(1, 0)));
             Assert.AreEqual(20, state.Wallet.Points);
-            Assert.AreEqual(2, state.Wallet.GetMaterial(ResourceType.Gravel));
+            Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
         }
 
         [Test]

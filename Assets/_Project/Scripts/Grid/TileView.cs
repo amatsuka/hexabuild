@@ -18,9 +18,7 @@ namespace Game.Grid
         [SerializeField, Range(0f, 1f)] float depletedAlpha = 0.35f;
 
         [Header("Цвета месторождений")]
-        [SerializeField] Color woodColor = new(0.22f, 0.60f, 0.25f);
-        [SerializeField] Color stoneColor = new(0.45f, 0.45f, 0.47f);
-        [SerializeField] Color oreColor = new(0.76f, 0.55f, 0.16f);
+        [SerializeField] ResourcePalette palette = new();
 
         [Header("Точки месторождений")]
         [SerializeField] float dotScale = 0.22f;
@@ -71,19 +69,6 @@ namespace Game.Grid
             }
         }
 
-        Color DepositColor(ResourceType type)
-        {
-            switch (type)
-            {
-                case ResourceType.Wood:
-                    return woodColor;
-                case ResourceType.Ore:
-                    return oreColor;
-                default:
-                    return stoneColor;
-            }
-        }
-
         void ApplyDeposits(TileData tile)
         {
             var visible = tile.State is TileState.Revealed or TileState.Depleted ? tile.Deposits.Count : 0;
@@ -101,7 +86,7 @@ namespace Game.Grid
                 dots[i].transform.localPosition = DotPosition(i, visible);
 
                 var deposit = tile.Deposits[i];
-                var color = DepositColor(deposit.Type);
+                var color = palette.Get(deposit.Type);
                 if (deposit.IsExhausted)
                     color.a = depletedAlpha;
                 SetColor(dots[i], color);

@@ -113,6 +113,50 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void PathToMetropolis_RunsFromTheTileToTheCentre()
+        {
+            var network = new RoadNetwork(Map());
+            for (var q = 1; q <= 3; q++)
+                network.Build(new HexCoord(q, 0));
+            var path = new List<HexCoord>();
+
+            Assert.IsTrue(network.TryFindPathToMetropolis(new HexCoord(3, 0), path));
+
+            Assert.AreEqual(
+                new[] { new HexCoord(3, 0), new HexCoord(2, 0), new HexCoord(1, 0), HexCoord.Zero },
+                path.ToArray());
+        }
+
+        [Test]
+        public void PathToMetropolis_TakesTheShortWayWhenTwoExist()
+        {
+            var network = new RoadNetwork(Map());
+            foreach (var coord in new[]
+                     {
+                         new HexCoord(1, 0), new HexCoord(1, 1), new HexCoord(0, 2),
+                         new HexCoord(0, 1)
+                     })
+                network.Build(coord);
+            var path = new List<HexCoord>();
+
+            network.TryFindPathToMetropolis(new HexCoord(0, 2), path);
+
+            Assert.AreEqual(3, path.Count, "короткий путь идёт через (0,1)");
+            Assert.AreEqual(new HexCoord(0, 1), path[1]);
+        }
+
+        [Test]
+        public void PathToMetropolis_ForDisconnectedRoad_IsNotFound()
+        {
+            var network = new RoadNetwork(Map());
+            network.Build(new HexCoord(3, 0));
+            var path = new List<HexCoord>();
+
+            Assert.IsFalse(network.TryFindPathToMetropolis(new HexCoord(3, 0), path));
+            Assert.IsEmpty(path);
+        }
+
+        [Test]
         public void Connectivity_FollowsRoadsAroundACorner()
         {
             var network = new RoadNetwork(Map());

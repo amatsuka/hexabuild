@@ -40,6 +40,56 @@ namespace Game.Roads
             return true;
         }
 
+        /// <summary>
+        /// Кратчайший путь по дорогам от плитки до Метрополии, включая обе крайние плитки.
+        /// Путь нужен доставке и фиксируется в момент отправки.
+        /// </summary>
+        public bool TryFindPathToMetropolis(HexCoord from, List<HexCoord> path)
+        {
+            path.Clear();
+            if (!IsConnected(from))
+                return false;
+
+            var cameFrom = new Dictionary<HexCoord, HexCoord>();
+            frontier.Clear();
+            frontier.Enqueue(from);
+            cameFrom[from] = from;
+
+            while (frontier.Count > 0)
+            {
+                var current = frontier.Dequeue();
+                if (current == HexCoord.Zero)
+                    return BuildPath(cameFrom, from, path);
+
+                foreach (var neighbor in current.Neighbors())
+                {
+                    if (neighbor != HexCoord.Zero && !roads.Contains(neighbor))
+                        continue;
+
+                    if (!cameFrom.TryAdd(neighbor, current))
+                        continue;
+
+                    frontier.Enqueue(neighbor);
+                }
+            }
+
+            return false;
+        }
+
+        static bool BuildPath(IReadOnlyDictionary<HexCoord, HexCoord> cameFrom, HexCoord from, List<HexCoord> path)
+        {
+            var current = HexCoord.Zero;
+            while (current != from)
+            {
+                path.Add(current);
+                current = cameFrom[current];
+            }
+
+            path.Add(from);
+            path.Reverse();
+            return true;
+        }
+
         /// <summary>BFS от Метрополии по плиткам с дорогами.</summary>
         void Recalculate()
         {

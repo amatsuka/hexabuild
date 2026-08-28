@@ -6,19 +6,15 @@ namespace Game.Tests.EditMode
     public sealed class WalletTests
     {
         [Test]
-        public void StartsWithConfiguredPointsAndGravel()
+        public void StartsWithConfiguredPoints()
         {
-            var wallet = new Wallet(40, 3);
-
-            Assert.AreEqual(40, wallet.Points);
-            Assert.AreEqual(3, wallet.GetMaterial(ResourceType.Gravel));
-            Assert.AreEqual(0, wallet.GetMaterial(ResourceType.Wood));
+            Assert.AreEqual(40, new Wallet(40).Points);
         }
 
         [Test]
         public void TrySpendPoints_WithEnoughPoints_SpendsAndReportsSuccess()
         {
-            var wallet = new Wallet(40, 3);
+            var wallet = new Wallet(40);
 
             Assert.IsTrue(wallet.TrySpendPoints(20));
             Assert.AreEqual(20, wallet.Points);
@@ -27,36 +23,24 @@ namespace Game.Tests.EditMode
         [Test]
         public void TrySpendPoints_WithoutEnoughPoints_LeavesWalletUntouched()
         {
-            var wallet = new Wallet(19, 0);
+            var wallet = new Wallet(19);
 
             Assert.IsFalse(wallet.TrySpendPoints(20));
             Assert.AreEqual(19, wallet.Points);
         }
 
         [Test]
-        public void TrySpendMaterial_ChecksExactType()
+        public void Changed_FiresOnlyOnSuccessfulOperations()
         {
-            var wallet = new Wallet(0, 3);
-
-            Assert.IsFalse(wallet.TrySpendMaterial(ResourceType.Wood, 1));
-            Assert.IsTrue(wallet.TrySpendMaterial(ResourceType.Gravel, 3));
-            Assert.AreEqual(0, wallet.GetMaterial(ResourceType.Gravel));
-        }
-
-        [Test]
-        public void Changed_FiresOnEverySuccessfulOperation()
-        {
-            var wallet = new Wallet(40, 0);
+            var wallet = new Wallet(40);
             var changes = 0;
             wallet.Changed += () => changes++;
 
             wallet.AddPoints(10);
             wallet.TrySpendPoints(5);
-            wallet.AddMaterial(ResourceType.Gravel, 2);
-            wallet.TrySpendMaterial(ResourceType.Gravel, 1);
             wallet.TrySpendPoints(1000);
 
-            Assert.AreEqual(4, changes);
+            Assert.AreEqual(2, changes);
         }
     }
 }
