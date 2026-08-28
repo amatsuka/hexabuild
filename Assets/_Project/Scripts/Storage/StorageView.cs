@@ -33,6 +33,21 @@ namespace Game.Storage
             Refresh();
         }
 
+        /// <summary>Клетка склада под экранной точкой: панель сама разбирает клики по себе.</summary>
+        public bool TryGetCellIndex(Vector2 screenPosition, out int index)
+        {
+            for (index = 0; index < cells.Length; index++)
+                if (RectTransformUtility.RectangleContainsScreenPoint((RectTransform)cells[index].transform, screenPosition))
+                    return true;
+
+            index = -1;
+            return false;
+        }
+
+        /// <summary>Точка попала в панель склада, а не в поле за ней.</summary>
+        public bool ContainsScreenPoint(Vector2 screenPosition) =>
+            RectTransformUtility.RectangleContainsScreenPoint((RectTransform)transform, screenPosition);
+
         void OnDestroy()
         {
             if (grid == null)

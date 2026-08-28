@@ -3,7 +3,10 @@ using UnityEngine;
 
 namespace Game.Core
 {
-    /// <summary>Только числа баланса из раздела 5 спеки. Цвета и параметры камеры сюда не переезжают.</summary>
+    /// <summary>
+    /// Только числа баланса из раздела 5 спеки. Цвета и параметры камеры сюда не переезжают.
+    /// Пороги и очки merge живут в `MergeRules`, чтобы не держать два источника правды.
+    /// </summary>
     [CreateAssetMenu(fileName = "GameConfig", menuName = "Hex Colony/Game Config")]
     public sealed class GameConfig : ScriptableObject
     {
@@ -30,12 +33,6 @@ namespace Game.Core
         [SerializeField] int tileOpenCost = 20;
         [SerializeField] int roadCost = 1;
 
-        [Header("Merge")]
-        [SerializeField] int smallMergeCount = 3;
-        [SerializeField] int smallMergePoints = 10;
-        [SerializeField] int largeMergeCount = 5;
-        [SerializeField] int largeMergePoints = 25;
-
         [Header("Старт партии")]
         [SerializeField] int startingPoints = 40;
         [SerializeField] int startingGravel = 3;
@@ -53,14 +50,6 @@ namespace Game.Core
         public int TileOpenCost => tileOpenCost;
 
         public int RoadCost => roadCost;
-
-        public int SmallMergeCount => smallMergeCount;
-
-        public int SmallMergePoints => smallMergePoints;
-
-        public int LargeMergeCount => largeMergeCount;
-
-        public int LargeMergePoints => largeMergePoints;
 
         public int StartingPoints => startingPoints;
 

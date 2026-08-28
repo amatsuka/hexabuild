@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Game.Economy;
 using Game.Grid;
+using Game.Merge;
 using Game.Roads;
 using Game.Storage;
 using Game.UI;
@@ -14,6 +15,7 @@ namespace Game.Core
         const float RoadDepth = -0.06f;
 
         [SerializeField] GameConfig config;
+        [SerializeField] MergeRules mergeRules;
         [SerializeField] TileView tilePrefab;
         [SerializeField] RoadView roadPrefab;
         [SerializeField] ResourceMover moverPrefab;
@@ -32,6 +34,7 @@ namespace Game.Core
         GameState state;
         ProductionSystem production;
         DeliverySystem deliveries;
+        MergeSystem merges;
 
         void Awake()
         {
@@ -42,6 +45,7 @@ namespace Game.Core
 
             production = new ProductionSystem(map, state.Roads, config.ExtractionInterval);
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
+            merges = new MergeSystem(storage, wallet, mergeRules);
 
             SpawnTiles(map);
             cameraRig.SetFieldHalfExtents(FieldHalfExtents(map));
@@ -51,7 +55,7 @@ namespace Game.Core
 
         void OnEnable()
         {
-            input.TileClicked += OnTileClicked;
+            input.Clicked += OnClicked;
             input.Dragged += cameraRig.Pan;
             input.Zoomed += cameraRig.Zoom;
             state.TileChanged += OnTileChanged;
@@ -61,11 +65,12 @@ namespace Game.Core
             production.TileDepleted += OnTileChanged;
             deliveries.Started += OnDeliveryStarted;
             deliveries.Arrived += OnDeliveryArrived;
+            merges.Refused += hudView.ShowMessage;
         }
 
         void OnDisable()
         {
-            input.TileClicked -= OnTileClicked;
+            input.Clicked -= OnClicked;
             input.Dragged -= cameraRig.Pan;
             input.Zoomed -= cameraRig.Zoom;
             state.TileChanged -= OnTileChanged;
@@ -75,6 +80,7 @@ namespace Game.Core
             production.TileDepleted -= OnTileChanged;
             deliveries.Started -= OnDeliveryStarted;
             deliveries.Arrived -= OnDeliveryArrived;
+            merges.Refused -= hudView.ShowMessage;
         }
 
         void Start()
@@ -114,7 +120,23 @@ namespace Game.Core
             return halfExtents;
         }
 
-        void OnTileClicked(HexCoord coord) => state.HandleTileClick(coord);
+        /// <summary>Клик разбирается по слоям: сначала склад, потом поле под ним.</summary>
+        void OnClicked(Vector2 screenPosition)
+        {
+            if (storageView.TryGetCellIndex(screenPosition, out var cell))
+            {
+                var content = state.Storage[cell];
+                if (content.HasValue)
+                    merges.TryMerge(content.Value);
+
+                return;
+            }
+
+            if (storageView.ContainsScreenPoint(screenPosition))
+                return;
+
+            state.HandleTileClick(input.CoordAt(screenPosition));
+        }
 
         void OnTileChanged(TileData tile)
         {

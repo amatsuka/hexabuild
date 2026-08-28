@@ -150,6 +150,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Game.Runtime::Game.Core.GameSession
   config: {fileID: 11400000, guid: 4a9b81eec4b7d45dda885b961574386f, type: 2}
+  mergeRules: {fileID: 11400000, guid: f63e5477016194584b7e63a76e076775, type: 2}
   tilePrefab: {fileID: 4650383412994097573, guid: 215bfe1e9cbb047f68e2cb0fde07caa8, type: 3}
   roadPrefab: {fileID: 74272935220182515, guid: 958dd9f4164ce45b8825472ca6582d79, type: 3}
   moverPrefab: {fileID: 8914290426641312651, guid: ed1538939bdc846de91bc2b306d1c598, type: 3}

@@ -14,8 +14,8 @@ namespace Game.UI
         float draggedDistance;
         bool pressed;
 
-        /// <summary>Клик левой кнопкой по плитке без перетаскивания.</summary>
-        public event Action<HexCoord> TileClicked;
+        /// <summary>Клик левой кнопкой без перетаскивания: экранная позиция курсора.</summary>
+        public event Action<Vector2> Clicked;
 
         /// <summary>Перетаскивание левой кнопкой: смещение курсора в пикселях за кадр.</summary>
         public event Action<Vector2> Dragged;
@@ -51,11 +51,12 @@ namespace Game.UI
             {
                 pressed = false;
                 if (draggedDistance <= clickThresholdPixels)
-                    TileClicked?.Invoke(CoordUnderCursor(mouse.position.ReadValue()));
+                    Clicked?.Invoke(mouse.position.ReadValue());
             }
         }
 
-        HexCoord CoordUnderCursor(Vector2 screenPosition)
+        /// <summary>Плитка под экранной точкой.</summary>
+        public HexCoord CoordAt(Vector2 screenPosition)
         {
             var distanceToPlane = -worldCamera.transform.position.z;
             var world = worldCamera.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, distanceToPlane));

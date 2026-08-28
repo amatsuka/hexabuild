@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c9a9f9a0d4f564d8dbe63750b3b0b4ed, type: 3}
+  m_Name: MergeRules
+  m_EditorClassIdentifier: Game.Runtime::Game.Merge.MergeRules
+  largeCount: 5
+  largeResultCount: 2
+  largePoints: 25
+  smallCount: 3
+  smallResultCount: 1
+  smallPoints: 10
+  recipes:
+  - Source: 0
+    Result: 3
+  - Source: 1
+    Result: 4
+  - Source: 2
+    Result: 5
