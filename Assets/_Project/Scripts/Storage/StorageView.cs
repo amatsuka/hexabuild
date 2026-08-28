@@ -16,9 +16,9 @@ namespace Game.Storage
         [SerializeField] Color lossFlashColor = new(0.75f, 0.15f, 0.15f, 0.95f);
         [SerializeField] float flashSeconds = 0.4f;
         [SerializeField] int columns = 5;
-        [SerializeField] float cellSize = 120f;
-        [SerializeField] float spacing = 12f;
-        [SerializeField] float padding = 16f;
+        [SerializeField] float cellSize = 88f;
+        [SerializeField] float spacing = 8f;
+        [SerializeField] float padding = 12f;
 
         [Header("Анимация слияния")]
         [SerializeField] float flySeconds = 0.28f;

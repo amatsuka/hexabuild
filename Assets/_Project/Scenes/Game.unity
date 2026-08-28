@@ -613,9 +613,9 @@ MonoBehaviour:
   lossFlashColor: {r: 0.75, g: 0.15, b: 0.15, a: 0.95}
   flashSeconds: 0.4
   columns: 5
-  cellSize: 120
-  spacing: 12
-  padding: 16
+  cellSize: 88
+  spacing: 8
+  padding: 12
   flySeconds: 0.28
   popSeconds: 0.18
   popScale: 1.3
