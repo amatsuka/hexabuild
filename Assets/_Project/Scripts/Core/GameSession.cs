@@ -178,16 +178,16 @@ namespace Game.Core
             }
         }
 
-        /// <summary>Биты направлений, в которых есть соседняя дорога или сама Метрополия.</summary>
+        /// <summary>
+        /// Биты направлений, по которым проходит маршрут: к своему родителю и к тем соседям, для
+        /// которых родитель — эта плитка. Соседняя дорога сама по себе перемычку не рисует.
+        /// </summary>
         int LinkMask(HexCoord coord)
         {
             var mask = 0;
             for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
-            {
-                var neighbor = coord.Neighbor(direction);
-                if (neighbor == HexCoord.Zero || state.Roads.HasRoad(neighbor))
+                if (state.Roads.IsRouteLink(coord, coord.Neighbor(direction)))
                     mask |= 1 << direction;
-            }
 
             return mask;
         }

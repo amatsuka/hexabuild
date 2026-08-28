@@ -98,6 +98,84 @@ namespace Game.Tests.EditMode
             Assert.IsEmpty(network.Roads);
         }
 
+        /// <summary>Три взаимно смежные дороги не должны рисоваться треугольником.</summary>
+        [Test]
+        public void TriangleOfRoads_KeepsOnlyOneLinkPerTile()
+        {
+            var network = new RoadNetwork(Map());
+            var left = new HexCoord(-1, 1);
+            var right = new HexCoord(0, 1);
+            var top = new HexCoord(-1, 2);
+
+            network.Build(left);
+            network.Build(right);
+            network.Build(top);
+
+            // обе нижние плитки цепляются за Метрополию, верхняя — ровно за одну из них
+            Assert.IsTrue(network.IsRouteLink(left, HexCoord.Zero));
+            Assert.IsTrue(network.IsRouteLink(right, HexCoord.Zero));
+            Assert.IsFalse(network.IsRouteLink(left, right), "перемычка между соседями не нужна");
+
+            var linksToTop = 0;
+            if (network.IsRouteLink(top, left)) linksToTop++;
+            if (network.IsRouteLink(top, right)) linksToTop++;
+            Assert.AreEqual(1, linksToTop, "у верхней плитки должен быть один путь вниз");
+        }
+
+        [Test]
+        public void EveryConnectedRoad_HasExactlyOneParent()
+        {
+            var network = new RoadNetwork(Map());
+            var roads = new[]
+            {
+                new HexCoord(0, 1), new HexCoord(-1, 1), new HexCoord(-1, 2),
+                new HexCoord(0, 2), new HexCoord(-2, 2), new HexCoord(-2, 3)
+            };
+
+            foreach (var coord in roads)
+                network.Build(coord);
+
+            foreach (var coord in roads)
+            {
+                Assert.IsTrue(network.TryGetParent(coord, out var parent), $"у {coord} нет пути вниз");
+                Assert.AreEqual(1, HexCoord.Distance(coord, parent), $"родитель {parent} не смежен с {coord}");
+            }
+        }
+
+        [Test]
+        public void RouteLinks_MatchTheDeliveryPath()
+        {
+            var network = new RoadNetwork(Map());
+            foreach (var row in new[] { 1, 2, 3 })
+                network.Build(new HexCoord(0, row));
+            var path = new List<HexCoord>();
+
+            network.TryFindPathToMetropolis(new HexCoord(0, 3), path);
+
+            for (var i = 0; i < path.Count - 1; i++)
+                Assert.IsTrue(network.IsRouteLink(path[i], path[i + 1]), $"участок {path[i]} → {path[i + 1]} не нарисован");
+        }
+
+        [Test]
+        public void DisconnectedRing_IsDrawnWithoutAClosingLink()
+        {
+            var network = new RoadNetwork(Map());
+            var ring = new[] { new HexCoord(0, 4), new HexCoord(-1, 5), new HexCoord(0, 5) };
+
+            foreach (var coord in ring)
+                network.Build(coord);
+
+            var links = 0;
+            for (var i = 0; i < ring.Length; i++)
+            for (var j = i + 1; j < ring.Length; j++)
+                if (network.IsRouteLink(ring[i], ring[j]))
+                    links++;
+
+            Assert.AreEqual(2, links, "три плитки соединяются двумя участками, а не тремя");
+            foreach (var coord in ring)
+                Assert.IsFalse(network.IsConnected(coord));
+        }
+
         [Test]
         public void Changed_FiresOncePerBuiltRoad()
         {

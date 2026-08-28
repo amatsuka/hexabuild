@@ -10,6 +10,7 @@ namespace Game.Roads
         readonly HexMap map;
         readonly HashSet<HexCoord> roads = new();
         readonly HashSet<HexCoord> connected = new();
+        readonly Dictionary<HexCoord, HexCoord> parents = new();
         readonly Queue<HexCoord> frontier = new();
 
         public RoadNetwork(HexMap map)
@@ -26,6 +27,17 @@ namespace Game.Roads
 
         /// <summary>Есть непрерывная цепочка дорог от плитки до Метрополии.</summary>
         public bool IsConnected(HexCoord coord) => connected.Contains(coord);
+
+        /// <summary>Плитка, через которую эта дорога уходит к Метрополии.</summary>
+        public bool TryGetParent(HexCoord coord, out HexCoord parent) => parents.TryGetValue(coord, out parent);
+
+        /// <summary>
+        /// Две плитки соединены участком маршрута. У каждой дороги ровно один родитель, поэтому
+        /// сеть рисуется деревом: перемычек между соседями по кругу не возникает.
+        /// </summary>
+        public bool IsRouteLink(HexCoord from, HexCoord to) =>
+            (parents.TryGetValue(from, out var fromParent) && fromParent == to)
+            || (parents.TryGetValue(to, out var toParent) && toParent == from);
 
         public bool Build(HexCoord coord)
         {
@@ -50,61 +62,50 @@ namespace Game.Roads
             if (!IsConnected(from))
                 return false;
 
-            var cameFrom = new Dictionary<HexCoord, HexCoord>();
-            frontier.Clear();
-            frontier.Enqueue(from);
-            cameFrom[from] = from;
-
-            while (frontier.Count > 0)
+            var current = from;
+            path.Add(current);
+            while (current != HexCoord.Zero)
             {
-                var current = frontier.Dequeue();
-                if (current == HexCoord.Zero)
-                    return BuildPath(cameFrom, from, path);
-
-                foreach (var neighbor in current.Neighbors())
-                {
-                    if (neighbor != HexCoord.Zero && !roads.Contains(neighbor))
-                        continue;
-
-                    if (!cameFrom.TryAdd(neighbor, current))
-                        continue;
-
-                    frontier.Enqueue(neighbor);
-                }
-            }
-
-            return false;
-        }
-
-        static bool BuildPath(IReadOnlyDictionary<HexCoord, HexCoord> cameFrom, HexCoord from, List<HexCoord> path)
-        {
-            var current = HexCoord.Zero;
-            while (current != from)
-            {
+                current = parents[current];
                 path.Add(current);
-                current = cameFrom[current];
             }
 
-            path.Add(from);
-            path.Reverse();
             return true;
         }
 
-        /// <summary>BFS от Метрополии по плиткам с дорогами.</summary>
+        /// <summary>
+        /// BFS от Метрополии по плиткам с дорогами. Попутно каждой дороге назначается родитель —
+        /// первая плитка, из которой её нашли, то есть шаг кратчайшего пути к Метрополии.
+        /// Оторванные от Метрополии куски тоже раскладываются в деревья, каждый от своего корня,
+        /// иначе кольцо дорог рисовалось бы замкнутым.
+        /// </summary>
         void Recalculate()
         {
             connected.Clear();
+            parents.Clear();
+
+            Traverse(HexCoord.Zero, connected);
+
+            foreach (var road in roads)
+                if (!parents.ContainsKey(road))
+                    Traverse(road, null);
+        }
+
+        void Traverse(HexCoord root, HashSet<HexCoord> reached)
+        {
             frontier.Clear();
-            frontier.Enqueue(HexCoord.Zero);
+            frontier.Enqueue(root);
 
             while (frontier.Count > 0)
             {
                 var current = frontier.Dequeue();
                 foreach (var neighbor in current.Neighbors())
                 {
-                    if (!roads.Contains(neighbor) || !connected.Add(neighbor))
+                    if (!roads.Contains(neighbor) || parents.ContainsKey(neighbor))
                         continue;
 
+                    parents[neighbor] = current;
+                    reached?.Add(neighbor);
                     frontier.Enqueue(neighbor);
                 }
             }
