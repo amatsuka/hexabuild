@@ -19,6 +19,9 @@ namespace Game.Grid
         [SerializeField] Color metropolisColor = new(0.20f, 0.45f, 0.85f);
         [SerializeField, Range(0f, 1f)] float hiddenDim = 0.26f;
         [SerializeField, Range(0f, 1f)] float availableDim = 0.62f;
+        [Tooltip("Насколько цвет биома уводится в серый под туманом: 1 — полностью серый")]
+        [SerializeField, Range(0f, 1f)] float hiddenDesaturation = 0.88f;
+        [SerializeField, Range(0f, 1f)] float availableDesaturation = 0.45f;
         [SerializeField, Range(0f, 1f)] float depletedAlpha = 0.35f;
         [SerializeField, Range(0f, 0.3f)] float shadeStrength = 0.08f;
 
@@ -58,9 +61,10 @@ namespace Game.Grid
         public void Apply(TileData tile)
         {
             var dim = StateDim(tile.State);
-            SetColor(Renderer, GroundColor(tile, dim));
+            var fade = StateDesaturation(tile.State);
+            SetColor(Renderer, GroundColor(tile, dim, fade));
 
-            var decorColor = Shaded(biomes.Decor(tile.Biome), tile.Shade, dim);
+            var decorColor = Shaded(biomes.Decor(tile.Biome), tile.Shade, dim, fade);
             if (tile.State == TileState.Depleted)
                 decorColor.a = depletedAlpha;
 
@@ -86,22 +90,43 @@ namespace Game.Grid
             }
         }
 
-        Color GroundColor(TileData tile, float dim)
+        /// <summary>Под туманом биом почти уходит в серый: рельеф угадывается, но не бросается в глаза.</summary>
+        float StateDesaturation(TileState state)
+        {
+            switch (state)
+            {
+                case TileState.Hidden:
+                    return hiddenDesaturation;
+                case TileState.Available:
+                    return availableDesaturation;
+                default:
+                    return 0f;
+            }
+        }
+
+        Color GroundColor(TileData tile, float dim, float fade)
         {
             if (tile.IsMetropolis)
                 return metropolisColor;
 
-            var ground = Shaded(biomes.Ground(tile.Biome), tile.Shade, dim);
+            var ground = Shaded(biomes.Ground(tile.Biome), tile.Shade, dim, fade);
             if (tile.State == TileState.Depleted)
                 ground.a = depletedAlpha;
 
             return ground;
         }
 
-        Color Shaded(Color color, float shade, float dim)
+        Color Shaded(Color color, float shade, float dim, float fade)
         {
+            var grey = color.grayscale;
+            var faded = new Color(
+                Mathf.Lerp(color.r, grey, fade),
+                Mathf.Lerp(color.g, grey, fade),
+                Mathf.Lerp(color.b, grey, fade),
+                color.a);
+
             var factor = dim * (1f + shade * shadeStrength);
-            return new Color(color.r * factor, color.g * factor, color.b * factor, color.a);
+            return new Color(faded.r * factor, faded.g * factor, faded.b * factor, faded.a);
         }
 
         void CreateOutline()
