@@ -20,12 +20,13 @@ namespace Game.Grid
                 vertices[i + 1] = new Vector3(HexCoord.Size * Mathf.Cos(angle), HexCoord.Size * Mathf.Sin(angle), 0f);
             }
 
+            // Обход по часовой стрелке: камера смотрит вдоль +Z, иначе грани срезает backface culling.
             var triangles = new int[18];
             for (var i = 0; i < 6; i++)
             {
                 triangles[i * 3] = 0;
-                triangles[i * 3 + 1] = i + 1;
-                triangles[i * 3 + 2] = i == 5 ? 1 : i + 2;
+                triangles[i * 3 + 1] = i == 5 ? 1 : i + 2;
+                triangles[i * 3 + 2] = i + 1;
             }
 
             var mesh = new Mesh { name = "Hex" };
