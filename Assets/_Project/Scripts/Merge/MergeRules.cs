@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Game.Merge
 {
-    /// <summary>Что получится из клика по ресурсу склада: пороги, рецепты и очки.</summary>
+    /// <summary>Что получится из клика по ресурсу склада: пороги, рецепты и цена крафта в очках.</summary>
     [CreateAssetMenu(fileName = "MergeRules", menuName = "Hex Colony/Merge Rules")]
     public sealed class MergeRules : ScriptableObject
     {
@@ -18,12 +18,13 @@ namespace Game.Merge
         [Header("Пятёрка")]
         [SerializeField] int largeCount = 5;
         [SerializeField] int largeResultCount = 2;
-        [SerializeField] int largePoints = 25;
 
         [Header("Тройка")]
         [SerializeField] int smallCount = 3;
         [SerializeField] int smallResultCount = 1;
-        [SerializeField] int smallPoints = 10;
+
+        [Header("Очки")]
+        [SerializeField] int craftedPoints = 15;
 
         [Header("Рецепты")]
         [SerializeField] Recipe[] recipes =
@@ -37,6 +38,9 @@ namespace Game.Merge
 
         public int SmallCount => smallCount;
 
+        /// <summary>Очки за клик по одному крафтовому ресурсу.</summary>
+        public int CraftedPoints => craftedPoints;
+
         /// <summary>У ресурса есть рецепт: крафтовые дальше не мержатся.</summary>
         public bool CanMerge(ResourceType type) => TryGetResult(type, out _);
 
@@ -49,13 +53,13 @@ namespace Game.Merge
 
             if (available >= largeCount)
             {
-                outcome = new MergeOutcome(type, result, largeCount, largeResultCount, largePoints);
+                outcome = new MergeOutcome(type, result, largeCount, largeResultCount);
                 return true;
             }
 
             if (available >= smallCount)
             {
-                outcome = new MergeOutcome(type, result, smallCount, smallResultCount, smallPoints);
+                outcome = new MergeOutcome(type, result, smallCount, smallResultCount);
                 return true;
             }
 
@@ -79,13 +83,12 @@ namespace Game.Merge
     /// <summary>Итог одного слияния.</summary>
     public readonly struct MergeOutcome
     {
-        public MergeOutcome(ResourceType source, ResourceType result, int consumed, int produced, int points)
+        public MergeOutcome(ResourceType source, ResourceType result, int consumed, int produced)
         {
             Source = source;
             Result = result;
             Consumed = consumed;
             Produced = produced;
-            Points = points;
         }
 
         public ResourceType Source { get; }
@@ -95,7 +98,5 @@ namespace Game.Merge
         public int Consumed { get; }
 
         public int Produced { get; }
-
-        public int Points { get; }
     }
 }

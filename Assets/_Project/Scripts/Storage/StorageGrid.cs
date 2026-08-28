@@ -26,23 +26,39 @@ namespace Game.Storage
 
         public ResourceType? this[int index] => cells[index];
 
-        public bool TryStore(ResourceType type)
+        public bool TryStore(ResourceType type) => TryStore(type, out _);
+
+        /// <summary>Кладёт ресурс и сообщает клетку, чтобы визуал знал, куда прыгать.</summary>
+        public bool TryStore(ResourceType type, out int index)
         {
-            for (var i = 0; i < cells.Length; i++)
+            for (index = 0; index < cells.Length; index++)
             {
-                if (cells[i].HasValue)
+                if (cells[index].HasValue)
                     continue;
 
-                cells[i] = type;
+                cells[index] = type;
                 Count++;
                 Changed?.Invoke();
                 return true;
             }
 
+            index = -1;
             LostCount++;
             ResourceLost?.Invoke(type);
             Changed?.Invoke();
             return false;
+        }
+
+        /// <summary>Убрать одну единицу из конкретной клетки: клик по ресурсу.</summary>
+        public bool TryRemoveAt(int index)
+        {
+            if (index < 0 || index >= cells.Length || !cells[index].HasValue)
+                return false;
+
+            cells[index] = null;
+            Count--;
+            Changed?.Invoke();
+            return true;
         }
 
         public int CountOf(ResourceType type)

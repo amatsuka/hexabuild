@@ -44,6 +44,26 @@ namespace Game.Storage
             return false;
         }
 
+        /// <summary>Мировая точка клетки: туда прыгает доехавший до Метрополии ресурс.</summary>
+        public Vector3 CellWorldPoint(int index, Camera worldCamera)
+        {
+            var screenPoint = RectTransformUtility.WorldToScreenPoint(null, cells[index].transform.position);
+            var world = worldCamera.ScreenToWorldPoint(
+                new Vector3(screenPoint.x, screenPoint.y, -worldCamera.transform.position.z));
+            return new Vector3(world.x, world.y, 0f);
+        }
+
+        /// <summary>Высота панели в пикселях экрана — по ней камера отодвигается от низа поля.</summary>
+        public float PanelHeightPixels
+        {
+            get
+            {
+                var corners = new Vector3[4];
+                ((RectTransform)transform).GetWorldCorners(corners);
+                return corners[1].y - corners[0].y;
+            }
+        }
+
         /// <summary>Точка попала в панель склада, а не в поле за ней.</summary>
         public bool ContainsScreenPoint(Vector2 screenPosition) =>
             RectTransformUtility.RectangleContainsScreenPoint((RectTransform)transform, screenPosition);
@@ -74,8 +94,8 @@ namespace Game.Storage
             panel.color = panelColor;
 
             var rect = (RectTransform)transform;
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1f, 0.5f);
-            rect.anchoredPosition = new Vector2(-20f, 0f);
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = new Vector2(0f, 16f);
             rect.sizeDelta = new Vector2(
                 columns * cellSize + (columns - 1) * spacing + padding * 2f,
                 rows * cellSize + (rows - 1) * spacing + padding * 2f);

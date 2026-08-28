@@ -48,9 +48,10 @@ namespace Game.Core
             merges = new MergeSystem(storage, wallet, mergeRules);
 
             SpawnTiles(map);
-            cameraRig.SetFieldHalfExtents(FieldHalfExtents(map));
             storageView.Bind(storage);
             hudView.Bind(wallet, storage);
+            cameraRig.SetFieldBounds(FieldBounds(map));
+            cameraRig.FocusOnBottom();
         }
 
         void OnEnable()
@@ -106,18 +107,27 @@ namespace Game.Core
             }
         }
 
-        /// <summary>Габариты поля с учётом вершин крайних гексов — для границ камеры.</summary>
-        Vector2 FieldHalfExtents(HexMap map)
+        /// <summary>
+        /// Прямоугольник поля с учётом вершин крайних гексов. Снизу он расширен на высоту панели
+        /// склада, иначе камера прижимает Метрополию под панель.
+        /// </summary>
+        Rect FieldBounds(HexMap map)
         {
-            var halfExtents = Vector2.zero;
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
+
             foreach (var tile in map.Tiles.Values)
             {
                 var center = tile.Coord.ToWorld();
-                halfExtents.x = Mathf.Max(halfExtents.x, Mathf.Abs(center.x) + HexCoord.Width * 0.5f);
-                halfExtents.y = Mathf.Max(halfExtents.y, Mathf.Abs(center.y) + HexCoord.Size);
+                min = Vector2.Min(min, center - new Vector2(HexCoord.Width * 0.5f, HexCoord.Size));
+                max = Vector2.Max(max, center + new Vector2(HexCoord.Width * 0.5f, HexCoord.Size));
             }
 
-            return halfExtents;
+            var camera = Camera.main;
+            var panelWorldHeight = storageView.PanelHeightPixels / Screen.height * camera.orthographicSize * 2f;
+            min.y -= panelWorldHeight;
+
+            return new Rect(min, max - min);
         }
 
         /// <summary>Клик разбирается по слоям: сначала склад, потом поле под ним.</summary>
@@ -126,8 +136,14 @@ namespace Game.Core
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
                 var content = state.Storage[cell];
-                if (content.HasValue)
+                if (!content.HasValue)
+                    return;
+
+                // Базовый ресурс мержится, крафтовый превращается в очки.
+                if (mergeRules.CanMerge(content.Value))
                     merges.TryMerge(content.Value);
+                else
+                    merges.TryConvert(cell);
 
                 return;
             }
@@ -189,12 +205,19 @@ namespace Game.Core
             movers.Add(delivery, mover);
         }
 
+        /// <summary>Доехавший ресурс перепрыгивает с Метрополии в свою клетку склада.</summary>
         void OnDeliveryArrived(Delivery delivery)
         {
-            if (movers.Remove(delivery, out var mover))
-                Destroy(mover.gameObject);
+            movers.Remove(delivery, out var mover);
+            var stored = state.Storage.TryStore(delivery.Type, out var cell);
 
-            state.Storage.TryStore(delivery.Type);
+            if (mover == null)
+                return;
+
+            if (stored)
+                mover.HopTo(storageView.CellWorldPoint(cell, Camera.main));
+            else
+                Destroy(mover.gameObject);
         }
     }
 }

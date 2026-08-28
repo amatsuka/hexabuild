@@ -11,7 +11,7 @@ namespace Game.Core
     public sealed class GameConfig : ScriptableObject
     {
         [Header("Поле")]
-        [SerializeField] int fieldRadius = 6;
+        [SerializeField] int fieldRows = 10;
         [SerializeField] int seed;
 
         [Header("Генерация месторождений")]
@@ -37,7 +37,7 @@ namespace Game.Core
         [SerializeField] int startingPoints = 40;
         [SerializeField] int startingGravel = 3;
 
-        public int FieldRadius => fieldRadius;
+        public int FieldRows => fieldRows;
 
         public int Seed => seed;
 
@@ -56,7 +56,7 @@ namespace Game.Core
         public int StartingGravel => startingGravel;
 
         public MapGenerationSettings MapGenerationSettings => new(
-            fieldRadius,
+            fieldRows,
             seed,
             emptyWeight,
             singleDepositWeight,

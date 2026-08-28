@@ -44,7 +44,7 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(0, storage.CountOf(ResourceType.Wood));
             Assert.AreEqual(2, storage.CountOf(ResourceType.Board));
-            Assert.AreEqual(25, wallet.Points);
+            Assert.AreEqual(0, wallet.Points, "очки даёт не merge, а клик по крафту");
             Assert.AreEqual(2, storage.Count);
         }
 
@@ -69,7 +69,7 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(1, storage.CountOf(ResourceType.Wood));
             Assert.AreEqual(1, storage.CountOf(ResourceType.Board));
-            Assert.AreEqual(10, wallet.Points);
+            Assert.AreEqual(0, wallet.Points);
         }
 
         [Test]
@@ -85,7 +85,7 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void CraftedResource_IsRefused()
+        public void CraftedResource_IsNotMerged()
         {
             Fill(ResourceType.Board, 5);
 
@@ -94,6 +94,53 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(5, storage.CountOf(ResourceType.Board));
             Assert.AreEqual(0, wallet.Points);
             Assert.AreEqual(1, refusals.Count);
+        }
+
+        [TestCase(ResourceType.Board)]
+        [TestCase(ResourceType.Gravel)]
+        [TestCase(ResourceType.Ingot)]
+        public void ClickOnCrafted_TurnsOneUnitIntoPoints(ResourceType crafted)
+        {
+            Fill(crafted, 2);
+
+            Assert.IsTrue(merges.TryConvert(0));
+
+            Assert.AreEqual(15, wallet.Points);
+            Assert.AreEqual(1, storage.CountOf(crafted));
+            Assert.IsFalse(storage[0].HasValue);
+        }
+
+        [Test]
+        public void ClickOnBaseResource_IsRefusedByConversion()
+        {
+            Fill(ResourceType.Wood, 5);
+
+            Assert.IsFalse(merges.TryConvert(0));
+
+            Assert.AreEqual(5, storage.CountOf(ResourceType.Wood));
+            Assert.AreEqual(0, wallet.Points);
+            Assert.AreEqual(1, refusals.Count);
+        }
+
+        [Test]
+        public void ClickOnEmptyCell_DoesNothing()
+        {
+            Assert.IsFalse(merges.TryConvert(0));
+            Assert.AreEqual(0, wallet.Points);
+            Assert.IsEmpty(refusals);
+        }
+
+        [Test]
+        public void MergeThenConvert_IsTheWayPointsAreEarned()
+        {
+            Fill(ResourceType.Ore, 5);
+
+            merges.TryMerge(ResourceType.Ore);
+            merges.TryConvert(0);
+            merges.TryConvert(1);
+
+            Assert.AreEqual(30, wallet.Points);
+            Assert.AreEqual(0, storage.Count);
         }
 
         [Test]

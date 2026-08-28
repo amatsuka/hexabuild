@@ -8,14 +8,14 @@ namespace Game.Grid
     {
         readonly Dictionary<HexCoord, TileData> tiles = new();
 
-        public HexMap(int radius, IEnumerable<TileData> tiles)
+        public HexMap(int rows, IEnumerable<TileData> tiles)
         {
-            Radius = radius;
+            Rows = rows;
             foreach (var tile in tiles)
                 this.tiles.Add(tile.Coord, tile);
         }
 
-        public int Radius { get; }
+        public int Rows { get; }
 
         public int Count => tiles.Count;
 
@@ -23,15 +23,17 @@ namespace Game.Grid
 
         public TileData Metropolis => tiles[HexCoord.Zero];
 
-        /// <summary>Координаты поля-гекса радиуса <paramref name="radius"/> вокруг центра.</summary>
-        public static IEnumerable<HexCoord> CoordsInRadius(int radius)
+        /// <summary>
+        /// Координаты поля-раструба: Метрополия внизу, ряд r содержит 2r+1 плиток и центрируется
+        /// над ней. Чётные и нечётные ряды смещены на полплитки — так гексы стыкуются.
+        /// </summary>
+        public static IEnumerable<HexCoord> CoordsInFlare(int rows)
         {
-            for (var q = -radius; q <= radius; q++)
+            for (var r = 0; r < rows; r++)
             {
-                var minR = Mathf.Max(-radius, -q - radius);
-                var maxR = Mathf.Min(radius, -q + radius);
-                for (var r = minR; r <= maxR; r++)
-                    yield return new HexCoord(q, r);
+                var firstQ = -Mathf.RoundToInt(1.5f * r);
+                for (var i = 0; i <= 2 * r; i++)
+                    yield return new HexCoord(firstQ + i, r);
             }
         }
 

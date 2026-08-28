@@ -7,13 +7,13 @@ namespace Game.Tests.EditMode
 {
     public sealed class RoadNetworkTests
     {
-        static HexMap Map(int radius = 6)
+        static HexMap Map(int rows = 10)
         {
             var tiles = new List<TileData>();
-            foreach (var coord in HexMap.CoordsInRadius(radius))
+            foreach (var coord in HexMap.CoordsInFlare(rows))
                 tiles.Add(new TileData(coord, coord == HexCoord.Zero));
 
-            return new HexMap(radius, tiles);
+            return new HexMap(rows, tiles);
         }
 
         [Test]
@@ -21,10 +21,10 @@ namespace Game.Tests.EditMode
         {
             var network = new RoadNetwork(Map());
 
-            Assert.IsTrue(network.Build(new HexCoord(1, 0)));
+            Assert.IsTrue(network.Build(new HexCoord(0, 1)));
 
-            Assert.IsTrue(network.HasRoad(new HexCoord(1, 0)));
-            Assert.IsTrue(network.IsConnected(new HexCoord(1, 0)));
+            Assert.IsTrue(network.HasRoad(new HexCoord(0, 1)));
+            Assert.IsTrue(network.IsConnected(new HexCoord(0, 1)));
         }
 
         [Test]
@@ -32,11 +32,11 @@ namespace Game.Tests.EditMode
         {
             var network = new RoadNetwork(Map());
 
-            for (var q = 1; q <= 4; q++)
-                network.Build(new HexCoord(q, 0));
+            for (var row = 1; row <= 4; row++)
+                network.Build(new HexCoord(0, row));
 
-            for (var q = 1; q <= 4; q++)
-                Assert.IsTrue(network.IsConnected(new HexCoord(q, 0)), $"плитка ({q}, 0) должна быть подключена");
+            for (var row = 1; row <= 4; row++)
+                Assert.IsTrue(network.IsConnected(new HexCoord(0, row)), $"плитка (0, {row}) должна быть подключена");
         }
 
         [Test]
@@ -44,47 +44,47 @@ namespace Game.Tests.EditMode
         {
             var network = new RoadNetwork(Map());
 
-            network.Build(new HexCoord(3, 0));
+            network.Build(new HexCoord(0, 3));
 
-            Assert.IsTrue(network.HasRoad(new HexCoord(3, 0)));
-            Assert.IsFalse(network.IsConnected(new HexCoord(3, 0)));
+            Assert.IsTrue(network.HasRoad(new HexCoord(0, 3)));
+            Assert.IsFalse(network.IsConnected(new HexCoord(0, 3)));
         }
 
         [Test]
         public void ClosingTheGap_ConnectsTheWholeChainAtOnce()
         {
             var network = new RoadNetwork(Map());
-            network.Build(new HexCoord(1, 0));
-            network.Build(new HexCoord(3, 0));
-            network.Build(new HexCoord(4, 0));
+            network.Build(new HexCoord(0, 1));
+            network.Build(new HexCoord(0, 3));
+            network.Build(new HexCoord(0, 4));
 
-            Assert.IsFalse(network.IsConnected(new HexCoord(3, 0)));
-            Assert.IsFalse(network.IsConnected(new HexCoord(4, 0)));
+            Assert.IsFalse(network.IsConnected(new HexCoord(0, 3)));
+            Assert.IsFalse(network.IsConnected(new HexCoord(0, 4)));
 
-            network.Build(new HexCoord(2, 0));
+            network.Build(new HexCoord(0, 2));
 
-            foreach (var q in new[] { 1, 2, 3, 4 })
-                Assert.IsTrue(network.IsConnected(new HexCoord(q, 0)), $"плитка ({q}, 0) должна подключиться");
+            foreach (var row in new[] { 1, 2, 3, 4 })
+                Assert.IsTrue(network.IsConnected(new HexCoord(0, row)), $"плитка (0, {row}) должна подключиться");
         }
 
         [Test]
         public void DiagonalNeighbourIsNotAdjacent_SoItDoesNotConnect()
         {
             var network = new RoadNetwork(Map());
-            network.Build(new HexCoord(1, 0));
+            network.Build(new HexCoord(0, 1));
 
-            network.Build(new HexCoord(2, 1));
+            network.Build(new HexCoord(1, 2));
 
-            Assert.IsFalse(network.IsConnected(new HexCoord(2, 1)));
+            Assert.IsFalse(network.IsConnected(new HexCoord(1, 2)));
         }
 
         [Test]
         public void Build_OnTheSameTileTwice_ChangesNothing()
         {
             var network = new RoadNetwork(Map());
-            network.Build(new HexCoord(1, 0));
+            network.Build(new HexCoord(0, 1));
 
-            Assert.IsFalse(network.Build(new HexCoord(1, 0)));
+            Assert.IsFalse(network.Build(new HexCoord(0, 1)));
             Assert.AreEqual(1, network.Roads.Count);
         }
 
@@ -105,9 +105,9 @@ namespace Game.Tests.EditMode
             var events = 0;
             network.Changed += () => events++;
 
-            network.Build(new HexCoord(1, 0));
-            network.Build(new HexCoord(1, 0));
-            network.Build(new HexCoord(2, 0));
+            network.Build(new HexCoord(0, 1));
+            network.Build(new HexCoord(0, 1));
+            network.Build(new HexCoord(0, 2));
 
             Assert.AreEqual(2, events);
         }
@@ -116,14 +116,14 @@ namespace Game.Tests.EditMode
         public void PathToMetropolis_RunsFromTheTileToTheCentre()
         {
             var network = new RoadNetwork(Map());
-            for (var q = 1; q <= 3; q++)
-                network.Build(new HexCoord(q, 0));
+            for (var row = 1; row <= 3; row++)
+                network.Build(new HexCoord(0, row));
             var path = new List<HexCoord>();
 
-            Assert.IsTrue(network.TryFindPathToMetropolis(new HexCoord(3, 0), path));
+            Assert.IsTrue(network.TryFindPathToMetropolis(new HexCoord(0, 3), path));
 
             Assert.AreEqual(
-                new[] { new HexCoord(3, 0), new HexCoord(2, 0), new HexCoord(1, 0), HexCoord.Zero },
+                new[] { new HexCoord(0, 3), new HexCoord(0, 2), new HexCoord(0, 1), HexCoord.Zero },
                 path.ToArray());
         }
 
@@ -133,8 +133,7 @@ namespace Game.Tests.EditMode
             var network = new RoadNetwork(Map());
             foreach (var coord in new[]
                      {
-                         new HexCoord(1, 0), new HexCoord(1, 1), new HexCoord(0, 2),
-                         new HexCoord(0, 1)
+                         new HexCoord(0, 1), new HexCoord(-1, 1), new HexCoord(-1, 2), new HexCoord(0, 2)
                      })
                 network.Build(coord);
             var path = new List<HexCoord>();
@@ -149,10 +148,10 @@ namespace Game.Tests.EditMode
         public void PathToMetropolis_ForDisconnectedRoad_IsNotFound()
         {
             var network = new RoadNetwork(Map());
-            network.Build(new HexCoord(3, 0));
+            network.Build(new HexCoord(0, 3));
             var path = new List<HexCoord>();
 
-            Assert.IsFalse(network.TryFindPathToMetropolis(new HexCoord(3, 0), path));
+            Assert.IsFalse(network.TryFindPathToMetropolis(new HexCoord(0, 3), path));
             Assert.IsEmpty(path);
         }
 
@@ -160,7 +159,7 @@ namespace Game.Tests.EditMode
         public void Connectivity_FollowsRoadsAroundACorner()
         {
             var network = new RoadNetwork(Map());
-            var path = new[] { new HexCoord(0, 1), new HexCoord(0, 2), new HexCoord(1, 2), new HexCoord(2, 2) };
+            var path = new[] { new HexCoord(0, 1), new HexCoord(-1, 2), new HexCoord(-2, 3), new HexCoord(-2, 4) };
 
             foreach (var coord in path)
                 network.Build(coord);

@@ -6,6 +6,12 @@ namespace Game.Tests.EditMode
 {
     public sealed class StorageGridTests
     {
+        static void Fill(StorageGrid storage, ResourceType type, int count)
+        {
+            for (var i = 0; i < count; i++)
+                storage.TryStore(type);
+        }
+
         [Test]
         public void TryStore_PutsResourceIntoFirstFreeCell()
         {
@@ -83,6 +89,51 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(storage[0].HasValue);
             Assert.IsFalse(storage[1].HasValue);
             Assert.AreEqual(ResourceType.Wood, storage[2]);
+        }
+
+        [Test]
+        public void TryStore_ReportsTheCellItUsed()
+        {
+            var storage = new StorageGrid(25);
+            storage.TryStore(ResourceType.Wood, out var first);
+            storage.TryStore(ResourceType.Stone, out var second);
+
+            Assert.AreEqual(0, first);
+            Assert.AreEqual(1, second);
+        }
+
+        [Test]
+        public void TryStore_OnFullStorage_ReportsNoCell()
+        {
+            var storage = new StorageGrid(1);
+            storage.TryStore(ResourceType.Wood);
+
+            Assert.IsFalse(storage.TryStore(ResourceType.Wood, out var index));
+            Assert.AreEqual(-1, index);
+        }
+
+        [Test]
+        public void TryRemoveAt_EmptiesExactlyThatCell()
+        {
+            var storage = new StorageGrid(25);
+            Fill(storage, ResourceType.Wood, 3);
+
+            Assert.IsTrue(storage.TryRemoveAt(1));
+
+            Assert.AreEqual(ResourceType.Wood, storage[0]);
+            Assert.IsFalse(storage[1].HasValue);
+            Assert.AreEqual(ResourceType.Wood, storage[2]);
+            Assert.AreEqual(2, storage.Count);
+        }
+
+        [Test]
+        public void TryRemoveAt_EmptyOrOutsideCell_ReturnsFalse()
+        {
+            var storage = new StorageGrid(25);
+
+            Assert.IsFalse(storage.TryRemoveAt(0));
+            Assert.IsFalse(storage.TryRemoveAt(-1));
+            Assert.IsFalse(storage.TryRemoveAt(99));
         }
 
         [Test]

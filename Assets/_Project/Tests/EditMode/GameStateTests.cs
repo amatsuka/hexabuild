@@ -14,7 +14,7 @@ namespace Game.Tests.EditMode
 
         static GameState NewGame(int points = 40, int gravel = 3)
         {
-            var map = MapGenerator.Generate(new MapGenerationSettings(6, 11, 30f, 45f, 20f, 5f, 8, 20));
+            var map = MapGenerator.Generate(new MapGenerationSettings(10, 11, 30f, 45f, 20f, 5f, 8, 20));
             var storage = new StorageGrid(25);
             for (var i = 0; i < gravel; i++)
                 storage.TryStore(ResourceType.Gravel);
@@ -33,7 +33,7 @@ namespace Game.Tests.EditMode
             foreach (var neighbor in state.Map.NeighborsOf(HexCoord.Zero))
                 Assert.AreEqual(TileState.Available, neighbor.State);
 
-            state.Map.TryGetTile(new HexCoord(3, 0), out var far);
+            state.Map.TryGetTile(new HexCoord(0, 3), out var far);
             Assert.AreEqual(TileState.Hidden, far.State);
         }
 
@@ -43,9 +43,9 @@ namespace Game.Tests.EditMode
             var state = NewGame();
             state.Begin();
 
-            Assert.IsTrue(state.TryRevealTile(new HexCoord(1, 0)));
+            Assert.IsTrue(state.TryRevealTile(new HexCoord(0, 1)));
 
-            state.Map.TryGetTile(new HexCoord(1, 0), out var tile);
+            state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
             Assert.AreEqual(TileState.Revealed, tile.State);
             Assert.AreEqual(20, state.Wallet.Points);
         }
@@ -56,9 +56,9 @@ namespace Game.Tests.EditMode
             var state = NewGame();
             state.Begin();
 
-            state.TryRevealTile(new HexCoord(1, 0));
+            state.TryRevealTile(new HexCoord(0, 1));
 
-            state.Map.TryGetTile(new HexCoord(2, 0), out var next);
+            state.Map.TryGetTile(new HexCoord(0, 2), out var next);
             Assert.AreEqual(TileState.Available, next.State);
         }
 
@@ -70,7 +70,7 @@ namespace Game.Tests.EditMode
             var refusals = new List<string>();
             state.ActionRefused += refusals.Add;
 
-            Assert.IsFalse(state.TryRevealTile(new HexCoord(3, 0)));
+            Assert.IsFalse(state.TryRevealTile(new HexCoord(0, 3)));
 
             Assert.AreEqual(1, refusals.Count);
             Assert.AreEqual(40, state.Wallet.Points);
@@ -84,9 +84,9 @@ namespace Game.Tests.EditMode
             var refusals = new List<string>();
             state.ActionRefused += refusals.Add;
 
-            Assert.IsFalse(state.TryRevealTile(new HexCoord(1, 0)));
+            Assert.IsFalse(state.TryRevealTile(new HexCoord(0, 1)));
 
-            state.Map.TryGetTile(new HexCoord(1, 0), out var tile);
+            state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
             Assert.AreEqual(TileState.Available, tile.State);
             Assert.AreEqual(19, state.Wallet.Points);
             Assert.AreEqual(1, refusals.Count);
@@ -97,9 +97,9 @@ namespace Game.Tests.EditMode
         {
             var state = NewGame();
             state.Begin();
-            state.TryRevealTile(new HexCoord(1, 0));
+            state.TryRevealTile(new HexCoord(0, 1));
 
-            Assert.IsFalse(state.TryRevealTile(new HexCoord(1, 0)));
+            Assert.IsFalse(state.TryRevealTile(new HexCoord(0, 1)));
             Assert.AreEqual(20, state.Wallet.Points);
         }
 
@@ -118,12 +118,12 @@ namespace Game.Tests.EditMode
         {
             var state = NewGame();
             state.Begin();
-            state.TryRevealTile(new HexCoord(1, 0));
+            state.TryRevealTile(new HexCoord(0, 1));
 
-            Assert.IsTrue(state.TryBuildRoad(new HexCoord(1, 0)));
+            Assert.IsTrue(state.TryBuildRoad(new HexCoord(0, 1)));
 
-            Assert.IsTrue(state.Roads.HasRoad(new HexCoord(1, 0)));
-            Assert.IsTrue(state.Roads.IsConnected(new HexCoord(1, 0)));
+            Assert.IsTrue(state.Roads.HasRoad(new HexCoord(0, 1)));
+            Assert.IsTrue(state.Roads.IsConnected(new HexCoord(0, 1)));
             Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
         }
 
@@ -135,9 +135,9 @@ namespace Game.Tests.EditMode
             var refusals = new List<string>();
             state.ActionRefused += refusals.Add;
 
-            Assert.IsFalse(state.TryBuildRoad(new HexCoord(1, 0)));
+            Assert.IsFalse(state.TryBuildRoad(new HexCoord(0, 1)));
 
-            Assert.IsFalse(state.Roads.HasRoad(new HexCoord(1, 0)));
+            Assert.IsFalse(state.Roads.HasRoad(new HexCoord(0, 1)));
             Assert.AreEqual(3, state.Storage.CountOf(ResourceType.Gravel));
             Assert.AreEqual(1, refusals.Count);
         }
@@ -147,13 +147,13 @@ namespace Game.Tests.EditMode
         {
             var state = NewGame(gravel: 0);
             state.Begin();
-            state.TryRevealTile(new HexCoord(1, 0));
+            state.TryRevealTile(new HexCoord(0, 1));
             var refusals = new List<string>();
             state.ActionRefused += refusals.Add;
 
-            Assert.IsFalse(state.TryBuildRoad(new HexCoord(1, 0)));
+            Assert.IsFalse(state.TryBuildRoad(new HexCoord(0, 1)));
 
-            Assert.IsFalse(state.Roads.HasRoad(new HexCoord(1, 0)));
+            Assert.IsFalse(state.Roads.HasRoad(new HexCoord(0, 1)));
             Assert.AreEqual(1, refusals.Count);
         }
 
@@ -162,10 +162,10 @@ namespace Game.Tests.EditMode
         {
             var state = NewGame();
             state.Begin();
-            state.TryRevealTile(new HexCoord(1, 0));
-            state.TryBuildRoad(new HexCoord(1, 0));
+            state.TryRevealTile(new HexCoord(0, 1));
+            state.TryBuildRoad(new HexCoord(0, 1));
 
-            Assert.IsFalse(state.TryBuildRoad(new HexCoord(1, 0)));
+            Assert.IsFalse(state.TryBuildRoad(new HexCoord(0, 1)));
             Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
         }
 
@@ -185,18 +185,18 @@ namespace Game.Tests.EditMode
             var state = NewGame();
             state.Begin();
 
-            state.HandleTileClick(new HexCoord(1, 0));
-            state.HandleTileClick(new HexCoord(1, 0));
+            state.HandleTileClick(new HexCoord(0, 1));
+            state.HandleTileClick(new HexCoord(0, 1));
 
-            state.Map.TryGetTile(new HexCoord(1, 0), out var tile);
+            state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
             Assert.AreEqual(TileState.Revealed, tile.State);
-            Assert.IsTrue(state.Roads.HasRoad(new HexCoord(1, 0)));
+            Assert.IsTrue(state.Roads.HasRoad(new HexCoord(0, 1)));
             Assert.AreEqual(20, state.Wallet.Points);
             Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
         }
 
         [Test]
-        public void TileChanged_FiresForMetropolisAndItsSixNeighbors()
+        public void TileChanged_FiresForMetropolisAndTheTilesAboveIt()
         {
             var state = NewGame();
             var changed = new List<TileData>();
@@ -204,7 +204,7 @@ namespace Game.Tests.EditMode
 
             state.Begin();
 
-            Assert.AreEqual(7, changed.Count);
+            Assert.AreEqual(3, changed.Count, "Метрополия и две плитки над ней");
         }
     }
 }

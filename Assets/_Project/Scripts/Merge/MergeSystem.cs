@@ -4,7 +4,7 @@ using Game.Storage;
 
 namespace Game.Merge
 {
-    /// <summary>Слияние ресурсов на складе: списание, выдача крафта и начисление очков.</summary>
+    /// <summary>Действия на складе: слияние базовых ресурсов и обмен крафтовых на очки.</summary>
     public sealed class MergeSystem
     {
         readonly StorageGrid storage;
@@ -23,11 +23,14 @@ namespace Game.Merge
 
         public event Action<MergeOutcome> Merged;
 
+        /// <summary>Крафтовый ресурс превращён в очки.</summary>
+        public event Action<ResourceType, int> Converted;
+
         public bool TryMerge(ResourceType type)
         {
             if (!rules.CanMerge(type))
             {
-                Refused?.Invoke("Крафтовый ресурс дальше не мержится");
+                Refused?.Invoke("Крафтовый ресурс не мержится, кликните его ради очков");
                 return false;
             }
 
@@ -41,8 +44,26 @@ namespace Game.Merge
             for (var i = 0; i < outcome.Produced; i++)
                 storage.TryStore(outcome.Result);
 
-            wallet.AddPoints(outcome.Points);
             Merged?.Invoke(outcome);
+            return true;
+        }
+
+        /// <summary>Клик по крафтовому ресурсу: клетка освобождается, игрок получает очки.</summary>
+        public bool TryConvert(int cellIndex)
+        {
+            var content = storage[cellIndex];
+            if (!content.HasValue)
+                return false;
+
+            if (rules.CanMerge(content.Value))
+            {
+                Refused?.Invoke("Базовый ресурс сначала нужно смержить");
+                return false;
+            }
+
+            storage.TryRemoveAt(cellIndex);
+            wallet.AddPoints(rules.CraftedPoints);
+            Converted?.Invoke(content.Value, rules.CraftedPoints);
             return true;
         }
     }

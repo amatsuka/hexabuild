@@ -13,7 +13,7 @@ namespace Game.Grid
             var random = settings.Seed == 0 ? new System.Random() : new System.Random(settings.Seed);
 
             var depositsByCoord = new Dictionary<HexCoord, List<Deposit>>();
-            foreach (var coord in HexMap.CoordsInRadius(settings.Radius))
+            foreach (var coord in HexMap.CoordsInFlare(settings.Rows))
                 if (coord != HexCoord.Zero)
                     depositsByCoord[coord] = RollDeposits(random, settings);
 
@@ -26,7 +26,7 @@ namespace Game.Grid
             foreach (var pair in depositsByCoord)
                 tiles.Add(new TileData(pair.Key, false, pair.Value));
 
-            return new HexMap(settings.Radius, tiles);
+            return new HexMap(settings.Rows, tiles);
         }
 
         static List<Deposit> RollDeposits(System.Random random, MapGenerationSettings settings)

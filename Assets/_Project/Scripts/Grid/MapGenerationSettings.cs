@@ -4,7 +4,7 @@ namespace Game.Grid
     public readonly struct MapGenerationSettings
     {
         public MapGenerationSettings(
-            int radius,
+            int rows,
             int seed,
             float emptyWeight,
             float singleDepositWeight,
@@ -13,7 +13,7 @@ namespace Game.Grid
             int minReserve,
             int maxReserve)
         {
-            Radius = radius;
+            Rows = rows;
             Seed = seed;
             EmptyWeight = emptyWeight;
             SingleDepositWeight = singleDepositWeight;
@@ -23,7 +23,7 @@ namespace Game.Grid
             MaxReserve = maxReserve;
         }
 
-        public int Radius { get; }
+        public int Rows { get; }
 
         /// <summary>0 — случайная партия, иначе воспроизводимая.</summary>
         public int Seed { get; }

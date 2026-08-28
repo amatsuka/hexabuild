@@ -16,13 +16,18 @@ namespace Game.Tests.EditMode
         public void TearDown() => Object.DestroyImmediate(rules);
 
         [Test]
-        public void FiveResources_GiveTwoCraftedAndTwentyFivePoints()
+        public void FiveResources_GiveTwoCrafted()
         {
             Assert.IsTrue(rules.TryResolve(ResourceType.Wood, 5, out var outcome));
 
             Assert.AreEqual(5, outcome.Consumed);
             Assert.AreEqual(2, outcome.Produced);
-            Assert.AreEqual(25, outcome.Points);
+        }
+
+        [Test]
+        public void CraftedResource_IsWorthPointsOnClick()
+        {
+            Assert.AreEqual(15, rules.CraftedPoints);
         }
 
         [Test]
@@ -32,18 +37,16 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(5, outcome.Consumed);
             Assert.AreEqual(2, outcome.Produced);
-            Assert.AreEqual(25, outcome.Points);
         }
 
         [TestCase(3)]
         [TestCase(4)]
-        public void ThreeOrFour_GiveOneCraftedAndTenPoints(int available)
+        public void ThreeOrFour_GiveOneCrafted(int available)
         {
             Assert.IsTrue(rules.TryResolve(ResourceType.Stone, available, out var outcome));
 
             Assert.AreEqual(3, outcome.Consumed);
             Assert.AreEqual(1, outcome.Produced);
-            Assert.AreEqual(10, outcome.Points);
         }
 
         [TestCase(0)]

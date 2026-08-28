@@ -7,19 +7,20 @@ namespace Game.Tests.EditMode
 {
     public sealed class MapGeneratorTests
     {
-        const int Radius = 6;
+        const int Rows = 10;
 
-        static MapGenerationSettings Settings(int seed) => new(Radius, seed, 30f, 45f, 20f, 5f, 8, 20);
+        static MapGenerationSettings Settings(int seed) => new(Rows, seed, 30f, 45f, 20f, 5f, 8, 20);
 
         static MapGenerationSettings SettingsWithWeights(int seed, float empty, float single, float two, float three) =>
-            new(Radius, seed, empty, single, two, three, 8, 20);
+            new(Rows, seed, empty, single, two, three, 8, 20);
 
         [Test]
-        public void Generates127TilesWithMetropolisInCenter()
+        public void Generates100TilesWithMetropolisAtTheBottom()
         {
             var map = MapGenerator.Generate(Settings(1));
 
-            Assert.AreEqual(127, map.Count);
+            Assert.AreEqual(100, map.Count);
+            Assert.AreEqual(0, map.Metropolis.Coord.R);
             Assert.IsTrue(map.Metropolis.IsMetropolis);
             Assert.IsEmpty(map.Metropolis.Deposits);
         }
@@ -117,7 +118,7 @@ namespace Game.Tests.EditMode
         static string Signature(HexMap map)
         {
             var builder = new System.Text.StringBuilder();
-            foreach (var coord in HexMap.CoordsInRadius(Radius))
+            foreach (var coord in HexMap.CoordsInFlare(Rows))
             {
                 map.TryGetTile(coord, out var tile);
                 builder.Append(coord).Append(':');

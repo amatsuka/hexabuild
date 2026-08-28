@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Game.UI
 {
-    /// <summary>Ортографическая камера: пан перетаскиванием, зум колесом, границы по размеру поля.</summary>
+    /// <summary>Ортографическая камера: пан перетаскиванием, зум колесом, границы по габаритам поля.</summary>
     [RequireComponent(typeof(Camera))]
     public sealed class CameraRig : MonoBehaviour
     {
@@ -11,16 +11,23 @@ namespace Game.UI
         [SerializeField] float zoomStepPerScroll = 0.5f;
 
         Camera cameraComponent;
-        Vector2 fieldHalfExtents = Vector2.positiveInfinity;
+        Rect fieldBounds = new(-1000f, -1000f, 2000f, 2000f);
 
         Camera Cam => cameraComponent != null ? cameraComponent : cameraComponent = GetComponent<Camera>();
 
         void Awake() => Cam.orthographic = true;
 
-        /// <summary>Половина размеров поля в мировых координатах: за них камера не выходит.</summary>
-        public void SetFieldHalfExtents(Vector2 halfExtents)
+        /// <summary>Прямоугольник поля в мировых координатах: за него камера не выходит.</summary>
+        public void SetFieldBounds(Rect bounds)
         {
-            fieldHalfExtents = halfExtents;
+            fieldBounds = bounds;
+            ClampPosition();
+        }
+
+        /// <summary>Поставить камеру к низу поля, где стоит Метрополия.</summary>
+        public void FocusOnBottom()
+        {
+            transform.position = new Vector3(fieldBounds.center.x, fieldBounds.yMin + Cam.orthographicSize, transform.position.z);
             ClampPosition();
         }
 
@@ -43,14 +50,20 @@ namespace Game.UI
             var halfHeight = Cam.orthographicSize;
             var halfWidth = halfHeight * Cam.aspect;
 
-            var limitX = Mathf.Max(0f, fieldHalfExtents.x - halfWidth);
-            var limitY = Mathf.Max(0f, fieldHalfExtents.y - halfHeight);
-
             var position = transform.position;
             transform.position = new Vector3(
-                Mathf.Clamp(position.x, -limitX, limitX),
-                Mathf.Clamp(position.y, -limitY, limitY),
+                ClampAxis(position.x, fieldBounds.xMin, fieldBounds.xMax, halfWidth),
+                ClampAxis(position.y, fieldBounds.yMin, fieldBounds.yMax, halfHeight),
                 position.z);
+        }
+
+        /// <summary>Если поле уже обзора, камера стоит по центру этой оси.</summary>
+        static float ClampAxis(float value, float min, float max, float halfSize)
+        {
+            if (max - min <= halfSize * 2f)
+                return (min + max) * 0.5f;
+
+            return Mathf.Clamp(value, min + halfSize, max - halfSize);
         }
     }
 }

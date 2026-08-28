@@ -22,7 +22,7 @@ namespace Game.Tests.EditMode
             }
 
             var tiles = new List<TileData>();
-            foreach (var coord in HexMap.CoordsInRadius(6))
+            foreach (var coord in HexMap.CoordsInFlare(10))
             {
                 contents.TryGetValue(coord, out var list);
                 var tile = new TileData(coord, coord == HexCoord.Zero, list);
@@ -32,13 +32,13 @@ namespace Game.Tests.EditMode
                 tiles.Add(tile);
             }
 
-            return new HexMap(6, tiles);
+            return new HexMap(10, tiles);
         }
 
         [Test]
         public void ConnectedTile_ProducesOneUnitPerInterval()
         {
-            var coord = new HexCoord(1, 0);
+            var coord = new HexCoord(0, 1);
             var map = MapWithDeposits((coord, ResourceType.Wood, 5));
             var roads = new RoadNetwork(map);
             roads.Build(coord);
@@ -59,7 +59,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void DisconnectedTile_ProducesNothing()
         {
-            var coord = new HexCoord(3, 0);
+            var coord = new HexCoord(0, 3);
             var map = MapWithDeposits((coord, ResourceType.Wood, 5));
             var roads = new RoadNetwork(map);
             roads.Build(coord);
@@ -75,7 +75,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void TileWithoutRoad_ProducesNothing()
         {
-            var coord = new HexCoord(1, 0);
+            var coord = new HexCoord(0, 1);
             var map = MapWithDeposits((coord, ResourceType.Wood, 5));
             var roads = new RoadNetwork(map);
             var production = new ProductionSystem(map, roads, Interval);
@@ -90,7 +90,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void TwoDeposits_AreShippedInTurn()
         {
-            var coord = new HexCoord(1, 0);
+            var coord = new HexCoord(0, 1);
             var map = MapWithDeposits((coord, ResourceType.Wood, 5), (coord, ResourceType.Stone, 5));
             var roads = new RoadNetwork(map);
             roads.Build(coord);
@@ -109,7 +109,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void ExhaustedTile_StopsProducingAndReportsDepletion()
         {
-            var coord = new HexCoord(1, 0);
+            var coord = new HexCoord(0, 1);
             var map = MapWithDeposits((coord, ResourceType.Wood, 2));
             var roads = new RoadNetwork(map);
             roads.Build(coord);
@@ -131,7 +131,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void EmptyTileWithRoad_NeverProduces()
         {
-            var coord = new HexCoord(1, 0);
+            var coord = new HexCoord(0, 1);
             var map = MapWithDeposits();
             var roads = new RoadNetwork(map);
             roads.Build(coord);
