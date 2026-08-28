@@ -219,10 +219,16 @@ namespace Game.Core
             if (mover == null)
                 return;
 
-            if (stored)
-                mover.HopTo(storageView.CellWorldPoint(cell, Camera.main));
-            else
+            if (!stored)
+            {
                 Destroy(mover.gameObject);
+                return;
+            }
+
+            // Клетка занята сразу, иначе её перехватит следующая доставка, но показываем её
+            // только когда кружок долетит.
+            storageView.HoldCell(cell);
+            mover.HopTo(storageView.CellWorldPoint(cell, Camera.main), () => storageView.ReleaseCell(cell));
         }
     }
 }

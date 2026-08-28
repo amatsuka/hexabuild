@@ -1,3 +1,4 @@
+using System;
 using Game.Grid;
 using UnityEngine;
 
@@ -16,6 +17,7 @@ namespace Game.Economy
         [SerializeField] float hopHeight = 0.7f;
 
         Delivery delivery;
+        Action landed;
         Vector3 hopFrom;
         Vector3 hopTo;
         float hopElapsed = -1f;
@@ -35,13 +37,27 @@ namespace Game.Economy
             MoveToDelivery();
         }
 
-        /// <summary>Ресурс доехал до Метрополии и перепрыгивает в клетку склада.</summary>
-        public void HopTo(Vector3 target)
+        /// <summary>
+        /// Ресурс доехал до Метрополии и перепрыгивает в клетку склада. `onLanded` вызывается
+        /// ровно один раз — в конце прыжка или при уничтожении кружка, чтобы клетка не осталась
+        /// скрытой навсегда.
+        /// </summary>
+        public void HopTo(Vector3 target, Action onLanded = null)
         {
             delivery = null;
+            landed = onLanded;
             hopFrom = transform.position;
             hopTo = new Vector3(target.x, target.y, depth);
             hopElapsed = 0f;
+        }
+
+        void OnDestroy() => Land();
+
+        void Land()
+        {
+            var callback = landed;
+            landed = null;
+            callback?.Invoke();
         }
 
         void Update()
@@ -66,7 +82,10 @@ namespace Game.Economy
             transform.position = position;
 
             if (progress >= 1f)
+            {
+                Land();
                 Destroy(gameObject);
+            }
         }
 
         void MoveToDelivery()

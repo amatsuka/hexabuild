@@ -26,6 +26,8 @@ namespace Game.Storage
         [SerializeField] float popScale = 1.3f;
         [SerializeField] float flyEndScale = 0.45f;
 
+        readonly HashSet<int> pendingCells = new();
+
         Image panel;
         Image[] cells;
         StorageGrid grid;
@@ -39,6 +41,30 @@ namespace Game.Storage
             grid.Changed += Refresh;
             grid.ResourceLost += OnResourceLost;
             Refresh();
+        }
+
+        /// <summary>
+        /// Клетка занята доставкой, но показывать её рано: ресурс ещё летит с Метрополии.
+        /// </summary>
+        public void HoldCell(int index)
+        {
+            pendingCells.Add(index);
+            Refresh();
+        }
+
+        /// <summary>Ресурс приземлился: клетка проявляется и выскакивает масштабом.</summary>
+        public void ReleaseCell(int index)
+        {
+            if (!pendingCells.Remove(index))
+                return;
+
+            Refresh();
+
+            if (!isActiveAndEnabled || !grid[index].HasValue)
+                return;
+
+            cells[index].rectTransform.localScale = Vector3.zero;
+            StartCoroutine(PopCells(new[] { index }));
         }
 
         /// <summary>
@@ -83,6 +109,12 @@ namespace Game.Storage
             foreach (var copy in flying)
                 Destroy(copy.gameObject);
 
+            yield return PopCells(resultCells);
+        }
+
+        /// <summary>Клетка выскакивает из нуля в чуть больший масштаб и оседает в единицу.</summary>
+        IEnumerator PopCells(IReadOnlyList<int> popped)
+        {
             for (var elapsed = 0f; elapsed < popSeconds; elapsed += Time.deltaTime)
             {
                 var progress = elapsed / popSeconds;
@@ -90,13 +122,13 @@ namespace Game.Storage
                     ? Mathf.Lerp(0f, popScale, progress * 2f)
                     : Mathf.Lerp(popScale, 1f, (progress - 0.5f) * 2f);
 
-                foreach (var index in resultCells)
+                foreach (var index in popped)
                     cells[index].rectTransform.localScale = Vector3.one * scale;
 
                 yield return null;
             }
 
-            foreach (var index in resultCells)
+            foreach (var index in popped)
                 cells[index].rectTransform.localScale = Vector3.one;
         }
 
@@ -204,7 +236,8 @@ namespace Game.Storage
             for (var i = 0; i < cells.Length; i++)
             {
                 var content = grid[i];
-                cells[i].color = content.HasValue ? palette.Get(content.Value) : emptyCellColor;
+                var shown = content.HasValue && !pendingCells.Contains(i);
+                cells[i].color = shown ? palette.Get(content.Value) : emptyCellColor;
             }
         }
 
