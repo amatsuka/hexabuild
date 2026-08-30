@@ -132,29 +132,11 @@ namespace Game.Core
         }
 
         /// <summary>
-        /// Цена дороги: обычная плюс надбавка за мост, если ребро к будущему родителю пересекает
-        /// реку. Родителя приходится спрашивать заранее — платят до постройки.
-        ///
-        /// Это работает только потому, что в M7 родитель стал липким: назначенный однажды, он не
-        /// переедет, и оплаченный мост останется на том самом ребре. Дорога, построенная в отрыве
-        /// от сети, родителя не имеет и за реку не платит — цена берётся в момент постройки.
+        /// Цена дороги: обычная плюс надбавка за мост на плитке с рекой. Русло идёт через центр
+        /// плитки, лента дороги — тоже, обойти реку внутри гекса нельзя, поэтому цена локальна
+        /// и родителя спрашивать не нужно.
         /// </summary>
-        public int RoadPrice(TileData tile)
-        {
-            if (Roads.TryPreviewParent(tile.Coord, out var parent) && CrossesRiver(tile, parent))
-                return prices.Road + prices.Bridge;
-
-            return prices.Road;
-        }
-
-        static bool CrossesRiver(TileData tile, HexCoord parent)
-        {
-            for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
-                if (tile.Coord.Neighbor(direction) == parent)
-                    return tile.HasRiver(direction);
-
-            return false;
-        }
+        public int RoadPrice(TileData tile) => tile.HasRiver ? prices.Road + prices.Bridge : prices.Road;
 
         void MakeNeighborsAvailable(TileData tile)
         {

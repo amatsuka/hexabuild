@@ -15,7 +15,6 @@ namespace Game.Grid
         const float RingWidth = 0.12f;
 
         static Mesh triangle;
-        static Mesh bar;
         static Mesh hexRing;
 
         static readonly Dictionary<(ResourceType Type, bool Exhausted, bool Accent), Mesh> deposits = new();
@@ -25,11 +24,6 @@ namespace Game.Grid
         public static Mesh Triangle => triangle != null
             ? triangle
             : triangle = new FlatMesh().Triangle(Vector2.zero, 1f, 1f).Bake("Triangle");
-
-        /// <summary>Квадрат со стороной 1.</summary>
-        public static Mesh Bar => bar != null
-            ? bar
-            : bar = new FlatMesh().Quad(Vector2.zero, 1f, 1f).Bake("Bar");
 
         /// <summary>
         /// Ободок по границе гекса. Увеличенный гекс позади плитки не годится: соседние плитки

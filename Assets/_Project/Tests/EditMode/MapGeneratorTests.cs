@@ -120,6 +120,32 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// Поле обязано быть проходимо целиком: гряда, замкнувшая кусок поля, вычёркивает его из
+        /// партии навсегда — открыть такие плитки нельзя никогда. Генератор пробивает в грядах
+        /// перевалы, и после этого непроходимыми остаются только сами горы.
+        /// </summary>
+        [Test]
+        public void EveryPassableTile_IsReachableFromTheMetropolis_OnEverySeed()
+        {
+            for (var seed = 1; seed <= 200; seed++)
+            {
+                var map = MapGenerator.Generate(Settings(seed));
+                var reachable = new HashSet<HexCoord> { HexCoord.Zero };
+                var frontier = new Queue<HexCoord>();
+                frontier.Enqueue(HexCoord.Zero);
+
+                while (frontier.Count > 0)
+                    foreach (var neighbor in map.NeighborsOf(frontier.Dequeue()))
+                        if (neighbor.IsPassable && reachable.Add(neighbor.Coord))
+                            frontier.Enqueue(neighbor.Coord);
+
+                foreach (var tile in map.Tiles.Values)
+                    if (tile.IsPassable)
+                        Assert.IsTrue(reachable.Contains(tile.Coord), $"seed {seed}: {tile.Coord} отрезана грядой");
+            }
+        }
+
         [Test]
         public void Metropolis_IsNeverAMountain()
         {
@@ -140,9 +166,12 @@ namespace Game.Tests.EditMode
                     Assert.IsEmpty(tile.Deposits, $"seed {seed}: у горы {tile.Coord} есть месторождение");
         }
 
-        /// <summary>Река лежит на ребре, а ребро общее: бит обязан стоять с обеих сторон.</summary>
+        /// <summary>
+        /// Русло переходит с плитки на плитку: бит в сторону соседа обязан иметь ответный бит.
+        /// Бит наружу поля ответного не имеет — это устье.
+        /// </summary>
         [Test]
-        public void RiverMask_IsSymmetricAcrossTheEdge()
+        public void RiverMask_IsSymmetricBetweenNeighbours()
         {
             for (var seed = 1; seed <= 50; seed++)
             {
@@ -151,98 +180,221 @@ namespace Game.Tests.EditMode
                 foreach (var tile in map.Tiles.Values)
                 for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
                 {
-                    if (!tile.HasRiver(direction))
+                    if ((tile.RiverMask & (1 << direction)) == 0)
                         continue;
 
                     if (!map.TryGetTile(tile.Coord.Neighbor(direction), out var other))
                         continue;
 
-                    Assert.IsTrue(
-                        other.HasRiver((direction + 3) % 6),
-                        $"seed {seed}: у {tile.Coord} река в сторону {direction}, а у соседа её нет");
+                    Assert.AreNotEqual(
+                        0,
+                        other.RiverMask & (1 << ((direction + 3) % 6)),
+                        $"seed {seed}: у {tile.Coord} русло уходит в сторону {direction}, а у соседа его нет");
                 }
             }
         }
 
+        /// <summary>Горы обязаны быть: без них у реки нет истока, а у поля — препятствий.</summary>
         [Test]
-        public void MapsWithMountains_GetRivers()
+        public void EveryMap_HasMountainsAndARiver()
         {
-            var withMountains = 0;
-            var withRivers = 0;
-
-            for (var seed = 1; seed <= 60; seed++)
+            for (var seed = 1; seed <= 200; seed++)
             {
                 var map = MapGenerator.Generate(Settings(seed));
-                var mountains = false;
-                var rivers = false;
+                var mountains = 0;
+                var riverTiles = 0;
 
                 foreach (var tile in map.Tiles.Values)
                 {
-                    mountains |= tile.Biome == BiomeType.Mountains;
-                    rivers |= tile.RiverMask != 0;
+                    if (tile.Biome == BiomeType.Mountains)
+                        mountains++;
+                    if (tile.HasRiver)
+                        riverTiles++;
                 }
 
-                if (!mountains)
-                    continue;
-
-                withMountains++;
-                if (rivers)
-                    withRivers++;
+                Assert.Greater(mountains, 0, $"seed {seed}: карта без единой горы");
+                Assert.Greater(riverTiles, 0, $"seed {seed}: горы есть, а реки нет");
             }
-
-            Assert.Greater(withMountains, 0, "на шестидесяти сидах не выпало ни одной горы");
-            Assert.AreEqual(withMountains, withRivers, "русло берёт начало в горах: есть горы — есть и река");
         }
 
-        /// <summary>
-        /// Русло — цепочка, а не россыпь: каждое ребро с рекой делит вершину с другим таким же,
-        /// кроме концов русла. Иначе река не была бы преградой, её обходили бы вплотную.
-        /// </summary>
         [Test]
-        public void River_RunsAsAConnectedChain()
+        public void Rivers_StartInTheMountains()
         {
             for (var seed = 1; seed <= 40; seed++)
             {
                 var map = MapGenerator.Generate(Settings(seed));
-                var edges = new HashSet<(HexCoord Tile, int Direction)>();
 
-                foreach (var tile in map.Tiles.Values)
-                for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
-                    if (tile.HasRiver(direction))
-                        edges.Add(Canonical(tile.Coord, direction));
-
-                var loose = 0;
-                foreach (var edge in edges)
+                foreach (var component in RiverComponents(map))
                 {
-                    var touching = 0;
-                    foreach (var candidate in NeighborEdges(edge))
-                        if (edges.Contains(Canonical(candidate.Tile, candidate.Direction)))
-                            touching++;
+                    var fromMountains = false;
+                    foreach (var tile in component)
+                        fromMountains |= tile.Biome == BiomeType.Mountains;
 
-                    if (touching == 0)
-                        loose++;
+                    Assert.IsTrue(fromMountains, $"seed {seed}: русло у {component[0].Coord} не берёт начала в горах");
                 }
-
-                Assert.AreEqual(0, loose, $"seed {seed}: {loose} рёбер русла висят в отрыве от остальных");
             }
         }
 
-        static (HexCoord Tile, int Direction) Canonical(HexCoord tile, int direction)
+        /// <summary>Река идёт по поверхности плитки: месторождению там уже не место.</summary>
+        [Test]
+        public void RiverTiles_CarryNoDeposits()
         {
-            var other = tile.Neighbor(direction);
-            if (tile.Q < other.Q || (tile.Q == other.Q && tile.R < other.R))
-                return (tile, direction);
-
-            return (other, (direction + 3) % 6);
+            for (var seed = 1; seed <= 50; seed++)
+            foreach (var tile in MapGenerator.Generate(Settings(seed)).Tiles.Values)
+                if (tile.HasRiver)
+                    Assert.IsEmpty(tile.Deposits, $"seed {seed}: у речной плитки {tile.Coord} есть месторождение");
         }
 
-        static IEnumerable<(HexCoord Tile, int Direction)> NeighborEdges((HexCoord Tile, int Direction) edge)
+        /// <summary>Русло уходит за границу поля: река, кончающаяся в чистом поле, читается сломанной.</summary>
+        [Test]
+        public void Rivers_ReachTheEdgeOfTheField()
         {
-            var far = edge.Tile.Neighbor(edge.Direction);
-            yield return (edge.Tile, (edge.Direction + 1) % 6);
-            yield return (edge.Tile, (edge.Direction + 5) % 6);
-            yield return (far, (edge.Direction + 2) % 6);
-            yield return (far, (edge.Direction + 4) % 6);
+            for (var seed = 1; seed <= 40; seed++)
+            {
+                var map = MapGenerator.Generate(Settings(seed));
+
+                foreach (var component in RiverComponents(map))
+                {
+                    var mouths = 0;
+                    foreach (var tile in component)
+                    for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+                        if ((tile.RiverMask & (1 << direction)) != 0 && !map.Contains(tile.Coord.Neighbor(direction)))
+                            mouths++;
+
+                    Assert.Greater(mouths, 0, $"seed {seed}: русло у {component[0].Coord} не дошло до края поля");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Кромка — только устье. Русло, свернувшее вдоль края, шло бы по границе карты и резало
+        /// бы от поля целую полосу плиток.
+        /// </summary>
+        [Test]
+        public void Rivers_NeverRunAlongTheEdgeOfTheField()
+        {
+            for (var seed = 1; seed <= 60; seed++)
+            {
+                var map = MapGenerator.Generate(Settings(seed));
+
+                foreach (var tile in map.Tiles.Values)
+                {
+                    if (!tile.HasRiver || !IsBorder(map, tile.Coord))
+                        continue;
+
+                    for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+                    {
+                        if ((tile.RiverMask & (1 << direction)) == 0)
+                            continue;
+
+                        if (!map.TryGetTile(tile.Coord.Neighbor(direction), out var other))
+                            continue;
+
+                        Assert.IsFalse(
+                            IsBorder(map, other.Coord),
+                            $"seed {seed}: русло идёт по кромке от {tile.Coord} к {other.Coord}");
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public void Rivers_SometimesBranch()
+        {
+            var branched = 0;
+
+            for (var seed = 1; seed <= 40; seed++)
+            foreach (var tile in MapGenerator.Generate(Settings(seed)).Tiles.Values)
+                if (BitCount(tile.RiverMask) >= 3)
+                {
+                    branched++;
+                    break;
+                }
+
+            Assert.Greater(branched, 0, "на сорока сидах река ни разу не разветвилась");
+        }
+
+        [Test]
+        public void Metropolis_IsNeverCrossedByARiver()
+        {
+            for (var seed = 1; seed <= 200; seed++)
+                Assert.IsFalse(MapGenerator.Generate(Settings(seed)).Metropolis.HasRiver, $"seed {seed}");
+        }
+
+        /// <summary>
+        /// Плитка с рекой не несёт месторождений и стоит трёх щебней под дорогу, поэтому их
+        /// число — вопрос баланса. Замер держит бюджет в тех рамках, из которых считался M10.
+        /// </summary>
+        [Test]
+        public void Rivers_CoverAModestShareOfTheField()
+        {
+            var total = 0;
+
+            for (var seed = 1; seed <= 200; seed++)
+            foreach (var tile in MapGenerator.Generate(Settings(seed)).Tiles.Values)
+                if (tile.HasRiver)
+                    total++;
+
+            var average = total / 200f;
+
+            Assert.GreaterOrEqual(average, 8f, $"рек стало мало: {average:F1} плитки на карту");
+            Assert.LessOrEqual(average, 18f, $"река съедает поле: {average:F1} плитки на карту");
+        }
+
+        /// <summary>Связные куски русла: обход по битам маски от каждой ещё не пройденной плитки.</summary>
+        static List<List<TileData>> RiverComponents(HexMap map)
+        {
+            var components = new List<List<TileData>>();
+            var visited = new HashSet<HexCoord>();
+
+            foreach (var tile in map.Tiles.Values)
+            {
+                if (!tile.HasRiver || !visited.Add(tile.Coord))
+                    continue;
+
+                var component = new List<TileData> { tile };
+                var frontier = new Queue<TileData>();
+                frontier.Enqueue(tile);
+
+                while (frontier.Count > 0)
+                {
+                    var current = frontier.Dequeue();
+                    for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+                    {
+                        if ((current.RiverMask & (1 << direction)) == 0)
+                            continue;
+
+                        if (!map.TryGetTile(current.Coord.Neighbor(direction), out var next) || !visited.Add(next.Coord))
+                            continue;
+
+                        component.Add(next);
+                        frontier.Enqueue(next);
+                    }
+                }
+
+                components.Add(component);
+            }
+
+            return components;
+        }
+
+        static bool IsBorder(HexMap map, HexCoord coord)
+        {
+            for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+                if (!map.Contains(coord.Neighbor(direction)))
+                    return true;
+
+            return false;
+        }
+
+        static int BitCount(int mask)
+        {
+            var count = 0;
+            for (var bit = 0; bit < HexCoord.Directions.Count; bit++)
+                if ((mask & (1 << bit)) != 0)
+                    count++;
+
+            return count;
         }
 
         [Test]
@@ -269,8 +421,8 @@ namespace Game.Tests.EditMode
 
             foreach (var tile in map.Tiles.Values)
             {
-                // Гора месторождений не несёт вовсе — веса до неё не доходят.
-                if (tile.IsMetropolis || tile.Biome == BiomeType.Mountains)
+                // Гора и плитка с рекой месторождений не несут вовсе — веса до них не доходят.
+                if (tile.IsMetropolis || tile.Biome == BiomeType.Mountains || tile.HasRiver)
                     continue;
 
                 Assert.AreEqual(expected, tile.Deposits.Count, $"плитка {tile.Coord}");

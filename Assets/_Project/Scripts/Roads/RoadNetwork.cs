@@ -40,45 +40,6 @@ namespace Game.Roads
             (parents.TryGetValue(from, out var fromParent) && fromParent == to)
             || (parents.TryGetValue(to, out var toParent) && toParent == from);
 
-        /// <summary>
-        /// Родитель, которого получит дорога, если построить её здесь. Нужен до постройки: цена
-        /// дороги зависит от ребра к родителю (мост через реку), а платить надо заранее.
-        ///
-        /// Обход повторяет порядок `Traverse` от Метрополии по уже построенным дорогам и берёт
-        /// первую снятую с очереди, которой `coord` приходится соседом, — то же самое сделает
-        /// BFS внутри `Build`. Совпадение стережёт тест: родитель липкий, так что предсказание
-        /// остаётся верным и потом.
-        /// </summary>
-        public bool TryPreviewParent(HexCoord coord, out HexCoord parent)
-        {
-            parent = HexCoord.Zero;
-            if (roads.Contains(coord) || !map.Contains(coord))
-                return false;
-
-            frontier.Clear();
-            visited.Clear();
-            frontier.Enqueue(HexCoord.Zero);
-            visited.Add(HexCoord.Zero);
-
-            while (frontier.Count > 0)
-            {
-                var current = frontier.Dequeue();
-                foreach (var neighbor in current.Neighbors())
-                {
-                    if (neighbor == coord)
-                    {
-                        parent = current;
-                        return true;
-                    }
-
-                    if (roads.Contains(neighbor) && visited.Add(neighbor))
-                        frontier.Enqueue(neighbor);
-                }
-            }
-
-            return false;
-        }
-
         public bool Build(HexCoord coord)
         {
             if (!map.Contains(coord) || coord == HexCoord.Zero)

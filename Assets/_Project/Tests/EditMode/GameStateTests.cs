@@ -348,14 +348,13 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Река лежит на ребре между (0,1) и Метрополией: направление 2 у плитки, обратное — у
-        /// Метрополии. Дорога на (0,1) цепляется именно за это ребро, значит нужен мост.
+        /// Река идёт по поверхности плитки: любая дорога на ней пересекает русло, потому что
+        /// лента дороги тоже проходит через центр гекса. Значит мост, значит три щебня.
         /// </summary>
         [Test]
-        public void RoadAcrossARiverEdge_CostsTheBridgeSurcharge()
+        public void RoadOnARiverTile_CostsTheBridgeSurcharge()
         {
-            var state = NewGame(map: FlatMap(rivers: c =>
-                c == new HexCoord(0, 1) ? 1 << 2 : c == HexCoord.Zero ? 1 << 5 : 0));
+            var state = NewGame(map: FlatMap(rivers: c => c == new HexCoord(0, 1) ? (1 << 2) | (1 << 5) : 0));
             state.Begin();
             state.TryRevealTile(new HexCoord(0, 1));
             state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
@@ -366,22 +365,21 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void RoadBesideARiver_CostsTheUsualPrice()
+        public void RoadBesideARiverTile_CostsTheUsualPrice()
         {
-            // река на дальнем ребре (0,1), к Метрополии она не выходит
-            var state = NewGame(map: FlatMap(rivers: c => c == new HexCoord(0, 1) ? 1 << 5 : 0));
+            // река течёт по соседней плитке, эта — сухая
+            var state = NewGame(map: FlatMap(rivers: c => c == new HexCoord(-1, 1) ? (1 << 0) | (1 << 3) : 0));
             state.Begin();
             state.TryRevealTile(new HexCoord(0, 1));
             state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
 
-            Assert.AreEqual(RoadCost, state.RoadPrice(tile), "река сбоку моста не требует");
+            Assert.AreEqual(RoadCost, state.RoadPrice(tile), "река у соседа моста не требует");
         }
 
         [Test]
         public void BridgeRefusal_NamesTheFullPrice()
         {
-            var state = NewGame(gravel: 2, map: FlatMap(rivers: c =>
-                c == new HexCoord(0, 1) ? 1 << 2 : c == HexCoord.Zero ? 1 << 5 : 0));
+            var state = NewGame(gravel: 2, map: FlatMap(rivers: c => c == new HexCoord(0, 1) ? 1 << 2 : 0));
             state.Begin();
             state.TryRevealTile(new HexCoord(0, 1));
             var refusals = new List<string>();
@@ -391,38 +389,6 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
             CollectionAssert.Contains(refusals, $"Нужен мост: {RoadCost + BridgeCost} щебня");
-        }
-
-        /// <summary>
-        /// Цену считают до постройки по ребру к будущему родителю, а назначает родителя BFS уже
-        /// после. Предсказание обязано совпадать, иначе игрок платит за один мост, а получает
-        /// дорогу через другое ребро.
-        /// </summary>
-        [Test]
-        public void PreviewedParent_MatchesTheOneAssignedOnBuild()
-        {
-            var state = NewGame(points: 100000, gravel: 0, map: FlatMap());
-            state.Begin();
-            for (var i = 0; i < 200; i++)
-                state.Storage.TryStore(ResourceType.Gravel);
-
-            foreach (var coord in new[]
-                     {
-                         new HexCoord(0, 1), new HexCoord(-1, 1), new HexCoord(-1, 2), new HexCoord(0, 2),
-                         new HexCoord(-2, 2), new HexCoord(-2, 3), new HexCoord(-1, 3), new HexCoord(0, 3),
-                         new HexCoord(-3, 4), new HexCoord(-2, 4)
-                     })
-            {
-                state.TryRevealTile(coord);
-                var previewed = state.Roads.TryPreviewParent(coord, out var expected);
-
-                state.TryBuildRoad(coord);
-
-                var assigned = state.Roads.TryGetParent(coord, out var actual);
-                Assert.AreEqual(previewed, assigned, $"{coord}: предсказание и назначение разошлись в самом факте родителя");
-                if (previewed)
-                    Assert.AreEqual(expected, actual, $"{coord}: предсказан родитель {expected}, назначен {actual}");
-            }
         }
 
         [Test]

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Game.Economy;
+using Game.Roads;
 using UnityEngine;
 
 namespace Game.Grid
@@ -36,7 +37,8 @@ namespace Game.Grid
 
         [Header("Река")]
         [SerializeField] Color riverColor = new(0.28f, 0.52f, 0.74f);
-        [SerializeField] float riverWidth = 0.17f;
+        [Tooltip("Шире полотна дороги: иначе на переправе русло не читается вовсе")]
+        [SerializeField] float riverWidth = 0.22f;
 
         [Header("Обводка")]
         [SerializeField] Color outlineColor = new(0.07f, 0.07f, 0.09f);
@@ -74,8 +76,8 @@ namespace Game.Grid
         readonly List<DepositView> deposits = new();
         readonly List<MeshRenderer> decor = new();
         readonly List<float> decorTints = new();
-        readonly List<MeshRenderer> river = new();
 
+        MeshRenderer river;
         MeshRenderer meshRenderer;
         MeshRenderer outline;
         MeshRenderer highlight;
@@ -114,9 +116,8 @@ namespace Game.Grid
             for (var i = 0; i < decor.Count; i++)
                 SetColor(decor[i], Scaled(decorColor, decorTints[i]));
 
-            var stream = Shaded(riverColor, tile.Shade, dim, fade);
-            foreach (var band in river)
-                SetColor(band, stream);
+            if (river != null)
+                SetColor(river, Shaded(riverColor, tile.Shade, dim, fade));
 
             ApplyDeposits(tile);
         }
@@ -267,32 +268,40 @@ namespace Game.Grid
         }
 
         /// <summary>
-        /// Река рисуется вдоль ребра, а не по плитке: каждая из двух соседних плиток кладёт свою
-        /// половину ленты со своей стороны, вместе получается сплошное русло. У края поля видна
-        /// одна половина — там соседа просто нет.
+        /// Русло идёт по поверхности плитки, как дорога: лента выходит из центра к серединам
+        /// граней, отмеченных в маске. Геометрия у неё та же, что у дороги, — берём готовую
+        /// `RoadMeshBuilder`, второй копии кривых не нужно. Развилка получается сама: три бита
+        /// в маске дают три рукава.
         /// </summary>
         void CreateRiver(TileData tile)
         {
+            if (tile.RiverMask == 0)
+                return;
+
+            river = CreatePart(
+                transform,
+                "River",
+                RoadMeshBuilder.Get(tile.RiverMask, riverWidth),
+                new Vector3(0f, 0f, RiverDepth),
+                Vector3.one);
+        }
+
+        /// <summary>Точка лежит в русле: декор туда ставить нельзя, дерево росло бы в воде.</summary>
+        static bool InsideRiver(TileData tile, Vector2 point, float width)
+        {
             for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
             {
-                if (!tile.HasRiver(direction))
+                if ((tile.RiverMask & (1 << direction)) == 0)
                     continue;
 
-                var toNeighbor = HexCoord.Directions[direction].ToWorld();
-                var half = riverWidth * 0.5f;
-                var band = CreatePart(
-                    transform,
-                    $"River {direction}",
-                    ShapeMeshes.Bar,
-                    new Vector3(toNeighbor.x * (0.5f - half * 0.5f), toNeighbor.y * (0.5f - half * 0.5f), RiverDepth),
-                    // Длинная сторона вдоль грани, короткая поперёк; с запасом, чтобы соседние
-                    // отрезки русла смыкались на углах гекса.
-                    new Vector3(half, HexCoord.Size * 1.08f, 1f));
-                band.transform.localRotation = Quaternion.Euler(
-                    0f, 0f, Mathf.Atan2(toNeighbor.y, toNeighbor.x) * Mathf.Rad2Deg);
-
-                river.Add(band);
+                // Рукав — отрезок от центра плитки до середины грани.
+                var edge = HexCoord.Directions[direction].ToWorld() * 0.5f;
+                var t = Mathf.Clamp01(Vector2.Dot(point, edge) / edge.sqrMagnitude);
+                if (Vector2.Distance(point, edge * t) < width)
+                    return true;
             }
+
+            return false;
         }
 
         /// <summary>
@@ -317,11 +326,15 @@ namespace Game.Grid
                 var tilt = Mathf.Lerp(-decorTilt, decorTilt, coord.Hash01(ItemSalt(i, 3)));
                 var shape = BiomeDecor(tile.Biome, coord.Hash01(ItemSalt(i, 4)));
 
+                var spot = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+                if (InsideRiver(tile, spot, riverWidth * 0.5f + decorScale * 0.5f))
+                    continue;
+
                 var part = CreatePart(
                     transform,
                     $"Decor {i}",
                     ShapeMeshes.Decor(shape),
-                    new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, DecorDepth),
+                    new Vector3(spot.x, spot.y, DecorDepth),
                     Vector3.one * scale);
                 part.transform.localRotation = Quaternion.Euler(0f, 0f, tilt);
 

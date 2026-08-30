@@ -52,7 +52,6 @@ namespace Game.Tests.EditMode
         public void DecorShapes_FaceTheCameraToo()
         {
             AssertFacesCamera(ShapeMeshes.Triangle);
-            AssertFacesCamera(ShapeMeshes.Bar);
             AssertFacesCamera(ShapeMeshes.HexRing);
         }
 

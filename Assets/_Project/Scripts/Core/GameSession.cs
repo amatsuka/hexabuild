@@ -258,14 +258,15 @@ namespace Game.Core
         }
 
         /// <summary>
-        /// Где маршрут идёт мостом: только там, где участок маршрута пересекает реку по ребру.
+        /// Где маршрут идёт мостом: на плитке с рекой настил лежит под всей лентой дороги — она
+        /// проходит через центр плитки, где течёт русло, и другой дороги на этой плитке не бывает.
         /// </summary>
         int BridgeMask(HexCoord coord, int linkMask)
         {
             if (!state.Map.TryGetTile(coord, out var tile))
                 return 0;
 
-            return linkMask & tile.RiverMask;
+            return tile.HasRiver ? linkMask : 0;
         }
 
         void OnProduced(TileData tile, ResourceType type)
