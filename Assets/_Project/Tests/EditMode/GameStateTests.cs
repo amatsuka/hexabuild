@@ -10,8 +10,12 @@ namespace Game.Tests.EditMode
     public sealed class GameStateTests
     {
         const int OpenCost = 20;
+        const int OpenStep = 2;
+        const int OpenGroup = 5;
         const int RoadCost = 1;
         const int BridgeCost = 2;
+
+        static readonly PriceSettings Prices = new(OpenCost, OpenStep, OpenGroup, RoadCost, BridgeCost);
 
         /// <summary>
         /// Поле без ландшафта: правила проверяются на ровном месте. Раньше здесь стояла карта
@@ -42,7 +46,7 @@ namespace Game.Tests.EditMode
             for (var i = 0; i < gravel; i++)
                 storage.TryStore(ResourceType.Gravel);
 
-            return new GameState(map ?? FlatMap(), new Wallet(points), storage, OpenCost, RoadCost, BridgeCost);
+            return new GameState(map ?? FlatMap(), new Wallet(points), storage, Prices);
         }
 
         [Test]
@@ -218,7 +222,82 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
         }
 
-        // --- M9: горы, вода и реки ---
+        // --- M10: растущая цена открытия ---
+
+        /// <summary>Открыть любую доступную плитку: какую именно — для цены безразлично.</summary>
+        static bool OpenAnyTile(GameState state)
+        {
+            foreach (var tile in state.Map.Tiles.Values)
+                if (tile.State == TileState.Available && state.TryRevealTile(tile.Coord))
+                    return true;
+
+            return false;
+        }
+
+        [Test]
+        public void NextTileCost_RisesByAStepEveryGroupOfOpenedTiles()
+        {
+            var state = NewGame(points: 100000);
+            state.Begin();
+
+            Assert.AreEqual(OpenCost, state.NextTileCost, "первая плитка стоит стартовую цену");
+
+            for (var i = 0; i < OpenGroup; i++)
+                OpenAnyTile(state);
+
+            Assert.AreEqual(OpenGroup, state.OpenedTiles);
+            Assert.AreEqual(OpenCost + OpenStep, state.NextTileCost);
+
+            for (var i = 0; i < OpenGroup; i++)
+                OpenAnyTile(state);
+
+            Assert.AreEqual(OpenCost + OpenStep * 2, state.NextTileCost);
+        }
+
+        [Test]
+        public void TryRevealTile_ChargesThePriceItShowedBeforeTheClick()
+        {
+            var state = NewGame(points: 100000);
+            state.Begin();
+
+            var spent = 0;
+            for (var i = 0; i < OpenGroup * 2; i++)
+            {
+                spent += state.NextTileCost;
+                OpenAnyTile(state);
+            }
+
+            Assert.AreEqual(OpenGroup * OpenCost + OpenGroup * (OpenCost + OpenStep), spent);
+            Assert.AreEqual(100000 - spent, state.Wallet.Points);
+        }
+
+        [Test]
+        public void RefusedOpening_NeitherCountsNorRaisesThePrice()
+        {
+            var state = NewGame(points: OpenCost);
+            state.Begin();
+            state.TryRevealTile(new HexCoord(0, 3));
+
+            Assert.AreEqual(0, state.OpenedTiles);
+            Assert.AreEqual(OpenCost, state.NextTileCost);
+        }
+
+        [Test]
+        public void Refusal_NamesTheGrownPrice()
+        {
+            var state = NewGame(points: OpenGroup * OpenCost);
+            state.Begin();
+            for (var i = 0; i < OpenGroup; i++)
+                OpenAnyTile(state);
+
+            var refusals = new List<string>();
+            state.ActionRefused += refusals.Add;
+            Assert.IsFalse(OpenAnyTile(state));
+
+            CollectionAssert.Contains(refusals, $"Не хватает очков: нужно {OpenCost + OpenStep}");
+        }
+
+        // --- M9: горы и реки ---
 
         [Test]
         public void TryRevealTile_OnMountain_IsRefusedAndCostsNothing()
@@ -268,19 +347,6 @@ namespace Game.Tests.EditMode
                     Assert.AreEqual(TileState.Hidden, tile.State, $"{tile.Coord} открылась сквозь гряду");
         }
 
-        [Test]
-        public void RoadOnWater_CostsTheBridgeSurcharge()
-        {
-            var state = NewGame(map: FlatMap(biome: c => c == new HexCoord(0, 1) ? BiomeType.Water : BiomeType.Meadow));
-            state.Begin();
-            state.TryRevealTile(new HexCoord(0, 1));
-            state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
-
-            Assert.AreEqual(RoadCost + BridgeCost, state.RoadPrice(tile));
-            Assert.IsTrue(state.TryBuildRoad(new HexCoord(0, 1)));
-            Assert.AreEqual(0, state.Storage.CountOf(ResourceType.Gravel), "три щебня ушли целиком");
-        }
-
         /// <summary>
         /// Река лежит на ребре между (0,1) и Метрополией: направление 2 у плитки, обратное — у
         /// Метрополии. Дорога на (0,1) цепляется именно за это ребро, значит нужен мост.
@@ -295,6 +361,8 @@ namespace Game.Tests.EditMode
             state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
 
             Assert.AreEqual(RoadCost + BridgeCost, state.RoadPrice(tile));
+            Assert.IsTrue(state.TryBuildRoad(new HexCoord(0, 1)));
+            Assert.AreEqual(0, state.Storage.CountOf(ResourceType.Gravel), "три щебня ушли целиком");
         }
 
         [Test]
@@ -312,7 +380,8 @@ namespace Game.Tests.EditMode
         [Test]
         public void BridgeRefusal_NamesTheFullPrice()
         {
-            var state = NewGame(gravel: 2, map: FlatMap(biome: c => c == new HexCoord(0, 1) ? BiomeType.Water : BiomeType.Meadow));
+            var state = NewGame(gravel: 2, map: FlatMap(rivers: c =>
+                c == new HexCoord(0, 1) ? 1 << 2 : c == HexCoord.Zero ? 1 << 5 : 0));
             state.Begin();
             state.TryRevealTile(new HexCoord(0, 1));
             var refusals = new List<string>();

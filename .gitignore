@@ -15,6 +15,9 @@
 # Asset meta data for ignored folders
 !/[Aa]ssets/**/*.meta
 
+# ...кроме метафайлов того же мусора: строка выше иначе тянет их обратно
+/[Aa]ssets/[Rr]esources/PerformanceTestRun*.json.meta
+
 # IDE / OS
 .vscode/
 .idea/

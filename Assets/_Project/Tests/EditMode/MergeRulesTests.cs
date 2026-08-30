@@ -84,5 +84,14 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(rules.CanMerge(ResourceType.Stone));
             Assert.IsTrue(rules.CanMerge(ResourceType.Ore));
         }
+
+        /// <summary>Из этого списка контракты берут свой тип: пустым он оставил бы игру без них.</summary>
+        [Test]
+        public void CraftedTypes_AreTheRightSidesOfEveryRecipe()
+        {
+            CollectionAssert.AreEquivalent(
+                new[] { ResourceType.Board, ResourceType.Gravel, ResourceType.Ingot },
+                rules.CraftedTypes());
+        }
     }
 }

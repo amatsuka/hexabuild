@@ -48,7 +48,7 @@ namespace Game.Grid
             foreach (var coord in HexMap.CoordsInFlare(settings.Rows))
                 biomes[coord] = RollBiome(coord, settings, noiseOrigin);
 
-            // Метрополия — город, а не ландшафт: горой или водой она быть не может по правилам 2.1.
+            // Метрополия — город, а не ландшафт: горой она быть не может по правилам 2.1.
             biomes[HexCoord.Zero] = BiomeType.Meadow;
 
             var rivers = CarveRivers(biomes, settings.Rows, noiseOrigin);
@@ -80,15 +80,13 @@ namespace Game.Grid
 
         /// <summary>
         /// Ландшафт берётся из шума Перлина по мировым координатам плитки, поэтому биомы ложатся
-        /// связными пятнами. Значение шума читается как высота: вода внизу, горы наверху.
+        /// связными пятнами. Значение шума читается как высота: песок внизу, горы наверху.
         /// </summary>
         static BiomeType RollBiome(HexCoord coord, MapGenerationSettings settings, Vector2 noiseOrigin)
         {
             var height = Height(coord, settings.BiomeNoiseScale, noiseOrigin);
 
-            // Пороги подобраны на глаз: вода занимает низины, горы — вершины, между ними суша.
-            if (height < 0.27f)
-                return BiomeType.Water;
+            // Пороги подобраны на глаз: песок занимает низины, горы — вершины, между ними суша.
             if (height < 0.36f)
                 return BiomeType.Sand;
             if (height < 0.50f)
@@ -236,19 +234,7 @@ namespace Game.Grid
             b.Direction >= 0 && Canonical(a) == Canonical(b);
 
         /// <summary>Доля поля, до которой можно дойти от Метрополии по проходимым плиткам.</summary>
-        static float PassableShare(HexMap map)
-        {
-            var visited = new HashSet<HexCoord> { HexCoord.Zero };
-            var frontier = new Queue<HexCoord>();
-            frontier.Enqueue(HexCoord.Zero);
-
-            while (frontier.Count > 0)
-                foreach (var neighbor in map.NeighborsOf(frontier.Dequeue()))
-                    if (neighbor.IsPassable && visited.Add(neighbor.Coord))
-                        frontier.Enqueue(neighbor.Coord);
-
-            return visited.Count / (float)map.Count;
-        }
+        static float PassableShare(HexMap map) => map.ReachableFromMetropolis().Count / (float)map.Count;
 
         /// <summary>Гарантированный камень бесполезен, если до него не дойти.</summary>
         static bool StoneGuaranteeIsReachable(HexMap map)

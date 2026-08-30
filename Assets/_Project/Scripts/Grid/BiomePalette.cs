@@ -7,7 +7,6 @@ namespace Game.Grid
     [Serializable]
     public sealed class BiomePalette
     {
-        [SerializeField] Color water = new(0.24f, 0.44f, 0.62f);
         [SerializeField] Color sand = new(0.85f, 0.78f, 0.55f);
         [SerializeField] Color meadow = new(0.55f, 0.70f, 0.40f);
         [SerializeField] Color forest = new(0.35f, 0.56f, 0.34f);
@@ -16,7 +15,6 @@ namespace Game.Grid
         [SerializeField] Color mountains = new(0.33f, 0.32f, 0.36f);
 
         [Header("Декор")]
-        [SerializeField] Color waterDecor = new(0.45f, 0.65f, 0.82f);
         [SerializeField] Color sandDecor = new(0.72f, 0.63f, 0.40f);
         [SerializeField] Color meadowDecor = new(0.47f, 0.62f, 0.33f);
         [SerializeField] Color forestDecor = new(0.18f, 0.34f, 0.20f);
@@ -27,8 +25,6 @@ namespace Game.Grid
         {
             switch (biome)
             {
-                case BiomeType.Water:
-                    return water;
                 case BiomeType.Sand:
                     return sand;
                 case BiomeType.Forest:
@@ -46,8 +42,6 @@ namespace Game.Grid
         {
             switch (biome)
             {
-                case BiomeType.Water:
-                    return waterDecor;
                 case BiomeType.Sand:
                     return sandDecor;
                 case BiomeType.Forest:

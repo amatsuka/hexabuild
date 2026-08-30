@@ -7,8 +7,6 @@ namespace Game.Grid
         Broadleaf,
         LayeredPeak,
         Ridge,
-        Ripple,
-        Lily,
         Tussock,
         Dune
     }

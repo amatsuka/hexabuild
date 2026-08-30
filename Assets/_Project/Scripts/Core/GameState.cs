@@ -9,19 +9,14 @@ namespace Game.Core
     /// <summary>Изменяемое состояние партии: поле, кошелёк и правило открытия плиток.</summary>
     public sealed class GameState
     {
-        readonly int tileOpenCost;
-        readonly int roadCost;
-        readonly int bridgeCost;
+        readonly PriceSettings prices;
 
-        public GameState(
-            HexMap map, Wallet wallet, StorageGrid storage, int tileOpenCost, int roadCost, int bridgeCost)
+        public GameState(HexMap map, Wallet wallet, StorageGrid storage, PriceSettings prices)
         {
             Map = map;
             Wallet = wallet;
             Storage = storage;
-            this.tileOpenCost = tileOpenCost;
-            this.roadCost = roadCost;
-            this.bridgeCost = bridgeCost;
+            this.prices = prices;
             Roads = new RoadNetwork(map);
         }
 
@@ -38,6 +33,15 @@ namespace Game.Core
         public StorageGrid Storage { get; }
 
         public RoadNetwork Roads { get; }
+
+        /// <summary>Сколько плиток открыл игрок. Метрополия не в счёт: её открывать не пришлось.</summary>
+        public int OpenedTiles { get; private set; }
+
+        /// <summary>
+        /// Цена следующего открытия. Растёт ступенями: чем больше поля позади, тем дороже шаг
+        /// вперёд. Иначе доход от новых плиток обгоняет расход и партия перестаёт быть выбором.
+        /// </summary>
+        public int NextTileCost => prices.TileOpen + prices.OpenStep * (OpenedTiles / prices.OpenGroup);
 
         /// <summary>Старт партии: Метрополия открыта, её соседи доступны.</summary>
         public void Begin()
@@ -80,12 +84,14 @@ namespace Game.Core
                 return false;
             }
 
-            if (!Wallet.TrySpendPoints(tileOpenCost))
+            var cost = NextTileCost;
+            if (!Wallet.TrySpendPoints(cost))
             {
-                ActionRefused?.Invoke($"Не хватает очков: нужно {tileOpenCost}");
+                ActionRefused?.Invoke($"Не хватает очков: нужно {cost}");
                 return false;
             }
 
+            OpenedTiles++;
             tile.Reveal();
             TileChanged?.Invoke(tile);
             MakeNeighborsAvailable(tile);
@@ -115,7 +121,7 @@ namespace Game.Core
             var price = RoadPrice(tile);
             if (!Storage.TryRemove(ResourceType.Gravel, price))
             {
-                ActionRefused?.Invoke(price > roadCost
+                ActionRefused?.Invoke(price > prices.Road
                     ? $"Нужен мост: {price} щебня"
                     : $"Не хватает щебня: нужно {price}");
                 return false;
@@ -126,8 +132,8 @@ namespace Game.Core
         }
 
         /// <summary>
-        /// Цена дороги: обычная плюс надбавка за мост, если плитка водная или ребро к будущему
-        /// родителю пересекает реку. Родителя приходится спрашивать заранее — платят до постройки.
+        /// Цена дороги: обычная плюс надбавка за мост, если ребро к будущему родителю пересекает
+        /// реку. Родителя приходится спрашивать заранее — платят до постройки.
         ///
         /// Это работает только потому, что в M7 родитель стал липким: назначенный однажды, он не
         /// переедет, и оплаченный мост останется на том самом ребре. Дорога, построенная в отрыве
@@ -135,13 +141,10 @@ namespace Game.Core
         /// </summary>
         public int RoadPrice(TileData tile)
         {
-            if (tile.Biome == BiomeType.Water)
-                return roadCost + bridgeCost;
-
             if (Roads.TryPreviewParent(tile.Coord, out var parent) && CrossesRiver(tile, parent))
-                return roadCost + bridgeCost;
+                return prices.Road + prices.Bridge;
 
-            return roadCost;
+            return prices.Road;
         }
 
         static bool CrossesRiver(TileData tile, HexCoord parent)

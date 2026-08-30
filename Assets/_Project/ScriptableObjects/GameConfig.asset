@@ -24,6 +24,8 @@ MonoBehaviour:
   deliverySecondsPerTile: 1
   storageSize: 24
   tileOpenCost: 20
+  openCostStep: 2
+  openCostGroup: 5
   roadCost: 1
   bridgeCost: 2
   smallMergeCount: 3
@@ -32,3 +34,9 @@ MonoBehaviour:
   largeMergePoints: 25
   startingPoints: 40
   startingGravel: 3
+  contractGoal: 3
+  contractSeconds: 45
+  contractReward: 40
+  lossPenalty: 10
+  fullFieldBonus: 500
+  fullDepositBonus: 500

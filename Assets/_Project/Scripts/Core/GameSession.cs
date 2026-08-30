@@ -27,6 +27,7 @@ namespace Game.Core
         [SerializeField] StorageView storageView;
         [SerializeField] HudView hudView;
         [SerializeField] TutorialView tutorialView;
+        [SerializeField] GameOverView gameOverView;
 
         readonly Dictionary<HexCoord, TileView> views = new();
         readonly Dictionary<HexCoord, RoadView> roadViews = new();
@@ -38,23 +39,34 @@ namespace Game.Core
         DeliverySystem deliveries;
         MergeSystem merges;
         TutorialSystem tutorial;
+        ContractSystem contracts;
+        GameEndSystem end;
 
         void Awake()
         {
             var map = MapGenerator.Generate(config.MapGenerationSettings);
             var wallet = new Wallet(config.StartingPoints);
             var storage = new StorageGrid(config.StorageSize);
-            state = new GameState(map, wallet, storage, config.TileOpenCost, config.RoadCost, config.BridgeCost);
+            state = new GameState(map, wallet, storage, config.Prices);
 
             production = new ProductionSystem(map, state.Roads, config.ExtractionInterval);
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
             merges = new MergeSystem(storage, wallet, mergeRules);
+            contracts = new ContractSystem(
+                wallet,
+                mergeRules.CraftedTypes(),
+                config.ContractGoal,
+                config.ContractSeconds,
+                config.ContractReward,
+                config.Seed);
+            end = new GameEndSystem(
+                state, mergeRules, deliveries, config.LossPenalty, config.FullFieldBonus, config.FullDepositBonus);
 
             tutorial = new TutorialSystem(map, storage, state.Roads, mergeRules);
 
             SpawnTiles(map);
             storageView.Bind(storage);
-            hudView.Bind(wallet, storage);
+            hudView.Bind(state, contracts);
             tutorialView.Bind(tutorial, views, storageView);
             cameraRig.SetFieldBounds(FieldBounds(map));
             cameraRig.FocusOnBottom();
@@ -76,6 +88,7 @@ namespace Game.Core
             merges.Merged += OnMerged;
             merges.Converted += OnConverted;
             state.Storage.Changed += tutorial.Refresh;
+            end.Ended += OnGameEnded;
         }
 
         void OnDisable()
@@ -94,6 +107,7 @@ namespace Game.Core
             merges.Merged -= OnMerged;
             merges.Converted -= OnConverted;
             state.Storage.Changed -= tutorial.Refresh;
+            end.Ended -= OnGameEnded;
         }
 
         void Start()
@@ -105,8 +119,29 @@ namespace Game.Core
 
         void Update()
         {
+            if (end.HasEnded)
+                return;
+
             production.Tick(Time.deltaTime);
             deliveries.Tick(Time.deltaTime);
+            TickContracts();
+            end.Tick();
+        }
+
+        /// <summary>
+        /// Контракты ждут конца обучения: шесть шагов и так занимают весь экран, а первый контракт
+        /// сгорел бы, пока игрок разбирается с первой дорогой. Дальше система выдаёт их сама,
+        /// поэтому `Issue` срабатывает здесь ровно один раз — на самый первый контракт партии.
+        /// </summary>
+        void TickContracts()
+        {
+            if (tutorial.IsRunning)
+                return;
+
+            if (contracts.IsActive)
+                contracts.Tick(Time.deltaTime);
+            else
+                contracts.Issue();
         }
 
         void SpawnTiles(HexMap map)
@@ -147,6 +182,9 @@ namespace Game.Core
         /// <summary>Клик разбирается по слоям: сначала склад, потом поле под ним.</summary>
         void OnClicked(Vector2 screenPosition)
         {
+            if (end.HasEnded)
+                return;
+
             if (tutorialView.ContainsSkipPoint(screenPosition))
             {
                 tutorial.Skip();
@@ -220,15 +258,14 @@ namespace Game.Core
         }
 
         /// <summary>
-        /// Где маршрут идёт мостом. По воде дорога целиком мост, на суше — только там, где
-        /// участок маршрута пересекает реку по ребру.
+        /// Где маршрут идёт мостом: только там, где участок маршрута пересекает реку по ребру.
         /// </summary>
         int BridgeMask(HexCoord coord, int linkMask)
         {
             if (!state.Map.TryGetTile(coord, out var tile))
                 return 0;
 
-            return tile.Biome == BiomeType.Water ? linkMask : linkMask & tile.RiverMask;
+            return linkMask & tile.RiverMask;
         }
 
         void OnProduced(TileData tile, ResourceType type)
@@ -255,7 +292,14 @@ namespace Game.Core
             tutorial.Notify(TutorialTrigger.Merged);
         }
 
-        void OnConverted(ResourceType type, int points) => tutorial.Notify(TutorialTrigger.Converted);
+        void OnConverted(ResourceType type, int points)
+        {
+            contracts.Count(type);
+            tutorial.Notify(TutorialTrigger.Converted);
+        }
+
+        /// <summary>Заработать больше нечем: поле замирает, на экране остаётся счёт.</summary>
+        void OnGameEnded(FinalScore score) => gameOverView.Show(score);
 
         /// <summary>Доехавший ресурс перепрыгивает с Метрополии в свою клетку склада.</summary>
         void OnDeliveryArrived(Delivery delivery)

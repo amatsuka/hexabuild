@@ -121,14 +121,13 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void Metropolis_IsNeverMountainOrWater()
+        public void Metropolis_IsNeverAMountain()
         {
             for (var seed = 1; seed <= 200; seed++)
             {
                 var biome = MapGenerator.Generate(Settings(seed)).Metropolis.Biome;
 
                 Assert.AreNotEqual(BiomeType.Mountains, biome, $"seed {seed}");
-                Assert.AreNotEqual(BiomeType.Water, biome, $"seed {seed}");
             }
         }
 

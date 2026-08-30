@@ -114,9 +114,9 @@ namespace Game.Grid
             for (var i = 0; i < decor.Count; i++)
                 SetColor(decor[i], Scaled(decorColor, decorTints[i]));
 
-            var water = Shaded(riverColor, tile.Shade, dim, fade);
+            var stream = Shaded(riverColor, tile.Shade, dim, fade);
             foreach (var band in river)
-                SetColor(band, water);
+                SetColor(band, stream);
 
             ApplyDeposits(tile);
         }
@@ -343,8 +343,6 @@ namespace Game.Grid
                     return DecorShape.LayeredPeak;
                 case BiomeType.Mountains:
                     return DecorShape.Ridge;
-                case BiomeType.Water:
-                    return roll < 0.65f ? DecorShape.Ripple : DecorShape.Lily;
                 case BiomeType.Sand:
                     return DecorShape.Dune;
                 default:

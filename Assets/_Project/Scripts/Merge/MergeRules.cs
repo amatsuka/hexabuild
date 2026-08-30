@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Game.Economy;
 using UnityEngine;
 
@@ -40,6 +41,22 @@ namespace Game.Merge
 
         /// <summary>Очки за клик по одному крафтовому ресурсу.</summary>
         public int CraftedPoints => craftedPoints;
+
+        /// <summary>
+        /// Крафтовые типы — правые части рецептов: контракты выдаются только на них. Список
+        /// собирается из тех же рецептов, чтобы не держать второй источник правды, и собирается
+        /// заново на каждый вызов. Кэш в поле не годится: у ассета в редакторе он живёт дольше
+        /// партии и однажды уже уехал пустым, пережив перезагрузку домена.
+        /// </summary>
+        public List<ResourceType> CraftedTypes()
+        {
+            var crafted = new List<ResourceType>(recipes.Length);
+            foreach (var recipe in recipes)
+                if (!crafted.Contains(recipe.Result))
+                    crafted.Add(recipe.Result);
+
+            return crafted;
+        }
 
         /// <summary>У ресурса есть рецепт: крафтовые дальше не мержатся.</summary>
         public bool CanMerge(ResourceType type) => TryGetResult(type, out _);

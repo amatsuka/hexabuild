@@ -46,5 +46,28 @@ namespace Game.Grid
                 if (tiles.TryGetValue(neighbor, out var tile))
                     yield return tile;
         }
+
+        /// <summary>
+        /// Плитки, до которых можно дойти от Метрополии по проходимым: гряда гор обрывает путь,
+        /// и поле за ней не открыть никогда. Ландшафт за партию не меняется, поэтому список
+        /// считают один раз и держат.
+        /// </summary>
+        public List<TileData> ReachableFromMetropolis()
+        {
+            var reachable = new List<TileData> { Metropolis };
+            var visited = new HashSet<HexCoord> { HexCoord.Zero };
+            var frontier = new Queue<HexCoord>();
+            frontier.Enqueue(HexCoord.Zero);
+
+            while (frontier.Count > 0)
+                foreach (var neighbor in NeighborsOf(frontier.Dequeue()))
+                    if (neighbor.IsPassable && visited.Add(neighbor.Coord))
+                    {
+                        reachable.Add(neighbor);
+                        frontier.Enqueue(neighbor.Coord);
+                    }
+
+            return reachable;
+        }
     }
 }

@@ -82,18 +82,6 @@ namespace Game.Tests.EditMode
             foreach (DecorShape shape in Enum.GetValues(typeof(DecorShape)))
                 Assert.IsTrue(seen.Add(ShapeMeshes.Decor(shape)), $"{shape}: меш повторяет чужой");
         }
-
-        /// <summary>Кувшинка — круг с вырезанным клином, иначе она не отличается от валуна.</summary>
-        [Test]
-        public void Lily_HasANotch()
-        {
-            var covered = 0f;
-            foreach (var vertex in ShapeMeshes.Decor(DecorShape.Lily).vertices)
-                if (vertex != Vector3.zero)
-                    covered = Mathf.Max(covered, Mathf.Atan2(vertex.y, vertex.x) * Mathf.Rad2Deg);
-
-            Assert.Less(covered, 175f, "клин не вырезан: обод замкнулся в целый круг");
-        }
     }
 
     /// <summary>Проверки, общие для всех процедурных мешей проекта.</summary>

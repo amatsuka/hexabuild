@@ -22,7 +22,7 @@ namespace Game.Tutorial
         [SerializeField] Color skipColor = new(0.62f, 0.62f, 0.68f);
         [SerializeField] Color highlightColor = new(1f, 0.84f, 0.30f);
         [SerializeField] int fontSize = 38;
-        [SerializeField] float topOffset = 200f;
+        [SerializeField] float topOffset = 260f;
         [SerializeField] float sideMargin = 24f;
         [SerializeField] float pulseSpeed = 3.2f;
         [SerializeField, Range(0f, 1f)] float minHighlightAlpha = 0.25f;

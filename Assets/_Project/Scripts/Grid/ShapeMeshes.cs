@@ -167,16 +167,6 @@ namespace Game.Grid
                         .Triangle(new Vector2(-0.01f, 0.02f), 0.50f, 0.92f)
                         .Bake("Ridge");
 
-                case DecorShape.Ripple:
-                    return new FlatMesh()
-                        .Quad(new Vector2(-0.09f, 0.13f), 0.52f, 0.07f)
-                        .Quad(new Vector2(0.11f, -0.11f), 0.36f, 0.07f)
-                        .Bake("Ripple");
-
-                // Кувшинка: круг с узким вырезом. Широкий читался пакманом, а не листом.
-                case DecorShape.Lily:
-                    return new FlatMesh().Fan(Vector2.zero, 0.40f, 0.36f, 12, 11f, 349f).Bake("Lily");
-
                 case DecorShape.Tussock:
                     return new FlatMesh()
                         .Blade(-0.17f, -0.13f, 0.09f, 0.72f)
