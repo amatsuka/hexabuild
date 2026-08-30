@@ -11,7 +11,7 @@ namespace Game.Core
     public sealed class GameConfig : ScriptableObject
     {
         [Header("Поле")]
-        [SerializeField] int fieldRows = 10;
+        [SerializeField] int fieldRows = 14;
         [SerializeField] int seed;
 
         [Header("Генерация месторождений")]
@@ -28,11 +28,13 @@ namespace Game.Core
         [SerializeField] float deliverySecondsPerTile = 1f;
 
         [Header("Склад")]
-        [SerializeField] int storageSize = 25;
+        [SerializeField] int storageSize = 24;
 
         [Header("Стоимости")]
         [SerializeField] int tileOpenCost = 20;
         [SerializeField] int roadCost = 1;
+        [Tooltip("Надбавка к дороге за мост: через реку и по воде. Полная цена — roadCost + bridgeCost")]
+        [SerializeField] int bridgeCost = 2;
 
         [Header("Старт партии")]
         [SerializeField] int startingPoints = 40;
@@ -51,6 +53,8 @@ namespace Game.Core
         public int TileOpenCost => tileOpenCost;
 
         public int RoadCost => roadCost;
+
+        public int BridgeCost => bridgeCost;
 
         public int StartingPoints => startingPoints;
 

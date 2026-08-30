@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Grid;
 using NUnit.Framework;
 using UnityEngine;
@@ -102,6 +103,58 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(new HexCoord(4, 1), a - b);
             Assert.IsTrue(new HexCoord(1, 2) == a);
             Assert.IsTrue(a != b);
+        }
+
+        /// <summary>
+        /// Хеш координаты держит внешний вид карты: ширину дорог и раскладку декора. Он обязан
+        /// быть одним и тем же от запуска к запуску, поэтому `GetHashCode` для этого не годится.
+        /// </summary>
+        [Test]
+        public void Hash01_IsStableAndInsideTheUnitRange()
+        {
+            for (var q = -6; q <= 6; q++)
+            for (var r = 0; r <= 12; r++)
+            for (var salt = 0; salt < 6; salt++)
+            {
+                var value = new HexCoord(q, r).Hash01(salt);
+
+                Assert.GreaterOrEqual(value, 0f, $"({q},{r}) соль {salt}");
+                Assert.Less(value, 1f, $"({q},{r}) соль {salt}");
+                Assert.AreEqual(value, new HexCoord(q, r).Hash01(salt), "повторный вызов дал другое значение");
+            }
+        }
+
+        [Test]
+        public void Hash01_TellsCoordinatesAndSaltsApart()
+        {
+            var values = new HashSet<float>();
+            for (var q = -6; q <= 6; q++)
+            for (var r = 0; r <= 12; r++)
+                values.Add(new HexCoord(q, r).Hash01(0));
+
+            // 91 координата: совпадений быть почти не должно, иначе карта выйдет полосатой
+            Assert.Greater(values.Count, 80, "хеш склеивает разные координаты в одно значение");
+
+            var coord = new HexCoord(2, 3);
+            Assert.AreNotEqual(coord.Hash01(0), coord.Hash01(1), "разные соли должны давать разные потоки");
+        }
+
+        /// <summary>Ступени ширины дороги и количество декора берутся так — перекос сразу заметен.</summary>
+        [Test]
+        public void Hash01_SpreadsAcrossBucketsEvenly()
+        {
+            var buckets = new int[4];
+            var total = 0;
+
+            for (var q = -8; q <= 8; q++)
+            for (var r = 0; r <= 16; r++)
+            {
+                buckets[(int)(new HexCoord(q, r).Hash01(7) * buckets.Length)]++;
+                total++;
+            }
+
+            foreach (var bucket in buckets)
+                Assert.Greater(bucket, total / buckets.Length / 2, "одна из корзин почти пустая: хеш перекошен");
         }
     }
 }

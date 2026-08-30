@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Game.Economy;
 using Game.Grid;
 using Game.Merge;
@@ -30,11 +31,32 @@ namespace Game.Tests.EditMode
         [SetUp]
         public void SetUp()
         {
-            map = MapGenerator.Generate(new MapGenerationSettings(10, 11, 30f, 45f, 20f, 5f, 8, 20));
+            map = FlatMap();
             storage = new StorageGrid(25);
             roads = new RoadNetwork(map);
             rules = ScriptableObject.CreateInstance<MergeRules>();
             tutorial = new TutorialSystem(map, storage, roads, rules);
+        }
+
+        /// <summary>
+        /// Поле без ландшафта и с камнем там, где его обещает гарантия генератора. Раньше здесь
+        /// стояла карта от генератора, но с M9 биом решает, можно ли вести игрока на плитку, —
+        /// гора под нужной координатой ломала бы тест про порядок шагов.
+        /// </summary>
+        static HexMap FlatMap(BiomeType stoneNeighbourBiome = BiomeType.Meadow)
+        {
+            const int rows = 6;
+            var stoneTile = new HexCoord(0, 1);
+            var tiles = new List<TileData>();
+
+            foreach (var coord in HexMap.CoordsInFlare(rows))
+                tiles.Add(new TileData(
+                    coord,
+                    coord == HexCoord.Zero,
+                    coord == stoneTile ? new List<Deposit> { new(ResourceType.Stone, 10) } : null,
+                    coord == stoneTile ? stoneNeighbourBiome : BiomeType.Meadow));
+
+            return new HexMap(rows, tiles);
         }
 
         [TearDown]
@@ -170,6 +192,43 @@ namespace Game.Tests.EditMode
             tutorial.Notify(TutorialTrigger.Merged);
 
             Assert.AreEqual(TutorialStep.Done, tutorial.Step);
+        }
+
+        /// <summary>
+        /// Гора не открывается и дорогу не примет: повести на неё игрока — тупик с первого шага.
+        /// Здесь камень лежит на горе, и обучение обязано выбрать другую плитку.
+        /// </summary>
+        [Test]
+        public void StartTile_SkipsAnImpassableNeighbour()
+        {
+            var mountainMap = FlatMap(BiomeType.Mountains);
+            var system = new TutorialSystem(mountainMap, new StorageGrid(25), new RoadNetwork(mountainMap), rules);
+            foreach (var neighbor in mountainMap.NeighborsOf(HexCoord.Zero))
+                neighbor.MakeAvailable();
+            system.Refresh();
+
+            Assert.IsTrue(system.TargetTile.HasValue, "обучению есть куда вести: проходимый сосед у Метрополии остался");
+            mountainMap.TryGetTile(system.TargetTile.Value, out var target);
+            Assert.IsTrue(target.IsPassable, $"обучение указывает на гору {target.Coord}");
+        }
+
+        [Test]
+        public void RoadStep_NeverPointsAtAMountain()
+        {
+            var mountainMap = FlatMap(BiomeType.Mountains);
+            var mountainStorage = new StorageGrid(25);
+            mountainStorage.TryStore(ResourceType.Gravel);
+            var system = new TutorialSystem(mountainMap, mountainStorage, new RoadNetwork(mountainMap), rules);
+            foreach (var tile in mountainMap.Tiles.Values)
+                if (!tile.IsMetropolis)
+                    tile.Reveal();
+
+            system.Notify(TutorialTrigger.TileRevealed);
+
+            Assert.AreEqual(TutorialStep.BuildRoad, system.Step);
+            Assert.IsTrue(system.TargetTile.HasValue);
+            mountainMap.TryGetTile(system.TargetTile.Value, out var target);
+            Assert.IsTrue(target.IsPassable, $"обучение зовёт строить дорогу на горе {target.Coord}");
         }
 
         void AdvanceTo(TutorialStep step)

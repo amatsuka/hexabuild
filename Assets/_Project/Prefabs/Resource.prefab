@@ -110,5 +110,5 @@ MonoBehaviour:
     board: {r: 0.55, g: 0.82, b: 0.5, a: 1}
     gravel: {r: 0.78, g: 0.78, b: 0.8, a: 1}
     ingot: {r: 0.95, g: 0.72, b: 0.42, a: 1}
-  scale: 0.24
+  scale: 0.34
   depth: -0.08

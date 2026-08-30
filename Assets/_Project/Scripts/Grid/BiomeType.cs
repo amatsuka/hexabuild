@@ -1,12 +1,16 @@
 namespace Game.Grid
 {
-    /// <summary>Ландшафт плитки. Чистая косметика: на добычу и правила не влияет.</summary>
+    /// <summary>
+    /// Ландшафт плитки. С M9 это уже не только косметика: горы непроходимы, вода требует моста.
+    /// Порядок — по высоте шума: от низин к вершинам.
+    /// </summary>
     public enum BiomeType
     {
         Water,
         Sand,
         Meadow,
         Forest,
-        Rocks
+        Rocks,
+        Mountains
     }
 }

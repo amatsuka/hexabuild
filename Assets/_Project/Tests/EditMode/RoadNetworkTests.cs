@@ -73,9 +73,10 @@ namespace Game.Tests.EditMode
             var network = new RoadNetwork(Map());
             network.Build(new HexCoord(0, 1));
 
-            network.Build(new HexCoord(1, 2));
+            network.Build(new HexCoord(-2, 2));
 
-            Assert.IsFalse(network.IsConnected(new HexCoord(1, 2)));
+            Assert.AreEqual(2, HexCoord.Distance(new HexCoord(0, 1), new HexCoord(-2, 2)), "плитки должны быть по диагонали");
+            Assert.IsFalse(network.IsConnected(new HexCoord(-2, 2)));
         }
 
         [Test]
@@ -120,6 +121,103 @@ namespace Game.Tests.EditMode
             if (network.IsRouteLink(top, left)) linksToTop++;
             if (network.IsRouteLink(top, right)) linksToTop++;
             Assert.AreEqual(1, linksToTop, "у верхней плитки должен быть один путь вниз");
+        }
+
+        /// <summary>
+        /// Липкий родитель. `(-1,2)` смежна и с `(0,1)`, и с `(-1,1)`, а обе смежны с Метрополией:
+        /// оба пути вниз одной длины. На полном пересчёте порядок очереди BFS отдал бы `(-1,2)`
+        /// новому соседу, и уже построенная дорога перерисовалась бы у игрока на глазах.
+        /// </summary>
+        [Test]
+        public void ParentOfAConnectedRoad_SurvivesANewNeighbour()
+        {
+            var network = new RoadNetwork(Map());
+            network.Build(new HexCoord(0, 1));
+            network.Build(new HexCoord(-1, 2));
+            Assert.IsTrue(network.TryGetParent(new HexCoord(-1, 2), out var before));
+
+            network.Build(new HexCoord(-1, 1));
+
+            Assert.IsTrue(network.TryGetParent(new HexCoord(-1, 2), out var after));
+            Assert.AreEqual(before, after, $"родитель {new HexCoord(-1, 2)} переехал с {before} на {after}");
+        }
+
+        /// <summary>Ни одна дорога не двигается — не только та, у которой появился второй путь.</summary>
+        [Test]
+        public void NoParentMoves_WhileTheNetworkGrows()
+        {
+            var network = new RoadNetwork(Map());
+            var built = new List<HexCoord>();
+            var seen = new Dictionary<HexCoord, HexCoord>();
+
+            foreach (var coord in new[]
+                     {
+                         new HexCoord(0, 1), new HexCoord(0, 2), new HexCoord(-1, 2), new HexCoord(-1, 1),
+                         new HexCoord(-2, 2), new HexCoord(-1, 3), new HexCoord(-2, 3), new HexCoord(0, 3)
+                     })
+            {
+                network.Build(coord);
+                built.Add(coord);
+                Assert.IsTrue(network.IsConnected(coord), $"{coord} должна подключаться сразу: липкость проверяем на связной сети");
+
+                foreach (var road in built)
+                {
+                    if (!network.TryGetParent(road, out var parent))
+                        continue;
+
+                    if (seen.TryGetValue(road, out var known))
+                        Assert.AreEqual(known, parent, $"после постройки {coord} родитель {road} переехал");
+                    else
+                        seen[road] = parent;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Оторванный кусок — исключение из липкости: его дерево росло от собственного корня и
+        /// смотрело бы не в ту сторону. При смыкании с Метрополией он перекладывается целиком.
+        /// </summary>
+        [Test]
+        public void DisconnectedCluster_IsRebuiltFromTheMetropolis_WhenItReconnects()
+        {
+            var network = new RoadNetwork(Map());
+            network.Build(new HexCoord(0, 3));
+            network.Build(new HexCoord(0, 2));
+
+            network.Build(new HexCoord(0, 1));
+
+            Assert.IsTrue(network.TryGetParent(new HexCoord(0, 2), out var lower));
+            Assert.AreEqual(new HexCoord(0, 1), lower, "нижняя дорога куска должна смотреть вниз");
+            Assert.IsTrue(network.TryGetParent(new HexCoord(0, 3), out var upper));
+            Assert.AreEqual(new HexCoord(0, 2), upper, "верхняя дорога куска должна смотреть вниз");
+
+            foreach (var row in new[] { 1, 2, 3 })
+                Assert.IsTrue(network.IsConnected(new HexCoord(0, row)));
+        }
+
+        /// <summary>
+        /// Цена липкости, названная в спеке 3.4: маршрут иногда на шаг длиннее кратчайшего.
+        /// `(-2,2)` вниз цепляется только через `(-1,2)`, пока `(-1,1)` пустая. Достроенная позже
+        /// `(-1,1)` даёт путь на шаг короче, но маршрут не переезжает — и картинка не дёргается.
+        /// </summary>
+        [Test]
+        public void PathToMetropolis_KeepsTheLongRoute_WhenAShortcutAppearsLater()
+        {
+            var network = new RoadNetwork(Map());
+            foreach (var coord in new[] { new HexCoord(0, 1), new HexCoord(-1, 2), new HexCoord(-2, 2) })
+                network.Build(coord);
+            var path = new List<HexCoord>();
+            network.TryFindPathToMetropolis(new HexCoord(-2, 2), path);
+            Assert.AreEqual(4, path.Count, "путь в обход: (-2,2) → (-1,2) → (0,1) → Метрополия");
+
+            network.Build(new HexCoord(-1, 1));
+
+            network.TryFindPathToMetropolis(new HexCoord(-2, 2), path);
+
+            Assert.AreEqual(4, path.Count, "короткий путь через (-1,1) появился, но маршрут остался прежним");
+            Assert.AreEqual(new HexCoord(-1, 2), path[1]);
+            Assert.AreEqual(1, HexCoord.Distance(new HexCoord(-2, 2), new HexCoord(-1, 1)),
+                "условие теста: (-1,1) смежна с (-2,2) и с Метрополией, короткий путь и правда есть");
         }
 
         [Test]

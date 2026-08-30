@@ -1,17 +1,16 @@
 using System;
-using Game.Grid;
 using UnityEngine;
 
 namespace Game.Economy
 {
-    /// <summary>Кружок цвета ресурса, едущий по дороге на склад.</summary>
+    /// <summary>Иконка ресурса, едущая по дороге на склад: бревно, валун, кристалл.</summary>
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public sealed class ResourceMover : MonoBehaviour
     {
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         [SerializeField] ResourcePalette palette;
-        [SerializeField] float scale = 0.24f;
+        [SerializeField] float scale = 0.34f;
         [SerializeField] float depth = -0.08f;
         [SerializeField] float hopSeconds = 0.35f;
         [SerializeField] float hopHeight = 0.7f;
@@ -26,7 +25,10 @@ namespace Game.Economy
         {
             delivery = bound;
             transform.localScale = Vector3.one * scale;
-            GetComponent<MeshFilter>().sharedMesh = HexMeshBuilder.Shared;
+
+            // Тот же полигон, что лежит в клетке склада: иначе едущий ресурс и приехавший
+            // выглядели бы разными предметами.
+            GetComponent<MeshFilter>().sharedMesh = ResourceShape.Icon(bound.Type);
 
             var meshRenderer = GetComponent<MeshRenderer>();
             var propertyBlock = new MaterialPropertyBlock();

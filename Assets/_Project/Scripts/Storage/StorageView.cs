@@ -6,16 +6,18 @@ using UnityEngine.UI;
 
 namespace Game.Storage
 {
-    /// <summary>Панель склада справа: сетка клеток и красная вспышка при потере ресурса.</summary>
+    /// <summary>Полоса склада внизу: сетка клеток и красная вспышка при потере ресурса.</summary>
     [RequireComponent(typeof(Image))]
     public sealed class StorageView : MonoBehaviour
     {
         [SerializeField] ResourcePalette palette;
         [SerializeField] Color panelColor = new(0.12f, 0.12f, 0.14f, 0.9f);
         [SerializeField] Color emptyCellColor = new(0.22f, 0.22f, 0.25f);
+        [Tooltip("Подложка занятой клетки: иконка лежит на ней, поэтому она чуть светлее пустой")]
+        [SerializeField] Color filledCellColor = new(0.30f, 0.30f, 0.34f);
         [SerializeField] Color lossFlashColor = new(0.75f, 0.15f, 0.15f, 0.95f);
         [SerializeField] float flashSeconds = 0.4f;
-        [SerializeField] int columns = 5;
+        [SerializeField] int columns = 8;
         [SerializeField] float cellSize = 88f;
         [SerializeField] float spacing = 8f;
         [SerializeField] float padding = 12f;
@@ -35,6 +37,7 @@ namespace Game.Storage
 
         Image panel;
         Image[] cells;
+        ResourceIcon[] icons;
         StorageGrid grid;
         float flashTimer;
 
@@ -143,13 +146,13 @@ namespace Game.Storage
         /// </summary>
         RectTransform CreateFlyingCopy(Vector3 position, ResourceType type)
         {
-            var copy = new GameObject("MergeFly", typeof(RectTransform), typeof(Image));
+            var copy = new GameObject("MergeFly", typeof(RectTransform), typeof(CanvasRenderer), typeof(ResourceIcon));
             var rect = (RectTransform)copy.transform;
             rect.SetParent(transform.parent, false);
             rect.SetAsLastSibling();
             rect.sizeDelta = Vector2.one * cellSize;
             rect.position = position;
-            copy.GetComponent<Image>().color = palette.Get(type);
+            copy.GetComponent<ResourceIcon>().Show(type, palette.Get(type));
             return rect;
         }
 
@@ -245,11 +248,26 @@ namespace Game.Storage
             layout.constraintCount = columns;
 
             cells = new Image[grid.Capacity];
+            icons = new ResourceIcon[grid.Capacity];
             for (var i = 0; i < cells.Length; i++)
             {
                 var cell = new GameObject($"Cell {i}", typeof(RectTransform), typeof(Image));
                 cell.transform.SetParent(transform, false);
                 cells[i] = cell.GetComponent<Image>();
+
+                // Иконка — ребёнок подложки: она едет вместе с ней на пульсации и на выскакивании
+                // масштабом, а `GridLayoutGroup` раскладывает только прямых детей панели.
+                // `CanvasRenderer` перечислен явно: конструктор `GameObject(имя, типы)` не разбирает
+                // `RequireComponent`, и без него графика молча не рисуется.
+                var icon = new GameObject("Icon", typeof(RectTransform), typeof(CanvasRenderer), typeof(ResourceIcon));
+                var iconRect = (RectTransform)icon.transform;
+                iconRect.SetParent(cell.transform, false);
+                iconRect.anchorMin = Vector2.zero;
+                iconRect.anchorMax = Vector2.one;
+                iconRect.sizeDelta = Vector2.zero;
+
+                icons[i] = icon.GetComponent<ResourceIcon>();
+                icons[i].raycastTarget = false;
             }
         }
 
@@ -259,7 +277,12 @@ namespace Game.Storage
             {
                 var content = grid[i];
                 var shown = content.HasValue && !pendingCells.Contains(i);
-                cells[i].color = shown ? palette.Get(content.Value) : emptyCellColor;
+                cells[i].color = shown ? filledCellColor : emptyCellColor;
+
+                if (shown)
+                    icons[i].Show(content.Value, palette.Get(content.Value));
+                else
+                    icons[i].Hide();
             }
         }
 

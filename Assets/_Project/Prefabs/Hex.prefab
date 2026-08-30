@@ -103,5 +103,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 747ee6bd0a07041deb85c190ef00fa0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game.Runtime::Game.Grid.TileView
-  hiddenColor: {r: 0.18, g: 0.18, b: 0.2, a: 1}
   metropolisColor: {r: 0.2, g: 0.45, b: 0.85, a: 1}

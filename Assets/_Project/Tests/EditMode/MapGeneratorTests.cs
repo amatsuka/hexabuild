@@ -7,7 +7,7 @@ namespace Game.Tests.EditMode
 {
     public sealed class MapGeneratorTests
     {
-        const int Rows = 10;
+        const int Rows = 14;
 
         static MapGenerationSettings Settings(int seed) => new(Rows, seed, 30f, 45f, 20f, 5f, 8, 20);
 
@@ -15,14 +15,34 @@ namespace Game.Tests.EditMode
             new(Rows, seed, empty, single, two, three, 8, 20);
 
         [Test]
-        public void Generates100TilesWithMetropolisAtTheBottom()
+        public void Generates105TilesWithMetropolisAtTheBottom()
         {
             var map = MapGenerator.Generate(Settings(1));
 
-            Assert.AreEqual(100, map.Count);
+            Assert.AreEqual(105, map.Count);
             Assert.AreEqual(0, map.Metropolis.Coord.R);
             Assert.IsTrue(map.Metropolis.IsMetropolis);
             Assert.IsEmpty(map.Metropolis.Deposits);
+        }
+
+        /// <summary>
+        /// Форму поля стережёт `HexMapTests`, здесь важно, что генератор выкладывает её целиком:
+        /// пропущенная плитка отрезала бы кусок карты от Метрополии.
+        /// </summary>
+        [Test]
+        public void EveryGeneratedTile_IsReachableFromTheMetropolis()
+        {
+            var map = MapGenerator.Generate(Settings(11));
+            var visited = new HashSet<HexCoord> { HexCoord.Zero };
+            var frontier = new Queue<HexCoord>();
+            frontier.Enqueue(HexCoord.Zero);
+
+            while (frontier.Count > 0)
+                foreach (var neighbor in map.NeighborsOf(frontier.Dequeue()))
+                    if (visited.Add(neighbor.Coord))
+                        frontier.Enqueue(neighbor.Coord);
+
+            Assert.AreEqual(map.Count, visited.Count, "часть плиток оторвана от Метрополии");
         }
 
         [Test]
@@ -52,8 +72,9 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>Камень за горой бесполезен: гарантия обязана лечь на проходимую соседку.</summary>
         [Test]
-        public void StoneAlwaysSitsNextToMetropolis()
+        public void StoneAlwaysSitsOnAPassableNeighbourOfTheMetropolis()
         {
             for (var seed = 1; seed <= 200; seed++)
             {
@@ -61,11 +82,168 @@ namespace Game.Tests.EditMode
                 var hasStone = false;
 
                 foreach (var neighbor in map.NeighborsOf(HexCoord.Zero))
-                foreach (var deposit in neighbor.Deposits)
-                    hasStone |= deposit.Type == ResourceType.Stone;
+                {
+                    if (!neighbor.IsPassable)
+                        continue;
 
-                Assert.IsTrue(hasStone, $"seed {seed}: рядом с Метрополией нет камня");
+                    foreach (var deposit in neighbor.Deposits)
+                        hasStone |= deposit.Type == ResourceType.Stone;
+                }
+
+                Assert.IsTrue(hasStone, $"seed {seed}: рядом с Метрополией нет доступного камня");
             }
+        }
+
+        // --- M9: препятствия ---
+
+        /// <summary>
+        /// Главное обещание стадии: ни один сид не даёт партию с отрезанной Метрополией.
+        /// Генератор перебирает смещения шума, пока обход по проходимым плиткам не покроет 85%.
+        /// </summary>
+        [Test]
+        public void PassableFieldFromTheMetropolis_CoversAtLeast85PercentOnEverySeed()
+        {
+            for (var seed = 1; seed <= 200; seed++)
+            {
+                var map = MapGenerator.Generate(Settings(seed));
+                var visited = new HashSet<HexCoord> { HexCoord.Zero };
+                var frontier = new Queue<HexCoord>();
+                frontier.Enqueue(HexCoord.Zero);
+
+                while (frontier.Count > 0)
+                    foreach (var neighbor in map.NeighborsOf(frontier.Dequeue()))
+                        if (neighbor.IsPassable && visited.Add(neighbor.Coord))
+                            frontier.Enqueue(neighbor.Coord);
+
+                var share = visited.Count / (float)map.Count;
+                Assert.GreaterOrEqual(share, 0.85f, $"seed {seed}: горы отрезали {1f - share:P0} поля");
+            }
+        }
+
+        [Test]
+        public void Metropolis_IsNeverMountainOrWater()
+        {
+            for (var seed = 1; seed <= 200; seed++)
+            {
+                var biome = MapGenerator.Generate(Settings(seed)).Metropolis.Biome;
+
+                Assert.AreNotEqual(BiomeType.Mountains, biome, $"seed {seed}");
+                Assert.AreNotEqual(BiomeType.Water, biome, $"seed {seed}");
+            }
+        }
+
+        [Test]
+        public void Mountains_CarryNoDeposits()
+        {
+            for (var seed = 1; seed <= 50; seed++)
+            foreach (var tile in MapGenerator.Generate(Settings(seed)).Tiles.Values)
+                if (tile.Biome == BiomeType.Mountains)
+                    Assert.IsEmpty(tile.Deposits, $"seed {seed}: у горы {tile.Coord} есть месторождение");
+        }
+
+        /// <summary>Река лежит на ребре, а ребро общее: бит обязан стоять с обеих сторон.</summary>
+        [Test]
+        public void RiverMask_IsSymmetricAcrossTheEdge()
+        {
+            for (var seed = 1; seed <= 50; seed++)
+            {
+                var map = MapGenerator.Generate(Settings(seed));
+
+                foreach (var tile in map.Tiles.Values)
+                for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+                {
+                    if (!tile.HasRiver(direction))
+                        continue;
+
+                    if (!map.TryGetTile(tile.Coord.Neighbor(direction), out var other))
+                        continue;
+
+                    Assert.IsTrue(
+                        other.HasRiver((direction + 3) % 6),
+                        $"seed {seed}: у {tile.Coord} река в сторону {direction}, а у соседа её нет");
+                }
+            }
+        }
+
+        [Test]
+        public void MapsWithMountains_GetRivers()
+        {
+            var withMountains = 0;
+            var withRivers = 0;
+
+            for (var seed = 1; seed <= 60; seed++)
+            {
+                var map = MapGenerator.Generate(Settings(seed));
+                var mountains = false;
+                var rivers = false;
+
+                foreach (var tile in map.Tiles.Values)
+                {
+                    mountains |= tile.Biome == BiomeType.Mountains;
+                    rivers |= tile.RiverMask != 0;
+                }
+
+                if (!mountains)
+                    continue;
+
+                withMountains++;
+                if (rivers)
+                    withRivers++;
+            }
+
+            Assert.Greater(withMountains, 0, "на шестидесяти сидах не выпало ни одной горы");
+            Assert.AreEqual(withMountains, withRivers, "русло берёт начало в горах: есть горы — есть и река");
+        }
+
+        /// <summary>
+        /// Русло — цепочка, а не россыпь: каждое ребро с рекой делит вершину с другим таким же,
+        /// кроме концов русла. Иначе река не была бы преградой, её обходили бы вплотную.
+        /// </summary>
+        [Test]
+        public void River_RunsAsAConnectedChain()
+        {
+            for (var seed = 1; seed <= 40; seed++)
+            {
+                var map = MapGenerator.Generate(Settings(seed));
+                var edges = new HashSet<(HexCoord Tile, int Direction)>();
+
+                foreach (var tile in map.Tiles.Values)
+                for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+                    if (tile.HasRiver(direction))
+                        edges.Add(Canonical(tile.Coord, direction));
+
+                var loose = 0;
+                foreach (var edge in edges)
+                {
+                    var touching = 0;
+                    foreach (var candidate in NeighborEdges(edge))
+                        if (edges.Contains(Canonical(candidate.Tile, candidate.Direction)))
+                            touching++;
+
+                    if (touching == 0)
+                        loose++;
+                }
+
+                Assert.AreEqual(0, loose, $"seed {seed}: {loose} рёбер русла висят в отрыве от остальных");
+            }
+        }
+
+        static (HexCoord Tile, int Direction) Canonical(HexCoord tile, int direction)
+        {
+            var other = tile.Neighbor(direction);
+            if (tile.Q < other.Q || (tile.Q == other.Q && tile.R < other.R))
+                return (tile, direction);
+
+            return (other, (direction + 3) % 6);
+        }
+
+        static IEnumerable<(HexCoord Tile, int Direction)> NeighborEdges((HexCoord Tile, int Direction) edge)
+        {
+            var far = edge.Tile.Neighbor(edge.Direction);
+            yield return (edge.Tile, (edge.Direction + 1) % 6);
+            yield return (edge.Tile, (edge.Direction + 5) % 6);
+            yield return (far, (edge.Direction + 2) % 6);
+            yield return (far, (edge.Direction + 4) % 6);
         }
 
         [Test]
@@ -92,7 +270,8 @@ namespace Game.Tests.EditMode
 
             foreach (var tile in map.Tiles.Values)
             {
-                if (tile.IsMetropolis)
+                // Гора месторождений не несёт вовсе — веса до неё не доходят.
+                if (tile.IsMetropolis || tile.Biome == BiomeType.Mountains)
                     continue;
 
                 Assert.AreEqual(expected, tile.Deposits.Count, $"плитка {tile.Coord}");

@@ -79,7 +79,7 @@ namespace Game.Tutorial
             {
                 case TutorialStep.OpenTile:
                 case TutorialStep.Loop:
-                    TargetTile = NearestTile(tile => tile.State == TileState.Available);
+                    TargetTile = NearestTile(tile => tile.State == TileState.Available && tile.IsPassable);
                     break;
                 case TutorialStep.BuildRoad:
                     IsStuck = roads.Roads.Count == 0 && storage.CountOf(ResourceType.Gravel) == 0;
@@ -97,9 +97,9 @@ namespace Game.Tutorial
             Changed?.Invoke();
         }
 
-        /// <summary>Открытая плитка без дороги: на ней и строят.</summary>
+        /// <summary>Открытая плитка без дороги: на ней и строят. Гора дорогу не примет.</summary>
         bool Buildable(TileData tile) =>
-            tile.State == TileState.Revealed && !tile.IsMetropolis && !roads.HasRoad(tile.Coord);
+            tile.State == TileState.Revealed && !tile.IsMetropolis && tile.IsPassable && !roads.HasRoad(tile.Coord);
 
         /// <summary>
         /// Ближайшая к Метрополии подходящая плитка. Плитка с гарантированным камнем идёт вне
@@ -195,6 +195,11 @@ namespace Game.Tutorial
 
             foreach (var tile in map.NeighborsOf(HexCoord.Zero))
             {
+                // Гора не открывается и дорогу не принимает: вести на неё игрока — тупик с
+                // первого шага. Генератор гарантирует камень на проходимой соседке (2.1).
+                if (!tile.IsPassable)
+                    continue;
+
                 fallback ??= tile.Coord;
 
                 foreach (var deposit in tile.Deposits)

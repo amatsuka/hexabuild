@@ -7,8 +7,9 @@ namespace Game.UI
     public sealed class CameraRig : MonoBehaviour
     {
         // Портрет узкий: на максимальном зуме поле влезает по высоте, ширину проходим паном.
-        [SerializeField] float minZoom = 2.5f;
-        [SerializeField] float maxZoom = 8.5f;
+        // Верхняя граница держит гекс крупным: при 6 юнитах он занимает около 160 px из 1080.
+        [SerializeField] float minZoom = 3f;
+        [SerializeField] float maxZoom = 6f;
         [SerializeField] float zoomStepPerScroll = 0.6f;
 
         Camera cameraComponent;

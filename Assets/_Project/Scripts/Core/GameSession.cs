@@ -44,7 +44,7 @@ namespace Game.Core
             var map = MapGenerator.Generate(config.MapGenerationSettings);
             var wallet = new Wallet(config.StartingPoints);
             var storage = new StorageGrid(config.StorageSize);
-            state = new GameState(map, wallet, storage, config.TileOpenCost, config.RoadCost);
+            state = new GameState(map, wallet, storage, config.TileOpenCost, config.RoadCost, config.BridgeCost);
 
             production = new ProductionSystem(map, state.Roads, config.ExtractionInterval);
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
@@ -198,7 +198,8 @@ namespace Game.Core
                     roadViews.Add(coord, roadView);
                 }
 
-                roadView.Show(state.Roads.IsConnected(coord), LinkMask(coord));
+                var links = LinkMask(coord);
+                roadView.Show(coord, state.Roads.IsConnected(coord), links, BridgeMask(coord, links));
             }
 
             tutorial.Notify(TutorialTrigger.RoadBuilt);
@@ -218,9 +219,24 @@ namespace Game.Core
             return mask;
         }
 
+        /// <summary>
+        /// Где маршрут идёт мостом. По воде дорога целиком мост, на суше — только там, где
+        /// участок маршрута пересекает реку по ребру.
+        /// </summary>
+        int BridgeMask(HexCoord coord, int linkMask)
+        {
+            if (!state.Map.TryGetTile(coord, out var tile))
+                return 0;
+
+            return tile.Biome == BiomeType.Water ? linkMask : linkMask & tile.RiverMask;
+        }
+
         void OnProduced(TileData tile, ResourceType type)
         {
             OnTileChanged(tile);
+
+            if (views.TryGetValue(tile.Coord, out var view))
+                view.PlayExtraction(tile, type);
 
             if (state.Roads.TryFindPathToMetropolis(tile.Coord, path))
                 deliveries.Send(type, new List<HexCoord>(path));

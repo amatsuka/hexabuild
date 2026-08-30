@@ -11,14 +11,17 @@ namespace Game.Core
     {
         readonly int tileOpenCost;
         readonly int roadCost;
+        readonly int bridgeCost;
 
-        public GameState(HexMap map, Wallet wallet, StorageGrid storage, int tileOpenCost, int roadCost)
+        public GameState(
+            HexMap map, Wallet wallet, StorageGrid storage, int tileOpenCost, int roadCost, int bridgeCost)
         {
             Map = map;
             Wallet = wallet;
             Storage = storage;
             this.tileOpenCost = tileOpenCost;
             this.roadCost = roadCost;
+            this.bridgeCost = bridgeCost;
             Roads = new RoadNetwork(map);
         }
 
@@ -71,6 +74,12 @@ namespace Game.Core
             if (tile.State != TileState.Available)
                 return false;
 
+            if (!tile.IsPassable)
+            {
+                ActionRefused?.Invoke("Гора непроходима");
+                return false;
+            }
+
             if (!Wallet.TrySpendPoints(tileOpenCost))
             {
                 ActionRefused?.Invoke($"Не хватает очков: нужно {tileOpenCost}");
@@ -88,6 +97,12 @@ namespace Game.Core
             if (!Map.TryGetTile(coord, out var tile) || tile.IsMetropolis)
                 return false;
 
+            if (!tile.IsPassable)
+            {
+                ActionRefused?.Invoke("Гора непроходима");
+                return false;
+            }
+
             if (tile.State is TileState.Hidden or TileState.Available)
             {
                 ActionRefused?.Invoke("Дорогу строят только на открытой плитке");
@@ -97,14 +112,45 @@ namespace Game.Core
             if (Roads.HasRoad(coord))
                 return false;
 
-            if (!Storage.TryRemove(ResourceType.Gravel, roadCost))
+            var price = RoadPrice(tile);
+            if (!Storage.TryRemove(ResourceType.Gravel, price))
             {
-                ActionRefused?.Invoke($"Не хватает щебня: нужно {roadCost}");
+                ActionRefused?.Invoke(price > roadCost
+                    ? $"Нужен мост: {price} щебня"
+                    : $"Не хватает щебня: нужно {price}");
                 return false;
             }
 
             Roads.Build(coord);
             return true;
+        }
+
+        /// <summary>
+        /// Цена дороги: обычная плюс надбавка за мост, если плитка водная или ребро к будущему
+        /// родителю пересекает реку. Родителя приходится спрашивать заранее — платят до постройки.
+        ///
+        /// Это работает только потому, что в M7 родитель стал липким: назначенный однажды, он не
+        /// переедет, и оплаченный мост останется на том самом ребре. Дорога, построенная в отрыве
+        /// от сети, родителя не имеет и за реку не платит — цена берётся в момент постройки.
+        /// </summary>
+        public int RoadPrice(TileData tile)
+        {
+            if (tile.Biome == BiomeType.Water)
+                return roadCost + bridgeCost;
+
+            if (Roads.TryPreviewParent(tile.Coord, out var parent) && CrossesRiver(tile, parent))
+                return roadCost + bridgeCost;
+
+            return roadCost;
+        }
+
+        static bool CrossesRiver(TileData tile, HexCoord parent)
+        {
+            for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+                if (tile.Coord.Neighbor(direction) == parent)
+                    return tile.HasRiver(direction);
+
+            return false;
         }
 
         void MakeNeighborsAvailable(TileData tile)

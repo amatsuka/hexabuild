@@ -222,8 +222,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3dd783a6dc5b243b09fea74f95c5ae45, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game.Runtime::Game.UI.CameraRig
-  minZoom: 2.5
-  maxZoom: 8.5
+  minZoom: 3
+  maxZoom: 6
   zoomStepPerScroll: 0.6
 --- !u!20 &381356109
 Camera:
@@ -669,9 +669,10 @@ MonoBehaviour:
     ingot: {r: 0.95, g: 0.72, b: 0.42, a: 1}
   panelColor: {r: 0.12, g: 0.12, b: 0.14, a: 0.9}
   emptyCellColor: {r: 0.22, g: 0.22, b: 0.25, a: 1}
+  filledCellColor: {r: 0.3, g: 0.3, b: 0.34, a: 1}
   lossFlashColor: {r: 0.75, g: 0.15, b: 0.15, a: 0.95}
   flashSeconds: 0.4
-  columns: 5
+  columns: 8
   cellSize: 88
   spacing: 8
   padding: 12

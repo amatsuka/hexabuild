@@ -44,6 +44,23 @@ namespace Game.Grid
             return result;
         }
 
+        /// <summary>
+        /// Детерминированный хеш координаты в [0, 1). `GetHashCode` для этого не годится: он идёт
+        /// через `HashCode.Combine`, а тот подмешивает случайное на процесс зерно — и одна и та же
+        /// карта выглядела бы по-разному при каждом запуске. <paramref name="salt"/> даёт
+        /// независимые потоки: количество декора, его позиция и оттенок не должны быть связаны.
+        /// </summary>
+        public float Hash01(int salt)
+        {
+            unchecked
+            {
+                var hash = Q * 73856093 ^ R * 19349663 ^ salt * 83492791;
+                hash = (hash ^ (hash >> 13)) * 1274126177;
+                hash ^= hash >> 16;
+                return (hash & 0x7fffffff) / 2147483648f;
+            }
+        }
+
         public static int Distance(HexCoord a, HexCoord b)
         {
             var dq = a.Q - b.Q;

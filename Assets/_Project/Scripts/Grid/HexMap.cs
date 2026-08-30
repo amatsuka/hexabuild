@@ -1,9 +1,8 @@
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace Game.Grid
 {
-    /// <summary>Поле гексов заданного радиуса: хранение плиток и доступ по координате.</summary>
+    /// <summary>Поле гексов из заданного числа рядов: хранение плиток и доступ по координате.</summary>
     public sealed class HexMap
     {
         readonly Dictionary<HexCoord, TileData> tiles = new();
@@ -24,17 +23,16 @@ namespace Game.Grid
         public TileData Metropolis => tiles[HexCoord.Zero];
 
         /// <summary>
-        /// Координаты поля-раструба: Метрополия внизу, ряд r содержит 2r+1 плиток и центрируется
-        /// над ней. Чётные и нечётные ряды смещены на полплитки — так гексы стыкуются.
+        /// Координаты поля-раструба: Метрополия внизу, ряд r содержит r+1 плиток и центрируется
+        /// над ней. Ряд шире нижнего на одну плитку, поэтому каждая плитка опирается хотя бы на
+        /// одну плитку ряда ниже, а крайние — ровно на одну. Чётные и нечётные ряды смещены на
+        /// полплитки — так гексы стыкуются.
         /// </summary>
         public static IEnumerable<HexCoord> CoordsInFlare(int rows)
         {
             for (var r = 0; r < rows; r++)
-            {
-                var firstQ = -Mathf.RoundToInt(1.5f * r);
-                for (var i = 0; i <= 2 * r; i++)
-                    yield return new HexCoord(firstQ + i, r);
-            }
+                for (var i = 0; i <= r; i++)
+                    yield return new HexCoord(-r + i, r);
         }
 
         public bool Contains(HexCoord coord) => tiles.ContainsKey(coord);

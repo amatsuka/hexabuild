@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1f4e4339e65db4178832040350570436, type: 3}
   m_Name: GameConfig
   m_EditorClassIdentifier: Game.Runtime::Game.Core.GameConfig
-  fieldRadius: 6
+  fieldRows: 14
   seed: 0
   emptyWeight: 30
   singleDepositWeight: 45
@@ -22,9 +22,10 @@ MonoBehaviour:
   maxDepositReserve: 20
   extractionInterval: 3
   deliverySecondsPerTile: 1
-  storageSize: 25
+  storageSize: 24
   tileOpenCost: 20
   roadCost: 1
+  bridgeCost: 2
   smallMergeCount: 3
   smallMergePoints: 10
   largeMergeCount: 5

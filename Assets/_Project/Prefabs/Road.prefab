@@ -45,7 +45,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Game.Runtime::Game.Roads.RoadView
   roadMaterial: {fileID: 2100000, guid: cb333b0cb1c9c4bf7ad8c68eb9006ead, type: 2}
-  roadColor: {r: 1, g: 1, b: 1, a: 1}
+  surfaceColor: {r: 0.84, g: 0.81, b: 0.73, a: 1}
+  shoulderColor: {r: 0.19, g: 0.17, b: 0.15, a: 1}
   disconnectedAlpha: 0.35
-  nodeScale: 0.26
-  segmentWidth: 0.13
+  surfaceWidth: 0.17
+  shoulderExtra: 0.08
+  bridgeColor: {r: 0.58, g: 0.42, b: 0.26, a: 1}
+  bridgeExtra: 0.12
+  widthJitter: 0.16
+  shadeJitter: 0.12

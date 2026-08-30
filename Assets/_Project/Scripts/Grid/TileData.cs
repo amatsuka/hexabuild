@@ -16,13 +16,15 @@ namespace Game.Grid
             bool isMetropolis,
             IReadOnlyList<Deposit> deposits = null,
             BiomeType biome = BiomeType.Meadow,
-            float shade = 0f)
+            float shade = 0f,
+            int riverMask = 0)
         {
             Coord = coord;
             IsMetropolis = isMetropolis;
             Deposits = deposits ?? NoDeposits;
             Biome = biome;
             Shade = shade;
+            RiverMask = riverMask;
         }
 
         public HexCoord Coord { get; }
@@ -31,8 +33,20 @@ namespace Game.Grid
 
         public IReadOnlyList<Deposit> Deposits { get; }
 
-        /// <summary>Ландшафт плитки: только внешний вид.</summary>
+        /// <summary>Ландшафт плитки. С M9 влияет на правила: см. `IsPassable` и `HasRiver`.</summary>
         public BiomeType Biome { get; }
+
+        /// <summary>
+        /// Биты рёбер по `HexCoord.Directions`, вдоль которых течёт река. Маска симметрична:
+        /// если у плитки взведён бит направления, у соседа взведён бит обратного направления.
+        /// </summary>
+        public int RiverMask { get; }
+
+        /// <summary>Горы дорогу не принимают и за очки не открываются: это стена, а не секрет.</summary>
+        public bool IsPassable => Biome != BiomeType.Mountains;
+
+        /// <summary>По ребру в эту сторону течёт река: дорога через него требует моста.</summary>
+        public bool HasRiver(int direction) => (RiverMask & (1 << direction)) != 0;
 
         /// <summary>Отклонение тона от −1 до 1, чтобы соседи одного биома не сливались в пятно.</summary>
         public float Shade { get; }
