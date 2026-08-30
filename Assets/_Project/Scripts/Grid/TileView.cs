@@ -22,6 +22,8 @@ namespace Game.Grid
         const int DecorCountSalt = 11;
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        static readonly int StateFogId = Shader.PropertyToID("_StateFog");
+        static readonly int StateFadeId = Shader.PropertyToID("_StateFade");
 
         // Разведка 3D: высота плитки по биому. Ноль возвращает прежнее плоское поле, поэтому
         // весь объём откатывается одним числом `heightScale`.
@@ -34,13 +36,21 @@ namespace Game.Grid
         [Header("Ландшафт")]
         [SerializeField] BiomePalette biomes = new();
         [SerializeField] Color metropolisColor = new(0.20f, 0.45f, 0.85f);
-        [SerializeField, Range(0f, 1f)] float hiddenDim = 0.26f;
-        [SerializeField, Range(0f, 1f)] float availableDim = 0.62f;
-        [Tooltip("Насколько цвет биома уводится в серый под туманом: 1 — полностью серый")]
-        [SerializeField, Range(0f, 1f)] float hiddenDesaturation = 0.88f;
-        [SerializeField, Range(0f, 1f)] float availableDesaturation = 0.45f;
-        [SerializeField, Range(0f, 1f)] float depletedAlpha = 0.35f;
         [SerializeField, Range(0f, 0.3f)] float shadeStrength = 0.08f;
+
+        // Состояние плитки выражает шейдер `Game/TileState`: `_StateFog` подмешивает цвет дымки
+        // поверх освещения, `_StateFade` уводит альбедо в серый. Раньше и то и другое было
+        // умножением цвета на CPU — оно чернило плитку и на текстурированной модели не сработает.
+        [Header("Состояния плитки")]
+        [Tooltip("Скрытая плитка: сколько её съела дымка")]
+        [SerializeField, Range(0f, 1f)] float hiddenFog = 0.50f;
+        [Tooltip("Насколько цвет биома уводится в серый под туманом: 1 — полностью серый")]
+        [SerializeField, Range(0f, 1f)] float hiddenFade = 0.72f;
+        [SerializeField, Range(0f, 1f)] float availableFog = 0.20f;
+        [SerializeField, Range(0f, 1f)] float availableFade = 0.34f;
+        [Tooltip("Истощённая плитка уже открыта, туман на неё не возвращается — она выцветает")]
+        [SerializeField, Range(0f, 1f)] float depletedFog = 0.18f;
+        [SerializeField, Range(0f, 1f)] float depletedFade = 0.55f;
 
         [Header("Река")]
         [SerializeField] Color riverColor = new(0.28f, 0.52f, 0.74f);
@@ -118,21 +128,19 @@ namespace Game.Grid
         {
             // Гора не прячется туманом: она не секрет, а стена, и игрок должен видеть её сразу,
             // иначе он раз за разом тратит клики на плитку, которая всё равно не откроется.
-            var dim = tile.IsPassable ? StateDim(tile.State) : 1f;
-            var fade = tile.IsPassable ? StateDesaturation(tile.State) : 0f;
-            SetColor(Renderer, GroundColor(tile, dim, fade));
+            var state = tile.IsPassable ? StateOf(tile.State) : Vector2.zero;
 
-            var decorColor = Shaded(biomes.Decor(tile.Biome), tile.Shade, dim, fade);
-            if (tile.State == TileState.Depleted)
-                decorColor.a = depletedAlpha;
+            SetTile(Renderer, GroundColor(tile), state);
+            SetTile(outline, outlineColor, state);
 
+            var decorColor = Shaded(biomes.Decor(tile.Biome), tile.Shade);
             for (var i = 0; i < decor.Count; i++)
-                SetColor(decor[i], Scaled(decorColor, decorTints[i]));
+                SetTile(decor[i], Scaled(decorColor, decorTints[i]), state);
 
             if (river != null)
-                SetColor(river, Shaded(riverColor, tile.Shade, dim, fade));
+                SetTile(river, Shaded(riverColor, tile.Shade), state);
 
-            ApplyDeposits(tile);
+            ApplyDeposits(tile, state);
         }
 
         /// <summary>
@@ -236,57 +244,31 @@ namespace Game.Grid
             }
         }
 
-        /// <summary>Скрытая плитка не прячет ландшафт полностью — она просто сильно затемнена.</summary>
-        float StateDim(TileState state)
+        /// <summary>
+        /// Состояние плитки для шейдера: x — доля дымки, y — обесцвечивание. Скрытая плитка не
+        /// исчезает и не чернеет: рельеф под дымкой угадывается, но цветом с открытым полем
+        /// не спорит.
+        /// </summary>
+        Vector2 StateOf(TileState state)
         {
             switch (state)
             {
                 case TileState.Hidden:
-                    return hiddenDim;
+                    return new Vector2(hiddenFog, hiddenFade);
                 case TileState.Available:
-                    return availableDim;
+                    return new Vector2(availableFog, availableFade);
+                case TileState.Depleted:
+                    return new Vector2(depletedFog, depletedFade);
                 default:
-                    return 1f;
+                    return Vector2.zero;
             }
         }
 
-        /// <summary>Под туманом биом почти уходит в серый: рельеф угадывается, но не бросается в глаза.</summary>
-        float StateDesaturation(TileState state)
-        {
-            switch (state)
-            {
-                case TileState.Hidden:
-                    return hiddenDesaturation;
-                case TileState.Available:
-                    return availableDesaturation;
-                default:
-                    return 0f;
-            }
-        }
+        Color GroundColor(TileData tile) =>
+            tile.IsMetropolis ? metropolisColor : Shaded(biomes.Ground(tile.Biome), tile.Shade);
 
-        Color GroundColor(TileData tile, float dim, float fade)
-        {
-            if (tile.IsMetropolis)
-                return metropolisColor;
-
-            var ground = Shaded(biomes.Ground(tile.Biome), tile.Shade, dim, fade);
-            if (tile.State == TileState.Depleted)
-                ground.a = depletedAlpha;
-
-            return ground;
-        }
-
-        Color Shaded(Color color, float shade, float dim, float fade)
-        {
-            var grey = color.grayscale;
-            var faded = new Color(
-                Mathf.Lerp(color.r, grey, fade),
-                Mathf.Lerp(color.g, grey, fade),
-                Mathf.Lerp(color.b, grey, fade),
-                color.a);
-
-            return Scaled(faded, dim * (1f + shade * shadeStrength));
-        }
+        /// <summary>Разброс тона внутри биома. Это разнообразие ландшафта, а не состояние плитки.</summary>
+        Color Shaded(Color color, float shade) => Scaled(color, 1f + shade * shadeStrength);
 
         static Color Scaled(Color color, float factor) =>
             new(color.r * factor, color.g * factor, color.b * factor, color.a);
@@ -301,7 +283,6 @@ namespace Game.Grid
             // там, где она нужнее всего. Поэтому обводка стала ободком, лежащим на крышке.
             outline = CreatePart(transform, "Outline", ShapeMeshes.HexRing,
                 new Vector3(0f, OutlineHeight, 0f), Vector3.one * outlineScale);
-            SetColor(outline, outlineColor);
         }
 
         /// <summary>
@@ -427,7 +408,7 @@ namespace Game.Grid
             }
         }
 
-        void ApplyDeposits(TileData tile)
+        void ApplyDeposits(TileData tile, Vector2 state)
         {
             var visible = tile.State is TileState.Revealed or TileState.Depleted;
 
@@ -440,19 +421,17 @@ namespace Game.Grid
 
                 var deposit = tile.Deposits[i];
                 var spent = deposit.IsExhausted;
-                var body = DepositColor(deposit.Type, spent, false);
-                var accent = DepositColor(deposit.Type, spent, true);
 
-                if (spent)
-                {
-                    body.a = depletedAlpha;
-                    accent.a = depletedAlpha;
-                }
+                // Исчерпанное месторождение выцветает, даже если сама плитка ещё нет: на плитке
+                // с двумя месторождениями одно может кончиться раньше другого.
+                var depositState = spent
+                    ? Vector2.Max(state, new Vector2(depletedFog, depletedFade))
+                    : state;
 
                 view.Body.GetComponent<MeshFilter>().sharedMesh = ShapeMeshes.Deposit(deposit.Type, spent, false);
                 view.Accent.GetComponent<MeshFilter>().sharedMesh = ShapeMeshes.Deposit(deposit.Type, spent, true);
-                SetColor(view.Body, body);
-                SetColor(view.Accent, accent);
+                SetTile(view.Body, DepositColor(deposit.Type, spent, false), depositState);
+                SetTile(view.Accent, DepositColor(deposit.Type, spent, true), depositState);
             }
         }
 
@@ -516,12 +495,21 @@ namespace Game.Grid
             return partRenderer;
         }
 
-        void SetColor(MeshRenderer target, Color color)
+        /// <summary>
+        /// Цвет без состояния: подсветка обучения и искра добычи туманом не гасятся. Нули пишутся
+        /// явно, а не полагаются на дефолт материала: блок переиспользуется между рендерерами.
+        /// </summary>
+        void SetColor(MeshRenderer target, Color color) => SetTile(target, color, Vector2.zero);
+
+        /// <summary>Цвет вместе с состоянием: дымку и обесцвечивание накладывает шейдер.</summary>
+        void SetTile(MeshRenderer target, Color color, Vector2 state)
         {
             propertyBlock ??= new MaterialPropertyBlock();
 
             target.GetPropertyBlock(propertyBlock);
             propertyBlock.SetColor(BaseColorId, color);
+            propertyBlock.SetFloat(StateFogId, state.x);
+            propertyBlock.SetFloat(StateFadeId, state.y);
             target.SetPropertyBlock(propertyBlock);
         }
 

@@ -27,11 +27,13 @@ namespace Game.Roads
         const int ShadeSalt = 1;
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        static readonly int StateFogId = Shader.PropertyToID("_StateFog");
 
         [SerializeField] Material roadMaterial;
         [SerializeField] Color surfaceColor = new(0.84f, 0.81f, 0.73f);
         [SerializeField] Color shoulderColor = new(0.19f, 0.17f, 0.15f);
-        [SerializeField, Range(0f, 1f)] float disconnectedAlpha = 0.35f;
+        [Tooltip("Насколько неподключённая дорога уходит в дымку: она построена, но не работает")]
+        [SerializeField, Range(0f, 1f)] float disconnectedFog = 0.55f;
         [SerializeField] float surfaceWidth = 0.17f;
         [Tooltip("Насколько обочина шире полотна: по половине с каждой стороны")]
         [SerializeField] float shoulderExtra = 0.08f;
@@ -61,10 +63,14 @@ namespace Game.Roads
             var width = surfaceWidth * WidthFactor(coord);
             var shade = Mathf.Lerp(1f - shadeJitter, 1f + shadeJitter, coord.Hash01(ShadeSalt));
 
+            // Неподключённая дорога раньше отличалась альфой. Материал стал непрозрачным, и альфа
+            // перестала что-либо значить — отличие вернулось дымкой того же шейдера, что у плиток.
+            var fog = connected ? 0f : disconnectedFog;
+
             Draw(bridge, RoadMeshBuilder.Bridge(bridgeMask, width + shoulderExtra + bridgeExtra),
-                Tinted(bridgeColor, shade, connected));
-            Draw(shoulder, RoadMeshBuilder.Get(linkMask, width + shoulderExtra), Tinted(shoulderColor, shade, connected));
-            Draw(surface, RoadMeshBuilder.Get(linkMask, width), Tinted(surfaceColor, shade, connected));
+                Tinted(bridgeColor, shade), fog);
+            Draw(shoulder, RoadMeshBuilder.Get(linkMask, width + shoulderExtra), Tinted(shoulderColor, shade), fog);
+            Draw(surface, RoadMeshBuilder.Get(linkMask, width), Tinted(surfaceColor, shade), fog);
         }
 
         /// <summary>Ширина квантуется: кэш мешей живёт по паре «маска + ширина».</summary>
@@ -74,10 +80,10 @@ namespace Game.Roads
             return Mathf.Lerp(1f - widthJitter, 1f + widthJitter, step / (float)(WidthSteps - 1));
         }
 
-        Color Tinted(Color color, float shade, bool connected) =>
-            new(color.r * shade, color.g * shade, color.b * shade, connected ? color.a : disconnectedAlpha);
+        Color Tinted(Color color, float shade) =>
+            new(color.r * shade, color.g * shade, color.b * shade, color.a);
 
-        void Draw(MeshFilter layer, Mesh mesh, Color color)
+        void Draw(MeshFilter layer, Mesh mesh, Color color, float fog)
         {
             layer.sharedMesh = mesh;
 
@@ -85,6 +91,7 @@ namespace Game.Roads
             var layerRenderer = layer.GetComponent<MeshRenderer>();
             layerRenderer.GetPropertyBlock(propertyBlock);
             propertyBlock.SetColor(BaseColorId, color);
+            propertyBlock.SetFloat(StateFogId, fog);
             layerRenderer.SetPropertyBlock(propertyBlock);
         }
 
