@@ -9,6 +9,9 @@
 /[Mm]emoryCaptures/
 /[Rr]ecordings/
 
+# Мусор Unity.PerformanceTesting: пишется прогоном тестов, к проекту не относится
+/[Aa]ssets/[Rr]esources/PerformanceTestRun*.json*
+
 # Asset meta data for ignored folders
 !/[Aa]ssets/**/*.meta
 
