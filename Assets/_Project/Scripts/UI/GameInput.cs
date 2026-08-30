@@ -11,8 +11,8 @@ namespace Game.UI
     /// </summary>
     public sealed class GameInput : MonoBehaviour
     {
-        /// <summary>Поле лежит в плоскости z = 0: по ней и бьёт луч из-под пальца.</summary>
-        static readonly Plane FieldPlane = new(Vector3.back, Vector3.zero);
+        /// <summary>Земля — плоскость y = 0: по ней и бьёт луч из-под пальца.</summary>
+        static readonly Plane FieldPlane = new(Vector3.up, Vector3.zero);
 
         [SerializeField] Camera worldCamera;
         [SerializeField] float clickThresholdPixels = 12f;
@@ -35,8 +35,9 @@ namespace Game.UI
         /// <summary>Плитка под экранной точкой.</summary>
         public HexCoord CoordAt(Vector2 screenPosition)
         {
-            // Разведка 3D: камера смотрит на поле под углом, поэтому отсчёт по её глубине больше
-            // не даёт точку плоскости — берём пересечение луча с самой плоскостью z = 0.
+            // Камера смотрит на поле под углом, поэтому отсчёт по её глубине не даёт точку земли —
+            // берём пересечение луча с плоскостью y = 0. Плитка на высоте даёт параллакс: клик по
+            // горе промахивается тем сильнее, чем она выше. Горы не кликаются, но знать про это надо.
             var ray = worldCamera.ScreenPointToRay(screenPosition);
             if (!FieldPlane.Raycast(ray, out var distance))
                 return HexCoord.Zero;

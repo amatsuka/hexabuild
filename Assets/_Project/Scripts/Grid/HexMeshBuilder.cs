@@ -13,9 +13,9 @@ namespace Game.Grid
         public static Mesh Shared => shared != null ? shared : shared = Build();
 
         /// <summary>
-        /// Разведка 3D: гекс с юбкой. Верхняя грань там же, где у плоского меша (z = 0), поэтому
-        /// вся раскладка декора и дорог по глубине остаётся верной, а юбка уходит от камеры на
-        /// <paramref name="skirt"/>. Разную высоту плиток даёт не меш, а сдвиг самой плитки по z.
+        /// Гекс с юбкой. Крышка там же, где у плоского меша (y = 0), поэтому вся раскладка
+        /// дорог и декора по высоте остаётся верной, а юбка уходит вниз на <paramref name="skirt"/>.
+        /// Разную высоту плиток даёт не меш, а подъём самой плитки по Y.
         /// </summary>
         public static Mesh Prism(float skirt)
         {
@@ -34,7 +34,7 @@ namespace Game.Grid
             for (var i = 0; i < 6; i++)
             {
                 var angle = Mathf.Deg2Rad * (60f * i - 30f);
-                rim[i] = new Vector3(HexCoord.Size * Mathf.Cos(angle), HexCoord.Size * Mathf.Sin(angle), 0f);
+                rim[i] = new Vector3(HexCoord.Size * Mathf.Cos(angle), 0f, HexCoord.Size * Mathf.Sin(angle));
             }
 
             var vertices = new System.Collections.Generic.List<Vector3>(7 + 24);
@@ -60,8 +60,8 @@ namespace Game.Grid
 
                 vertices.Add(top);
                 vertices.Add(next);
-                vertices.Add(next + new Vector3(0f, 0f, skirt));
-                vertices.Add(top + new Vector3(0f, 0f, skirt));
+                vertices.Add(next - new Vector3(0f, skirt, 0f));
+                vertices.Add(top - new Vector3(0f, skirt, 0f));
 
                 triangles.Add(first);
                 triangles.Add(first + 1);
@@ -86,10 +86,11 @@ namespace Game.Grid
             for (var i = 0; i < 6; i++)
             {
                 var angle = Mathf.Deg2Rad * (60f * i - 30f);
-                vertices[i + 1] = new Vector3(HexCoord.Size * Mathf.Cos(angle), HexCoord.Size * Mathf.Sin(angle), 0f);
+                vertices[i + 1] = new Vector3(HexCoord.Size * Mathf.Cos(angle), 0f, HexCoord.Size * Mathf.Sin(angle));
             }
 
-            // Обход по часовой стрелке: камера смотрит вдоль +Z, иначе грани срезает backface culling.
+            // Земля лежит в плоскости XZ, крышка смотрит нормалью вверх: при этом обходе
+            // нормаль получается +Y, и backface culling грань не срезает.
             var triangles = new int[18];
             for (var i = 0; i < 6; i++)
             {

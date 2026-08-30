@@ -33,11 +33,11 @@ namespace Game.Economy
             get
             {
                 if (Path.Count == 1)
-                    return Path[0].ToWorld();
+                    return Path[0].ToPlane();
 
                 var travelled = Progress * (Path.Count - 1);
                 var index = Mathf.Min(Mathf.FloorToInt(travelled), Path.Count - 2);
-                return Vector2.Lerp(Path[index].ToWorld(), Path[index + 1].ToWorld(), travelled - index);
+                return Vector2.Lerp(Path[index].ToPlane(), Path[index + 1].ToPlane(), travelled - index);
             }
         }
 

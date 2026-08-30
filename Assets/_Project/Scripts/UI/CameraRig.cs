@@ -12,47 +12,31 @@ namespace Game.UI
         [SerializeField] float maxZoom = 6f;
         [SerializeField] float zoomStepPerScroll = 0.6f;
 
-        // Разведка 3D. Мир по-прежнему лежит в плоскости XY, наклоняется только камера: это
-        // проверка вида и света, а не переезд в XZ. Ноль градусов возвращает прежний вид сверху,
-        // поэтому вся стадия откатывается одним числом.
-        [Header("Разведка 3D")]
-        [SerializeField, Range(0f, 70f)] float pitch;
-        [Tooltip("Отвод камеры от плоскости поля. При ортографии влияет только на клиппинг")]
+        // Наклон камеры к земле. 90 — прежний вид строго сверху, поэтому вся стадия
+        // откатывается одним числом.
+        [Header("Наклон")]
+        [SerializeField, Range(20f, 90f)] float pitch = 55f;
+        [Tooltip("Отвод камеры от земли. При ортографии влияет только на клиппинг и дальность теней")]
         [SerializeField] float distance = 20f;
 
         Camera cameraComponent;
         Rect fieldBounds = new(-1000f, -1000f, 2000f, 2000f);
         bool initialized;
 
-        /// <summary>Точка плоскости поля, на которую смотрит камера. Позиция выводится из неё.</summary>
+        /// <summary>Точка земли, на которую смотрит камера: x вправо, y вглубь поля. Позиция выводится из неё.</summary>
         Vector2 focus;
 
         Camera Cam => cameraComponent != null ? cameraComponent : cameraComponent = GetComponent<Camera>();
 
         /// <summary>
-        /// Наклон укорачивает поле по вертикали экрана: тот же пиксель тянет больше мира, и
-        /// столько же мира влезает в кадр. Один множитель на пан, на границы и на фокус.
+        /// Насколько земля укорочена по вертикали экрана. На виде сверху (90°) единица: поле
+        /// показано как есть. Чем сильнее наклон, тем меньше мира влезает в ту же высоту кадра
+        /// и тем длиннее шаг пана на тот же пиксель.
         /// </summary>
-        float Foreshortening => Mathf.Max(Mathf.Cos(pitch * Mathf.Deg2Rad), 0.1f);
+        float Foreshortening => Mathf.Max(Mathf.Sin(pitch * Mathf.Deg2Rad), 0.1f);
 
-        /// <summary>Половина видимой высоты поля в мировых единицах, уже с поправкой на наклон.</summary>
-        float HalfHeight => Cam.orthographicSize / Foreshortening;
-
-        /// <summary>
-        /// Позиция камеры выводится из фокуса, поэтому прочитать её как фокус можно ровно один
-        /// раз. `GameSession.Awake` дёргает риг из своего `Awake`, а порядок между ними Unity не
-        /// обещает: без этого флага смещение по наклону накладывалось бы дважды и камера уезжала
-        /// выше поля.
-        /// </summary>
-        void Initialize()
-        {
-            if (initialized)
-                return;
-
-            initialized = true;
-            Cam.orthographic = true;
-            focus = transform.position;
-        }
+        /// <summary>Половина видимой глубины поля в мировых единицах, уже с поправкой на наклон.</summary>
+        float HalfDepth => Cam.orthographicSize / Foreshortening;
 
         void Awake()
         {
@@ -60,7 +44,7 @@ namespace Game.UI
             ApplyTransform();
         }
 
-        /// <summary>Прямоугольник поля в мировых координатах: за него камера не выходит.</summary>
+        /// <summary>Прямоугольник поля по земле: x — вправо, y — вглубь. За него камера не выходит.</summary>
         public void SetFieldBounds(Rect bounds)
         {
             Initialize();
@@ -68,11 +52,11 @@ namespace Game.UI
             ClampPosition();
         }
 
-        /// <summary>Поставить камеру к низу поля, где стоит Метрополия.</summary>
+        /// <summary>Поставить камеру к ближнему краю поля, где стоит Метрополия.</summary>
         public void FocusOnBottom()
         {
             Initialize();
-            focus = new Vector2(fieldBounds.center.x, fieldBounds.yMin + HalfHeight);
+            focus = new Vector2(fieldBounds.center.x, fieldBounds.yMin + HalfDepth);
             ClampPosition();
         }
 
@@ -95,14 +79,30 @@ namespace Game.UI
             ClampPosition();
         }
 
+        /// <summary>
+        /// Позиция камеры выводится из фокуса, поэтому прочитать её как фокус можно ровно один
+        /// раз. `GameSession.Awake` дёргает риг из своего `Awake`, а порядок между ними Unity не
+        /// обещает: без этого флага смещение по наклону накладывалось бы дважды и камера уезжала
+        /// бы мимо поля.
+        /// </summary>
+        void Initialize()
+        {
+            if (initialized)
+                return;
+
+            initialized = true;
+            Cam.orthographic = true;
+            focus = new Vector2(transform.position.x, transform.position.z);
+        }
+
         void ClampPosition()
         {
-            var halfHeight = HalfHeight;
+            var halfDepth = HalfDepth;
             var halfWidth = Cam.orthographicSize * Cam.aspect;
 
             focus = new Vector2(
                 ClampAxis(focus.x, fieldBounds.xMin, fieldBounds.xMax, halfWidth),
-                ClampAxis(focus.y, fieldBounds.yMin, fieldBounds.yMax, halfHeight));
+                ClampAxis(focus.y, fieldBounds.yMin, fieldBounds.yMax, halfDepth));
 
             ApplyTransform();
         }
@@ -112,7 +112,7 @@ namespace Game.UI
         {
             var rotation = Quaternion.Euler(pitch, 0f, 0f);
             transform.rotation = rotation;
-            transform.position = new Vector3(focus.x, focus.y, 0f) - rotation * Vector3.forward * distance;
+            transform.position = new Vector3(focus.x, 0f, focus.y) - rotation * Vector3.forward * distance;
         }
 
         /// <summary>Если поле уже обзора, камера стоит по центру этой оси.</summary>

@@ -10,15 +10,14 @@ namespace Game.Grid
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public sealed class TileView : MonoBehaviour
     {
-        // Камера смотрит вдоль +Z: чем меньше z, тем ближе к зрителю. Модельки месторождений
-        // лежат ближе дороги — по ним игрок читает плитку, дорога их перекрывать не должна.
-        const float OutlineDepth = 0.01f;
-        const float RiverDepth = -0.015f;
-        const float DecorDepth = -0.03f;
-        const float DepositDepth = -0.09f;
+        // Земля — плоскость XZ, высота — ось Y. Порядок «кто поверх кого» стал порядком по
+        // высоте: обводка и русло лежат на крышке плитки, ободок подсветки выше дороги.
+        const float OutlineHeight = 0.003f;
+        const float RiverHeight = 0.012f;
+        const float HighlightHeight = 0.05f;
+
+        /// <summary>Огранка стоит перед телом модельки. Моделька плоская, поэтому это её локальный z.</summary>
         const float AccentDepth = -0.005f;
-        const float HighlightDepth = -0.10f;
-        const float SparkDepth = -0.11f;
 
         const int DecorCountSalt = 11;
 
@@ -98,12 +97,11 @@ namespace Game.Grid
         {
             Coord = tile.Coord;
             name = $"Hex {tile.Coord}";
-            // Разведка 3D: высота плитки — это сдвиг её корня к камере (камера смотрит вдоль +Z,
-            // ближе значит меньше z). Дети плитки едут вместе с ней и сохраняют свою раскладку,
-            // а юбка добирает до общего дна поля.
+            // Высота плитки — это подъём её корня по Y. Дети едут вместе с ней и сохраняют свою
+            // раскладку, а юбка добирает вниз до общего дна поля.
             var height = BiomeHeight(tile) * heightScale;
-            var world = tile.Coord.ToWorld();
-            transform.localPosition = new Vector3(world.x, world.y, -height);
+            var plane = tile.Coord.ToPlane();
+            transform.localPosition = new Vector3(plane.x, height, plane.y);
             GetComponent<MeshFilter>().sharedMesh = height > 0f || baseSkirt > 0f
                 ? HexMeshBuilder.Prism(height + baseSkirt)
                 : HexMeshBuilder.Shared;
@@ -166,7 +164,7 @@ namespace Game.Grid
             }
 
             highlight ??= CreatePart(
-                transform, "Highlight", ShapeMeshes.HexRing, new Vector3(0f, 0f, HighlightDepth), Vector3.one);
+                transform, "Highlight", ShapeMeshes.HexRing, new Vector3(0f, HighlightHeight, 0f), Vector3.one);
 
             highlight.gameObject.SetActive(true);
             SetColor(highlight, color);
@@ -197,7 +195,7 @@ namespace Game.Grid
                     : Mathf.Sin((progress - 0.25f) / 0.75f * Mathf.PI) * extractionHop;
 
                 deposit.Root.localScale = new Vector3(
-                    depositScale * (1f + (1f - squat) * 0.5f), depositScale * squat, 1f);
+                    depositScale * (1f + (1f - squat) * 0.5f), depositScale * squat, depositScale);
                 deposit.Root.localPosition = deposit.Home
                     + new Vector3(0f, hop - (1f - squat) * 0.5f * depositScale, 0f);
 
@@ -207,7 +205,7 @@ namespace Game.Grid
                 spark.transform.localPosition = new Vector3(
                     deposit.Home.x,
                     deposit.Home.y + depositScale * 0.5f + progress * sparkRise,
-                    SparkDepth);
+                    deposit.Home.z);
 
                 yield return null;
             }
@@ -298,8 +296,11 @@ namespace Game.Grid
             if (outline != null)
                 return;
 
-            outline = CreatePart(transform, "Outline", HexMeshBuilder.Shared,
-                new Vector3(0f, 0f, OutlineDepth), Vector3.one * outlineScale);
+            // На плоском поле обводкой был увеличенный гекс позади плитки. В 3D «позади» — это
+            // «ниже», и на ровном участке его целиком закрывают крышки соседей: граница пропадает
+            // там, где она нужнее всего. Поэтому обводка стала ободком, лежащим на крышке.
+            outline = CreatePart(transform, "Outline", ShapeMeshes.HexRing,
+                new Vector3(0f, OutlineHeight, 0f), Vector3.one * outlineScale);
             SetColor(outline, outlineColor);
         }
 
@@ -318,7 +319,7 @@ namespace Game.Grid
                 transform,
                 "River",
                 RoadMeshBuilder.Get(tile.RiverMask, riverWidth),
-                new Vector3(0f, 0f, RiverDepth),
+                new Vector3(0f, RiverHeight, 0f),
                 Vector3.one);
         }
 
@@ -331,7 +332,7 @@ namespace Game.Grid
                     continue;
 
                 // Рукав — отрезок от центра плитки до середины грани.
-                var edge = HexCoord.Directions[direction].ToWorld() * 0.5f;
+                var edge = HexCoord.Directions[direction].ToPlane() * 0.5f;
                 var t = Mathf.Clamp01(Vector2.Dot(point, edge) / edge.sqrMagnitude);
                 if (Vector2.Distance(point, edge * t) < width)
                     return true;
@@ -366,11 +367,13 @@ namespace Game.Grid
                 if (InsideRiver(tile, spot, riverWidth * 0.5f + decorScale * 0.5f))
                     continue;
 
+                // Фигура декора построена в квадрате с центром в нуле и стоит вертикально —
+                // поднимаем её на половину роста, иначе она наполовину утоплена в землю.
                 var part = CreatePart(
                     transform,
                     $"Decor {i}",
                     ShapeMeshes.Decor(shape),
-                    new Vector3(spot.x, spot.y, DecorDepth),
+                    new Vector3(spot.x, scale * 0.5f, spot.y),
                     Vector3.one * scale);
                 part.transform.localRotation = Quaternion.Euler(0f, 0f, tilt);
 
@@ -471,23 +474,28 @@ namespace Game.Grid
             return accent ? Color.Lerp(body, Color.white, accentLift) : body;
         }
 
-        /// <summary>Одна моделька в центре, две в ряд, три треугольником.</summary>
+        /// <summary>
+        /// Одна моделька в центре, две в ряд, три треугольником. Раскладка идёт по земле (x, z),
+        /// а Y поднимает модельку на половину роста, чтобы она стояла, а не тонула.
+        /// </summary>
         Vector3 DepositPosition(int index, int count)
         {
+            var stand = depositScale * 0.5f;
+
             if (count == 1)
-                return new Vector3(0f, 0f, DepositDepth);
+                return new Vector3(0f, stand, 0f);
 
             if (count == 2)
-                return new Vector3(index == 0 ? -depositOffset : depositOffset, 0f, DepositDepth);
+                return new Vector3(index == 0 ? -depositOffset : depositOffset, stand, 0f);
 
             switch (index)
             {
                 case 0:
-                    return new Vector3(0f, depositOffset * 1.15f, DepositDepth);
+                    return new Vector3(0f, stand, depositOffset * 1.15f);
                 case 1:
-                    return new Vector3(-depositOffset, -depositOffset * 0.66f, DepositDepth);
+                    return new Vector3(-depositOffset, stand, -depositOffset * 0.66f);
                 default:
-                    return new Vector3(depositOffset, -depositOffset * 0.66f, DepositDepth);
+                    return new Vector3(depositOffset, stand, -depositOffset * 0.66f);
             }
         }
 

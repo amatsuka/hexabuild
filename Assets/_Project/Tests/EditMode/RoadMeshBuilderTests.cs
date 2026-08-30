@@ -43,11 +43,11 @@ namespace Game.Tests.EditMode
         public void RibbonReachesTheEdgeMidpoint(int direction)
         {
             var mesh = RoadMeshBuilder.Get(1 << direction, Width);
-            var edge = HexCoord.Directions[direction].ToWorld() * 0.5f;
+            var edge = HexCoord.Directions[direction].ToPlane() * 0.5f;
 
             var closest = float.MaxValue;
             foreach (var vertex in mesh.vertices)
-                closest = Mathf.Min(closest, Vector2.Distance(new Vector2(vertex.x, vertex.y), edge));
+                closest = Mathf.Min(closest, Vector2.Distance(Plane(vertex), edge));
 
             Assert.LessOrEqual(closest, Width * 0.5f + 1e-4f, $"лента не дотянулась до грани {direction}");
         }
@@ -59,7 +59,7 @@ namespace Game.Tests.EditMode
 
             foreach (var vertex in mesh.vertices)
                 Assert.LessOrEqual(
-                    new Vector2(vertex.x, vertex.y).magnitude, HexCoord.Size + 1e-4f,
+                    Plane(vertex).magnitude, HexCoord.Size + 1e-4f,
                     "лента вылезла за описанную окружность гекса и залезет на соседа");
         }
 
@@ -71,12 +71,12 @@ namespace Game.Tests.EditMode
         public void OppositeDirections_MakeAStraightRibbon()
         {
             var mesh = RoadMeshBuilder.Get(StraightMask, Width);
-            var along = HexCoord.Directions[0].ToWorld().normalized;
+            var along = HexCoord.Directions[0].ToPlane().normalized;
             var across = new Vector2(-along.y, along.x);
 
             foreach (var vertex in mesh.vertices)
                 Assert.LessOrEqual(
-                    Mathf.Abs(Vector2.Dot(new Vector2(vertex.x, vertex.y), across)), Width * 0.5f + 1e-4f,
+                    Mathf.Abs(Vector2.Dot(Plane(vertex), across)), Width * 0.5f + 1e-4f,
                     "прямой проезд отклонился от оси");
         }
 
@@ -93,9 +93,9 @@ namespace Game.Tests.EditMode
             var axis = Centerline(mesh);
 
             Assert.GreaterOrEqual(axis.Length, 5, "дуга должна быть разбита на отрезки");
-            Assert.AreEqual(0f, Vector2.Distance(HexCoord.Directions[0].ToWorld() * 0.5f, axis[0]), 1e-4f,
+            Assert.AreEqual(0f, Vector2.Distance(HexCoord.Directions[0].ToPlane() * 0.5f, axis[0]), 1e-4f,
                 "дуга начинается на середине грани");
-            Assert.AreEqual(0f, Vector2.Distance(HexCoord.Directions[2].ToWorld() * 0.5f, axis[^1]), 1e-4f,
+            Assert.AreEqual(0f, Vector2.Distance(HexCoord.Directions[2].ToPlane() * 0.5f, axis[^1]), 1e-4f,
                 "дуга кончается на середине грани");
 
             var sharpest = 0f;
@@ -114,7 +114,7 @@ namespace Game.Tests.EditMode
             {
                 var left = vertices[i * 2];
                 var right = vertices[i * 2 + 1];
-                axis[i] = new Vector2((left.x + right.x) * 0.5f, (left.y + right.y) * 0.5f);
+                axis[i] = (Plane(left) + Plane(right)) * 0.5f;
             }
 
             return axis;
@@ -130,7 +130,7 @@ namespace Game.Tests.EditMode
         {
             foreach (var vertex in RoadMeshBuilder.Get(TurnMask, Width).vertices)
                 Assert.Greater(
-                    new Vector2(vertex.x, vertex.y).magnitude, 1e-4f,
+                    Plane(vertex).magnitude, 1e-4f,
                     "в центре плитки лежит вершина пятачка, а на повороте его быть не должно");
         }
 
@@ -140,17 +140,18 @@ namespace Game.Tests.EditMode
         {
             var closest = float.MaxValue;
             foreach (var vertex in RoadMeshBuilder.Get(1, Width).vertices)
-                closest = Mathf.Min(closest, new Vector2(vertex.x, vertex.y).magnitude);
+                closest = Mathf.Min(closest, Plane(vertex).magnitude);
 
             Assert.AreEqual(0f, closest, 1e-4f, "у тупика нет вершины в центре — пятачок пропал");
         }
 
+        /// <summary>Лента лежит на земле, значит её нормаль смотрит вверх, а не в камеру.</summary>
         [TestCase(0)]
         [TestCase(1)]
         [TestCase(StraightMask)]
         [TestCase(TurnMask)]
         [TestCase(0x3f)]
-        public void Triangles_FaceTheCamera(int linkMask)
+        public void Triangles_FaceUp(int linkMask)
         {
             var mesh = RoadMeshBuilder.Get(linkMask, Width);
             var vertices = mesh.vertices;
@@ -162,11 +163,22 @@ namespace Game.Tests.EditMode
                 var a = vertices[triangles[i]];
                 var b = vertices[triangles[i + 1]];
                 var c = vertices[triangles[i + 2]];
-                var signedArea = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+                var up = Vector3.Cross(b - a, c - a).y;
 
-                Assert.Less(signedArea, 0f,
-                    $"маска {linkMask:X2}: треугольник {i / 3} обходится против часовой и будет срезан");
+                Assert.Greater(up, 0f,
+                    $"маска {linkMask:X2}: треугольник {i / 3} смотрит вниз и будет срезан backface culling");
             }
         }
+
+        /// <summary>Вся лента лежит ровно на земле: высота не должна появиться сама собой.</summary>
+        [Test]
+        public void Ribbon_LiesFlatOnTheGround()
+        {
+            foreach (var vertex in RoadMeshBuilder.Get(0x3f, Width).vertices)
+                Assert.AreEqual(0f, vertex.y, 1e-4f, "вершина ленты оторвалась от земли");
+        }
+
+        /// <summary>Плоская координата вершины: земля — это XZ.</summary>
+        static Vector2 Plane(Vector3 vertex) => new(vertex.x, vertex.z);
     }
 }

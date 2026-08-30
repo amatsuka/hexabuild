@@ -51,7 +51,28 @@ namespace Game.Tests.EditMode
         [Test]
         public void ToWorld_Origin_IsWorldZero()
         {
-            Assert.AreEqual(Vector2.zero, HexCoord.Zero.ToWorld());
+            Assert.AreEqual(Vector3.zero, HexCoord.Zero.ToWorld());
+        }
+
+        /// <summary>Земля — плоскость XZ. Высота плитки живёт в её трансформе, а не в координате.</summary>
+        [Test]
+        public void ToWorld_LiesOnTheGroundPlane()
+        {
+            for (var q = -6; q <= 6; q++)
+            for (var r = -6; r <= 6; r++)
+                Assert.AreEqual(0f, new HexCoord(q, r).ToWorld().y, 1e-4f);
+        }
+
+        /// <summary>Мировая точка — это плоская, разложенная по земле: x вправо, y плоскости в z.</summary>
+        [Test]
+        public void ToWorld_IsToPlaneLaidOnTheGround()
+        {
+            var coord = new HexCoord(2, -3);
+            var plane = coord.ToPlane();
+            var world = coord.ToWorld();
+
+            Assert.AreEqual(plane.x, world.x, 1e-4f);
+            Assert.AreEqual(plane.y, world.z, 1e-4f);
         }
 
         [Test]
@@ -60,14 +81,14 @@ namespace Game.Tests.EditMode
             var origin = HexCoord.Zero.ToWorld();
 
             foreach (var neighbor in HexCoord.Zero.Neighbors())
-                Assert.AreEqual(HexCoord.Width, Vector2.Distance(origin, neighbor.ToWorld()), 1e-4f);
+                Assert.AreEqual(HexCoord.Width, Vector3.Distance(origin, neighbor.ToWorld()), 1e-4f);
         }
 
         [Test]
         public void ToWorld_IsPointyTop_RowStepIsSmallerThanColumnStep()
         {
             var columnStep = new HexCoord(1, 0).ToWorld().x;
-            var rowStep = new HexCoord(0, 1).ToWorld().y;
+            var rowStep = new HexCoord(0, 1).ToWorld().z;
 
             Assert.AreEqual(HexCoord.Width, columnStep, 1e-4f);
             Assert.Less(rowStep, columnStep);
@@ -84,11 +105,21 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>Высота точки роли не играет: под лучом та же плитка, что и на земле.</summary>
+        [Test]
+        public void FromWorld_IgnoresHeight()
+        {
+            var coord = new HexCoord(-2, 4);
+            var above = coord.ToWorld() + new Vector3(0f, 3.5f, 0f);
+
+            Assert.AreEqual(coord, HexCoord.FromWorld(above));
+        }
+
         [Test]
         public void FromWorld_PointNearHexEdge_ResolvesToThatHex()
         {
             var coord = new HexCoord(1, -2);
-            var almostEdge = coord.ToWorld() + new Vector2(HexCoord.Width * 0.45f, 0f);
+            var almostEdge = coord.ToWorld() + new Vector3(HexCoord.Width * 0.45f, 0f, 0f);
 
             Assert.AreEqual(coord, HexCoord.FromWorld(almostEdge));
         }

@@ -13,7 +13,7 @@ namespace Game.Core
     /// <summary>Точка входа: создаёт партию и системы, порождает визуалы и связывает подписки.</summary>
     public sealed class GameSession : MonoBehaviour
     {
-        const float RoadDepth = -0.06f;
+        const float RoadHeight = 0.02f;
 
         [SerializeField] GameConfig config;
         [SerializeField] MergeRules mergeRules;
@@ -165,7 +165,7 @@ namespace Game.Core
 
             foreach (var tile in map.Tiles.Values)
             {
-                var center = tile.Coord.ToWorld();
+                var center = tile.Coord.ToPlane();
                 min = Vector2.Min(min, center - new Vector2(HexCoord.Width * 0.5f, HexCoord.Size));
                 max = Vector2.Max(max, center + new Vector2(HexCoord.Width * 0.5f, HexCoord.Size));
             }
@@ -232,7 +232,7 @@ namespace Game.Core
                 if (!roadViews.TryGetValue(coord, out var roadView))
                 {
                     roadView = Instantiate(roadPrefab, views[coord].transform);
-                    roadView.transform.localPosition = new Vector3(0f, 0f, RoadDepth);
+                    roadView.transform.localPosition = new Vector3(0f, RoadHeight, 0f);
                     roadViews.Add(coord, roadView);
                 }
 

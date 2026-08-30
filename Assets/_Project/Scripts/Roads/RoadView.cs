@@ -11,11 +11,11 @@ namespace Game.Roads
     /// </summary>
     public sealed class RoadView : MonoBehaviour
     {
-        /// <summary>Полотно ближе к камере обочины: камера смотрит вдоль +Z, ближе — меньше z.</summary>
-        const float SurfaceDepth = -0.01f;
+        /// <summary>Полотно лежит поверх обочины: земля — XZ, «поверх» это выше по Y.</summary>
+        const float SurfaceHeight = 0.006f;
 
-        /// <summary>Настил моста дальше обочины и шире её: он торчит из-под дороги оторочкой.</summary>
-        const float BridgeDepth = 0.01f;
+        /// <summary>Настил моста ниже обочины и шире её: он торчит из-под дороги оторочкой.</summary>
+        const float BridgeHeight = -0.004f;
 
         /// <summary>
         /// Ступеней ширины. Непрерывная ширина размножила бы кэш мешей до одного на плитку;
@@ -54,9 +54,9 @@ namespace Game.Roads
         /// </summary>
         public void Show(HexCoord coord, bool connected, int linkMask, int bridgeMask)
         {
-            bridge ??= CreateLayer("Bridge", BridgeDepth);
+            bridge ??= CreateLayer("Bridge", BridgeHeight);
             shoulder ??= CreateLayer("Shoulder", 0f);
-            surface ??= CreateLayer("Surface", SurfaceDepth);
+            surface ??= CreateLayer("Surface", SurfaceHeight);
 
             var width = surfaceWidth * WidthFactor(coord);
             var shade = Mathf.Lerp(1f - shadeJitter, 1f + shadeJitter, coord.Hash01(ShadeSalt));
@@ -88,11 +88,11 @@ namespace Game.Roads
             layerRenderer.SetPropertyBlock(propertyBlock);
         }
 
-        MeshFilter CreateLayer(string layerName, float depth)
+        MeshFilter CreateLayer(string layerName, float height)
         {
             var layer = new GameObject(layerName, typeof(MeshFilter), typeof(MeshRenderer));
             layer.transform.SetParent(transform, false);
-            layer.transform.localPosition = new Vector3(0f, 0f, depth);
+            layer.transform.localPosition = new Vector3(0f, height, 0f);
 
             var layerRenderer = layer.GetComponent<MeshRenderer>();
             layerRenderer.sharedMaterial = roadMaterial;

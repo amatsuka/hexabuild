@@ -68,14 +68,28 @@ namespace Game.Grid
             return (Mathf.Abs(dq) + Mathf.Abs(dq + dr) + Mathf.Abs(dr)) / 2;
         }
 
-        public Vector2 ToWorld() => new(Size * Mathf.Sqrt(3f) * (Q + R * 0.5f), Size * 1.5f * R);
+        /// <summary>
+        /// Центр плитки в плоскости поля: x вправо, y вглубь. Плоские координаты — это система
+        /// мешей, шума генератора и границ камеры; мир получается из них в <see cref="ToWorld"/>.
+        /// </summary>
+        public Vector2 ToPlane() => new(Size * Mathf.Sqrt(3f) * (Q + R * 0.5f), Size * 1.5f * R);
 
-        public static HexCoord FromWorld(Vector2 world)
+        /// <summary>Центр плитки в мире: земля — плоскость XZ, высота — ось Y.</summary>
+        public Vector3 ToWorld()
         {
-            var q = (Mathf.Sqrt(3f) / 3f * world.x - world.y / 3f) / Size;
-            var r = 2f / 3f * world.y / Size;
+            var plane = ToPlane();
+            return new Vector3(plane.x, 0f, plane.y);
+        }
+
+        public static HexCoord FromPlane(Vector2 plane)
+        {
+            var q = (Mathf.Sqrt(3f) / 3f * plane.x - plane.y / 3f) / Size;
+            var r = 2f / 3f * plane.y / Size;
             return Round(q, r);
         }
+
+        /// <summary>Плитка под мировой точкой. Высота роли не играет: берётся проекция на землю.</summary>
+        public static HexCoord FromWorld(Vector3 world) => FromPlane(new Vector2(world.x, world.z));
 
         /// <summary>Округление дробных axial-координат до ближайшего гекса через кубические координаты.</summary>
         public static HexCoord Round(float q, float r)

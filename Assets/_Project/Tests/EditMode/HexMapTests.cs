@@ -54,7 +54,7 @@ namespace Game.Tests.EditMode
 
             foreach (var coord in map.Tiles.Keys)
             {
-                var x = coord.ToWorld().x;
+                var x = coord.ToPlane().x;
                 span[coord.R] = span.TryGetValue(coord.R, out var known)
                     ? (Mathf.Min(known.Min, x), Mathf.Max(known.Max, x))
                     : (x, x);

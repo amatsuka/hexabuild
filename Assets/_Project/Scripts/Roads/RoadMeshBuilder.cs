@@ -121,12 +121,12 @@ namespace Game.Roads
         }
 
         /// <summary>Середина общей грани с соседом: полпути до его центра.</summary>
-        static Vector2 Edge(int direction) => HexCoord.Directions[direction].ToWorld() * 0.5f;
+        static Vector2 Edge(int direction) => HexCoord.Directions[direction].ToPlane() * 0.5f;
 
         /// <summary>
-        /// Полоса постоянной ширины вдоль квадратичной кривой Безье. Вершины кладутся парами
-        /// «левая, правая», треугольники обходятся по часовой стрелке — как у остальных мешей,
-        /// иначе backface culling срежет грань.
+        /// Полоса постоянной ширины вдоль квадратичной кривой Безье. Кривая живёт в плоских
+        /// координатах плитки, а вершины кладутся на землю XZ. Вершины парами «левая, правая»,
+        /// обход такой же, как у крышки гекса, — нормаль ленты смотрит вверх.
         /// </summary>
         static void AppendRibbon(Vector2 from, Vector2 control, Vector2 to, float half, int samples)
         {
@@ -139,8 +139,8 @@ namespace Game.Roads
                 var tangent = Tangent(from, control, to, t).normalized;
                 var normal = new Vector2(-tangent.y, tangent.x) * half;
 
-                vertices.Add(new Vector3(point.x + normal.x, point.y + normal.y, 0f));
-                vertices.Add(new Vector3(point.x - normal.x, point.y - normal.y, 0f));
+                vertices.Add(new Vector3(point.x + normal.x, 0f, point.y + normal.y));
+                vertices.Add(new Vector3(point.x - normal.x, 0f, point.y - normal.y));
             }
 
             for (var i = 0; i < samples - 1; i++)
@@ -163,7 +163,7 @@ namespace Game.Roads
             for (var i = 0; i < 6; i++)
             {
                 var angle = Mathf.Deg2Rad * (60f * i - 30f);
-                vertices.Add(new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f));
+                vertices.Add(new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius));
             }
 
             for (var i = 0; i < 6; i++)

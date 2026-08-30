@@ -149,14 +149,14 @@ namespace Game.Grid
 
         static float Height(HexCoord coord, float noiseScale, Vector2 noiseOrigin)
         {
-            var world = coord.ToWorld() * noiseScale;
+            var world = coord.ToPlane() * noiseScale;
             return Mathf.PerlinNoise(noiseOrigin.x + world.x, noiseOrigin.y + world.y);
         }
 
         /// <summary>Второй, более частый шум — мелкая разница тона внутри одного биома.</summary>
         static float RollShade(HexCoord coord, Vector2 noiseOrigin)
         {
-            var world = coord.ToWorld() * 0.9f;
+            var world = coord.ToPlane() * 0.9f;
             // PerlinNoise изредка отдаёт значения чуть за пределами [0,1], поэтому зажимаем.
             return Mathf.Clamp(Mathf.PerlinNoise(noiseOrigin.y + world.x, noiseOrigin.x + world.y) * 2f - 1f, -1f, 1f);
         }
@@ -478,7 +478,7 @@ namespace Game.Grid
             RiverTerrain terrain,
             Dictionary<HexCoord, int> rivers)
         {
-            var flow = tile.ToWorld() - from.ToWorld();
+            var flow = tile.ToPlane() - from.ToPlane();
             if (flow.sqrMagnitude < 1e-6f)
                 return;
 
@@ -490,7 +490,7 @@ namespace Game.Grid
                 if (terrain.Contains(tile.Neighbor(direction)))
                     continue;
 
-                var dot = Vector2.Dot(flow.normalized, HexCoord.Directions[direction].ToWorld().normalized);
+                var dot = Vector2.Dot(flow.normalized, HexCoord.Directions[direction].ToPlane().normalized);
                 if (dot <= bestDot)
                     continue;
 
@@ -541,7 +541,7 @@ namespace Game.Grid
             /// </summary>
             public float Slope(HexCoord tile, HexCoord neighbor)
             {
-                var world = neighbor.ToWorld() * noiseScale;
+                var world = neighbor.ToPlane() * noiseScale;
                 var height = Mathf.PerlinNoise(noiseOrigin.x + world.x, noiseOrigin.y + world.y);
 
                 return height - DownPull * (tile.R - neighbor.R) + (IsBorder(neighbor) ? BorderPenalty : 0f);

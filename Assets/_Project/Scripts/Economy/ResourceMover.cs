@@ -11,7 +11,8 @@ namespace Game.Economy
 
         [SerializeField] ResourcePalette palette;
         [SerializeField] float scale = 0.34f;
-        [SerializeField] float depth = -0.08f;
+        [Tooltip("Высота над землёй: ресурс едет над полотном дороги, а не в нём")]
+        [SerializeField] float height = 0.22f;
         [SerializeField] float hopSeconds = 0.35f;
         [SerializeField] float hopHeight = 0.7f;
 
@@ -49,7 +50,7 @@ namespace Game.Economy
             delivery = null;
             landed = onLanded;
             hopFrom = transform.position;
-            hopTo = new Vector3(target.x, target.y, depth);
+            hopTo = new Vector3(target.x, height, target.z);
             hopElapsed = 0f;
         }
 
@@ -92,8 +93,9 @@ namespace Game.Economy
 
         void MoveToDelivery()
         {
+            // `Delivery.Position` живёт в плоских координатах поля: x вправо, y вглубь.
             var position = delivery.Position;
-            transform.position = new Vector3(position.x, position.y, depth);
+            transform.position = new Vector3(position.x, height, position.y);
         }
     }
 }

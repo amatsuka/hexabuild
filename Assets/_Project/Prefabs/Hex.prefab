@@ -103,4 +103,51 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 747ee6bd0a07041deb85c190ef00fa0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game.Runtime::Game.Grid.TileView
+  heightScale: 1
+  baseSkirt: 0.14
+  biomes:
+    sand: {r: 0.85, g: 0.78, b: 0.55, a: 1}
+    meadow: {r: 0.55, g: 0.7, b: 0.4, a: 1}
+    forest: {r: 0.35, g: 0.56, b: 0.34, a: 1}
+    rocks: {r: 0.55, g: 0.54, b: 0.52, a: 1}
+    mountains: {r: 0.33, g: 0.32, b: 0.36, a: 1}
+    sandDecor: {r: 0.72, g: 0.63, b: 0.4, a: 1}
+    meadowDecor: {r: 0.47, g: 0.62, b: 0.33, a: 1}
+    forestDecor: {r: 0.18, g: 0.34, b: 0.2, a: 1}
+    rocksDecor: {r: 0.38, g: 0.37, b: 0.36, a: 1}
+    mountainsDecor: {r: 0.74, g: 0.74, b: 0.79, a: 1}
   metropolisColor: {r: 0.2, g: 0.45, b: 0.85, a: 1}
+  hiddenDim: 0.26
+  availableDim: 0.62
+  hiddenDesaturation: 0.88
+  availableDesaturation: 0.45
+  depletedAlpha: 0.35
+  shadeStrength: 0.08
+  riverColor: {r: 0.28, g: 0.52, b: 0.74, a: 1}
+  riverWidth: 0.22
+  outlineColor: {r: 0.07, g: 0.07, b: 0.09, a: 1}
+  outlineScale: 0.89285713
+  resources:
+    wood: {r: 0.22, g: 0.6, b: 0.25, a: 1}
+    stone: {r: 0.45, g: 0.45, b: 0.47, a: 1}
+    ore: {r: 0.76, g: 0.55, b: 0.16, a: 1}
+    board: {r: 0.55, g: 0.82, b: 0.5, a: 1}
+    gravel: {r: 0.78, g: 0.78, b: 0.8, a: 1}
+    ingot: {r: 0.95, g: 0.72, b: 0.42, a: 1}
+  trunkColor: {r: 0.36, g: 0.25, b: 0.17, a: 1}
+  accentLift: 0.34
+  depositScale: 0.42
+  depositOffset: 0.21
+  extractionSeconds: 0.25
+  extractionSquat: 0.26
+  extractionHop: 0.07
+  sparkScale: 0.08
+  sparkRise: 0.24
+  decorMin: 2
+  decorMax: 5
+  decorScale: 0.26
+  decorScaleJitter: 0.3
+  decorInnerRadius: 0.13
+  decorOuterRadius: 0.33
+  decorTilt: 9
+  decorTintJitter: 0.14

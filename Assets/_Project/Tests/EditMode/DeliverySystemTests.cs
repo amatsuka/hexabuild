@@ -55,10 +55,10 @@ namespace Game.Tests.EditMode
             var deliveries = new DeliverySystem(1f);
             var delivery = deliveries.Send(ResourceType.Wood, Path(new HexCoord(2, 0), new HexCoord(1, 0), HexCoord.Zero));
 
-            Assert.AreEqual(new HexCoord(2, 0).ToWorld(), delivery.Position);
+            Assert.AreEqual(new HexCoord(2, 0).ToPlane(), delivery.Position);
 
             deliveries.Tick(1f);
-            Assert.AreEqual(new HexCoord(1, 0).ToWorld(), delivery.Position, "на середине пути ресурс стоит на средней плитке");
+            Assert.AreEqual(new HexCoord(1, 0).ToPlane(), delivery.Position, "на середине пути ресурс стоит на средней плитке");
 
             deliveries.Tick(1f);
             Assert.AreEqual(Vector2.zero, delivery.Position);

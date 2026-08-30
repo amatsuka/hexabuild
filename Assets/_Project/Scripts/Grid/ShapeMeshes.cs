@@ -179,13 +179,13 @@ namespace Game.Grid
             for (var i = 0; i < 6; i++)
             {
                 var angle = Mathf.Deg2Rad * (60f * i - 30f);
-                var direction = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
+                var direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
                 vertices[i] = direction * HexCoord.Size;
                 vertices[i + 6] = direction * (HexCoord.Size * (1f + RingWidth));
             }
 
-            // Обход по часовой стрелке, как у остальных мешей: внутренний угол, следующий
-            // внутренний, следующий внешний, внешний.
+            // Ободок лежит на земле, как крышка гекса: внутренний угол, следующий внутренний,
+            // следующий внешний, внешний — при таком обходе нормаль смотрит вверх.
             var triangles = new int[36];
             for (var i = 0; i < 6; i++)
             {
@@ -201,6 +201,7 @@ namespace Game.Grid
             var mesh = new Mesh { name = "HexRing" };
             mesh.SetVertices(vertices);
             mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
         }
