@@ -24,6 +24,14 @@ namespace Game.Grid
 
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
+        // Разведка 3D: высота плитки по биому. Ноль возвращает прежнее плоское поле, поэтому
+        // весь объём откатывается одним числом `heightScale`.
+        [Header("Разведка 3D")]
+        [Tooltip("Общий множитель высоты. 0 — плоское поле, как было")]
+        [SerializeField, Range(0f, 1f)] float heightScale = 1f;
+        [Tooltip("Глубина юбки под самой низкой плиткой: без неё у края поля нет борта")]
+        [SerializeField] float baseSkirt = 0.14f;
+
         [Header("Ландшафт")]
         [SerializeField] BiomePalette biomes = new();
         [SerializeField] Color metropolisColor = new(0.20f, 0.45f, 0.85f);
@@ -90,8 +98,15 @@ namespace Game.Grid
         {
             Coord = tile.Coord;
             name = $"Hex {tile.Coord}";
-            transform.localPosition = tile.Coord.ToWorld();
-            GetComponent<MeshFilter>().sharedMesh = HexMeshBuilder.Shared;
+            // Разведка 3D: высота плитки — это сдвиг её корня к камере (камера смотрит вдоль +Z,
+            // ближе значит меньше z). Дети плитки едут вместе с ней и сохраняют свою раскладку,
+            // а юбка добирает до общего дна поля.
+            var height = BiomeHeight(tile) * heightScale;
+            var world = tile.Coord.ToWorld();
+            transform.localPosition = new Vector3(world.x, world.y, -height);
+            GetComponent<MeshFilter>().sharedMesh = height > 0f || baseSkirt > 0f
+                ? HexMeshBuilder.Prism(height + baseSkirt)
+                : HexMeshBuilder.Shared;
 
             CreateOutline();
             CreateRiver(tile);
@@ -200,6 +215,27 @@ namespace Game.Grid
             deposit.Root.localScale = Vector3.one * depositScale;
             deposit.Root.localPosition = deposit.Home;
             spark.gameObject.SetActive(false);
+        }
+
+        /// <summary>Разведка 3D: гора выше скал, скалы выше леса, луг и песок лежат внизу.</summary>
+        static float BiomeHeight(TileData tile)
+        {
+            if (tile.IsMetropolis)
+                return 0.06f;
+
+            switch (tile.Biome)
+            {
+                case BiomeType.Mountains:
+                    return 0.44f;
+                case BiomeType.Rocks:
+                    return 0.20f;
+                case BiomeType.Forest:
+                    return 0.07f;
+                case BiomeType.Sand:
+                    return 0.02f;
+                default:
+                    return 0.04f;
+            }
         }
 
         /// <summary>Скрытая плитка не прячет ландшафт полностью — она просто сильно затемнена.</summary>
@@ -465,8 +501,10 @@ namespace Game.Grid
 
             var partRenderer = part.GetComponent<MeshRenderer>();
             partRenderer.sharedMaterial = Renderer.sharedMaterial;
-            partRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            partRenderer.receiveShadows = false;
+            // Разведка 3D: декор и модельки лежат чуть выше земли, и под наклонным светом
+            // ровно они дают единственную тень на поле. Ради неё тени и включены.
+            partRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            partRenderer.receiveShadows = true;
             return partRenderer;
         }
 

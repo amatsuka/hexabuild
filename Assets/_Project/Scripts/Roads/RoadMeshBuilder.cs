@@ -74,6 +74,9 @@ namespace Game.Roads
             var mesh = new Mesh { name = $"Bridge {bridgeMask:X2}" };
             mesh.SetVertices(vertices);
             mesh.SetTriangles(triangles, 0);
+
+            // Разведка 3D: под Lit-шейдером меш без нормалей чёрный.
+            mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
         }
@@ -110,6 +113,9 @@ namespace Game.Roads
             var mesh = new Mesh { name = $"Road {linkMask:X2}" };
             mesh.SetVertices(vertices);
             mesh.SetTriangles(triangles, 0);
+
+            // Разведка 3D: под Lit-шейдером меш без нормалей чёрный.
+            mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
         }

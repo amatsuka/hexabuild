@@ -180,10 +180,13 @@ namespace Game.Storage
         /// <summary>Мировая точка клетки: туда прыгает доехавший до Метрополии ресурс.</summary>
         public Vector3 CellWorldPoint(int index, Camera worldCamera)
         {
+            // Разведка 3D: наклонная камера, поэтому цель прыжка берётся пересечением луча
+            // с плоскостью поля, а не отсчётом по глубине камеры.
             var screenPoint = RectTransformUtility.WorldToScreenPoint(null, cells[index].rectTransform.position);
-            var world = worldCamera.ScreenToWorldPoint(
-                new Vector3(screenPoint.x, screenPoint.y, -worldCamera.transform.position.z));
-            return new Vector3(world.x, world.y, 0f);
+            var ray = worldCamera.ScreenPointToRay(screenPoint);
+            return new Plane(Vector3.back, Vector3.zero).Raycast(ray, out var distance)
+                ? ray.GetPoint(distance)
+                : Vector3.zero;
         }
 
         /// <summary>Высота панели в пикселях экрана — по ней камера отодвигается от низа поля.</summary>

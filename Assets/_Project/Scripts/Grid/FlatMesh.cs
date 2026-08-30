@@ -128,6 +128,9 @@ namespace Game.Grid
             var mesh = new Mesh { name = name };
             mesh.SetVertices(positions);
             mesh.SetTriangles(triangles, 0);
+
+            // Разведка 3D: под Lit-шейдером меш без нормалей чёрный.
+            mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
         }

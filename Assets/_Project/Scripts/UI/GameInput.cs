@@ -11,6 +11,9 @@ namespace Game.UI
     /// </summary>
     public sealed class GameInput : MonoBehaviour
     {
+        /// <summary>Поле лежит в плоскости z = 0: по ней и бьёт луч из-под пальца.</summary>
+        static readonly Plane FieldPlane = new(Vector3.back, Vector3.zero);
+
         [SerializeField] Camera worldCamera;
         [SerializeField] float clickThresholdPixels = 12f;
         [SerializeField] float pinchSensitivity = 0.01f;
@@ -32,9 +35,13 @@ namespace Game.UI
         /// <summary>Плитка под экранной точкой.</summary>
         public HexCoord CoordAt(Vector2 screenPosition)
         {
-            var distanceToPlane = -worldCamera.transform.position.z;
-            var world = worldCamera.ScreenToWorldPoint(new Vector3(screenPosition.x, screenPosition.y, distanceToPlane));
-            return HexCoord.FromWorld(world);
+            // Разведка 3D: камера смотрит на поле под углом, поэтому отсчёт по её глубине больше
+            // не даёт точку плоскости — берём пересечение луча с самой плоскостью z = 0.
+            var ray = worldCamera.ScreenPointToRay(screenPosition);
+            if (!FieldPlane.Raycast(ray, out var distance))
+                return HexCoord.Zero;
+
+            return HexCoord.FromWorld(ray.GetPoint(distance));
         }
 
         void Update()
