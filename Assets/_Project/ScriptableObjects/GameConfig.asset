@@ -18,6 +18,7 @@ MonoBehaviour:
   singleDepositWeight: 45
   twoDepositsWeight: 20
   threeDepositsWeight: 5
+  biomeNoiseScale: 0.18
   minDepositReserve: 8
   maxDepositReserve: 20
   extractionInterval: 3
@@ -28,10 +29,6 @@ MonoBehaviour:
   openCostGroup: 5
   roadCost: 1
   bridgeCost: 2
-  smallMergeCount: 3
-  smallMergePoints: 10
-  largeMergeCount: 5
-  largeMergePoints: 25
   startingPoints: 40
   startingGravel: 3
   contractGoal: 3

@@ -11,6 +11,14 @@ namespace Game.Storage
     public sealed class StorageView : MonoBehaviour
     {
         [SerializeField] ResourcePalette palette;
+        [Tooltip("Модели добываемых ресурсов. Пусто — клетки рисуют полигоны, как было")]
+        [SerializeField] ResourceModels models = new();
+        [Tooltip("Сторона снимка модели в пикселях")]
+        [SerializeField] int snapshotResolution = 256;
+        [Tooltip("Разворот модели в снимке")]
+        [SerializeField] Vector3 snapshotAngles = new(25f, 35f, 0f);
+        [Tooltip("Запас вокруг модели в снимке, доля габарита")]
+        [SerializeField, Range(1f, 2f)] float snapshotMargin = 1.2f;
         [SerializeField] Color panelColor = new(0.12f, 0.12f, 0.14f, 0.9f);
         [SerializeField] Color emptyCellColor = new(0.22f, 0.22f, 0.25f);
         [Tooltip("Подложка занятой клетки: иконка лежит на ней, поэтому она чуть светлее пустой")]
@@ -39,11 +47,13 @@ namespace Game.Storage
         Image[] cells;
         ResourceIcon[] icons;
         StorageGrid grid;
+        ResourceIconBaker snapshots;
         float flashTimer;
 
         public void Bind(StorageGrid storage)
         {
             grid = storage;
+            snapshots = new ResourceIconBaker(models, snapshotResolution, snapshotAngles, snapshotMargin);
             BuildPanel();
 
             grid.Changed += Refresh;
@@ -152,7 +162,7 @@ namespace Game.Storage
             rect.SetAsLastSibling();
             rect.sizeDelta = Vector2.one * cellSize;
             rect.position = position;
-            copy.GetComponent<ResourceIcon>().Show(type, palette.Get(type));
+            ShowIcon(copy.GetComponent<ResourceIcon>(), type);
             return rect;
         }
 
@@ -206,6 +216,8 @@ namespace Game.Storage
 
         void OnDestroy()
         {
+            snapshots?.Dispose();
+
             if (grid == null)
                 return;
 
@@ -283,10 +295,20 @@ namespace Game.Storage
                 cells[i].color = shown ? filledCellColor : emptyCellColor;
 
                 if (shown)
-                    icons[i].Show(content.Value, palette.Get(content.Value));
+                    ShowIcon(icons[i], content.Value);
                 else
                     icons[i].Hide();
             }
+        }
+
+        /// <summary>
+        /// У модели цвет уже лежит в палитре текстуры, и красить снимок цветом ресурса нельзя —
+        /// он перемножится. Крафтовый ресурс модели не имеет и красится, как раньше.
+        /// </summary>
+        void ShowIcon(ResourceIcon icon, ResourceType type)
+        {
+            var snapshot = snapshots?.Get(type);
+            icon.Show(type, snapshot != null ? Color.white : palette.Get(type), snapshot);
         }
 
         void OnResourceLost(ResourceType type) => flashTimer = flashSeconds;

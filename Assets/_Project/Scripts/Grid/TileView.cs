@@ -43,14 +43,14 @@ namespace Game.Grid
         // умножением цвета на CPU — оно чернило плитку и на текстурированной модели не сработает.
         [Header("Состояния плитки")]
         [Tooltip("Скрытая плитка: сколько её съела дымка")]
-        [SerializeField, Range(0f, 1f)] float hiddenFog = 0.50f;
+        [SerializeField, Range(0f, 1f)] float hiddenFog = 0.78f;
         [Tooltip("Насколько цвет биома уводится в серый под туманом: 1 — полностью серый")]
-        [SerializeField, Range(0f, 1f)] float hiddenFade = 0.72f;
-        [SerializeField, Range(0f, 1f)] float availableFog = 0.20f;
-        [SerializeField, Range(0f, 1f)] float availableFade = 0.34f;
+        [SerializeField, Range(0f, 1f)] float hiddenFade = 0.85f;
+        [SerializeField, Range(0f, 1f)] float availableFog = 0.45f;
+        [SerializeField, Range(0f, 1f)] float availableFade = 0.45f;
         [Tooltip("Истощённая плитка уже открыта, туман на неё не возвращается — она выцветает")]
-        [SerializeField, Range(0f, 1f)] float depletedFog = 0.18f;
-        [SerializeField, Range(0f, 1f)] float depletedFade = 0.55f;
+        [SerializeField, Range(0f, 1f)] float depletedFog = 0.20f;
+        [SerializeField, Range(0f, 1f)] float depletedFade = 0.85f;
 
         [Header("Река")]
         [SerializeField] Color riverColor = new(0.28f, 0.52f, 0.74f);
@@ -71,6 +71,18 @@ namespace Game.Grid
         [Header("Модельки месторождений")]
         [SerializeField] float depositScale = 0.42f;
         [SerializeField] float depositOffset = 0.21f;
+        [Tooltip("Материал с палитрой ресурсов: у стеков своя текстура, не та, что у деревьев")]
+        [SerializeField] Material resourceMaterial;
+        [Tooltip("Штабель брёвен. Пусто — процедурная фигура, как было")]
+        [SerializeField] Mesh woodDepositModel;
+        [Tooltip("Груда камня")]
+        [SerializeField] Mesh stoneDepositModel;
+        [Tooltip("Стопка слитков")]
+        [SerializeField] Mesh oreDepositModel;
+        [Tooltip("Наибольший габарит стека в юнитах")]
+        [SerializeField, Range(0.1f, 0.8f)] float depositModelSize = 0.30f;
+        [Tooltip("Во сколько усыхает выработанный стек: форма у модели одна на оба состояния, и без этого истощение видно только дымкой")]
+        [SerializeField, Range(0.2f, 1f)] float spentModelScale = 0.55f;
 
         [Header("Добыча")]
         [SerializeField] float extractionSeconds = 0.25f;
@@ -80,10 +92,25 @@ namespace Game.Grid
         [SerializeField] float sparkScale = 0.08f;
         [SerializeField] float sparkRise = 0.24f;
 
+        // Модели KayKit развёрнуты на палитровый атлас: цвет грани задаёт её UV, а не код.
+        // Поэтому у модельной части свой материал и белый `_BaseColor` — умножать цвет биома
+        // на зелёный из текстуры нельзя, дерево почернеет.
+        [Header("Модели")]
+        [Tooltip("Материал с палитровым атласом. Пусто — весь декор рисуется процедурными фигурами")]
+        [SerializeField] Material paletteMaterial;
+        [Tooltip("Деревья леса. Вариант выбирается хешем, пустой список — процедурная фигура")]
+        [SerializeField] Mesh[] treeModels;
+        [Tooltip("Камни скал и гор. Вариант выбирается хешем, пустой список — процедурная фигура")]
+        [SerializeField] Mesh[] rockModels;
+        [Tooltip("Наибольший габарит дерева в юнитах. Инрадиус гекса — 0.5")]
+        [SerializeField, Range(0.1f, 1f)] float treeSize = 0.44f;
+        [Tooltip("Наибольший габарит камня в юнитах")]
+        [SerializeField, Range(0.05f, 0.6f)] float rockSize = 0.24f;
+
         [Header("Декор биома")]
-        [SerializeField, Range(0, 6)] int decorMin = 2;
-        [SerializeField, Range(1, 8)] int decorMax = 5;
-        [SerializeField] float decorScale = 0.26f;
+        [SerializeField, Range(0, 8)] int decorMin = 3;
+        [SerializeField, Range(1, 10)] int decorMax = 6;
+        [SerializeField] float decorScale = 0.32f;
         [SerializeField, Range(0f, 0.6f)] float decorScaleJitter = 0.30f;
         [SerializeField] float decorInnerRadius = 0.13f;
         [SerializeField] float decorOuterRadius = 0.33f;
@@ -91,8 +118,7 @@ namespace Game.Grid
         [SerializeField, Range(0f, 0.4f)] float decorTintJitter = 0.14f;
 
         readonly List<DepositView> deposits = new();
-        readonly List<MeshRenderer> decor = new();
-        readonly List<float> decorTints = new();
+        readonly List<DecorPart> decor = new();
 
         MeshRenderer river;
         MeshRenderer meshRenderer;
@@ -134,8 +160,9 @@ namespace Game.Grid
             SetTile(outline, outlineColor, state);
 
             var decorColor = Shaded(biomes.Decor(tile.Biome), tile.Shade);
+            var modelColor = Shaded(Color.white, tile.Shade);
             for (var i = 0; i < decor.Count; i++)
-                SetTile(decor[i], Scaled(decorColor, decorTints[i]), state);
+                SetTile(decor[i].Renderer, Scaled(decor[i].Textured ? modelColor : decorColor, decor[i].Tint), state);
 
             if (river != null)
                 SetTile(river, Shaded(riverColor, tile.Shade), state);
@@ -202,23 +229,29 @@ namespace Game.Grid
                     ? 0f
                     : Mathf.Sin((progress - 0.25f) / 0.75f * Mathf.PI) * extractionHop;
 
+                // Приседание тянет фигуру вниз только у процедурной модельки: она построена
+                // с центром в нуле, и сжатие по высоте поднимает её основание над землёй.
+                // У модели пивот в основании, компенсировать нечего.
+                var rest = deposit.Rest;
+                var sink = deposit.Textured ? 0f : (1f - squat) * 0.5f * rest;
                 deposit.Root.localScale = new Vector3(
-                    depositScale * (1f + (1f - squat) * 0.5f), depositScale * squat, depositScale);
-                deposit.Root.localPosition = deposit.Home
-                    + new Vector3(0f, hop - (1f - squat) * 0.5f * depositScale, 0f);
+                    rest * (1f + (1f - squat) * 0.5f), rest * squat, rest);
+                deposit.Root.localPosition = deposit.Home + new Vector3(0f, hop - sink, 0f);
 
                 var fading = sparkColor;
                 fading.a = 1f - progress;
                 SetColor(spark, fading);
                 spark.transform.localPosition = new Vector3(
                     deposit.Home.x,
-                    deposit.Home.y + depositScale * 0.5f + progress * sparkRise,
+                    deposit.Home.y + deposit.Rest * 0.5f + progress * sparkRise,
                     deposit.Home.z);
 
                 yield return null;
             }
 
-            deposit.Root.localScale = Vector3.one * depositScale;
+            // Возвращаемся к текущему покою, а не к полному размеру: последняя добыча могла
+            // исчерпать месторождение, и `Apply` уже усадил стек.
+            deposit.Root.localScale = Vector3.one * deposit.Rest;
             deposit.Root.localPosition = deposit.Home;
             spark.gameObject.SetActive(false);
         }
@@ -335,12 +368,19 @@ namespace Game.Grid
             var coord = tile.Coord;
             var count = decorMin + (int)(coord.Hash01(DecorCountSalt) * (decorMax - decorMin + 1));
 
+            // Стек месторождения занимает середину плитки. Декор не выбрасывается, а отходит
+            // к ободу: иначе плитка с месторождением остаётся голой, а она как раз главная.
+            var keepOut = DepositKeepOut(tile);
+            var inner = Mathf.Max(decorInnerRadius, keepOut);
+            var outer = Mathf.Max(decorOuterRadius, keepOut + 0.10f);
+
             for (var i = 0; i < count; i++)
             {
                 var angle = coord.Hash01(ItemSalt(i, 0)) * Mathf.PI * 2f;
-                var radius = Mathf.Lerp(decorInnerRadius, decorOuterRadius, coord.Hash01(ItemSalt(i, 1)));
-                var scale = decorScale * Mathf.Lerp(
+                var radius = Mathf.Lerp(inner, outer, coord.Hash01(ItemSalt(i, 1)));
+                var jitter = Mathf.Lerp(
                     1f - decorScaleJitter, 1f + decorScaleJitter, coord.Hash01(ItemSalt(i, 2)));
+                var scale = decorScale * jitter;
                 var tilt = Mathf.Lerp(-decorTilt, decorTilt, coord.Hash01(ItemSalt(i, 3)));
                 var shape = BiomeDecor(tile.Biome, coord.Hash01(ItemSalt(i, 4)));
 
@@ -348,24 +388,81 @@ namespace Game.Grid
                 if (InsideRiver(tile, spot, riverWidth * 0.5f + decorScale * 0.5f))
                     continue;
 
-                // Фигура декора построена в квадрате с центром в нуле и стоит вертикально —
-                // поднимаем её на половину роста, иначе она наполовину утоплена в землю.
+                // Месторождение на плитке — главный объект, и оно занимает ту же середину, куда
+                // ложится декор. Пока обе стороны были плоскими фигурами, наложение читалось как
+                // кустик за камнем; объёмные модели врастают друг в друга.
+                if (OccupiedByDeposit(tile, spot, keepOut))
+                    continue;
+
+                // Модель стоит основанием в нуле, её габарит приводится к заданному размеру.
+                // Процедурная фигура построена в квадрате с центром в нуле — её надо поднять
+                // на половину роста, иначе она наполовину утоплена в землю.
+                var model = DecorModel(shape, coord.Hash01(ItemSalt(i, 7)));
                 var part = CreatePart(
                     transform,
                     $"Decor {i}",
-                    ShapeMeshes.Decor(shape),
-                    new Vector3(spot.x, scale * 0.5f, spot.y),
-                    Vector3.one * scale);
-                part.transform.localRotation = Quaternion.Euler(0f, 0f, tilt);
+                    model != null ? model : ShapeMeshes.Decor(shape),
+                    new Vector3(spot.x, model != null ? 0f : scale * 0.5f, spot.y),
+                    Vector3.one * (model != null ? ModelScale(model, DecorTarget(shape)) * jitter : scale),
+                    model != null ? paletteMaterial : null);
 
-                decor.Add(part);
-                decorTints.Add(Mathf.Lerp(1f - decorTintJitter, 1f + decorTintJitter, coord.Hash01(ItemSalt(i, 5))));
+                // У плоской фигуры наклон был креном в плоскости экрана. У модели такой крен
+                // валит дерево набок, поэтому он раскладывается по осям земли, а тот же хеш
+                // вдобавок разворачивает модель вокруг своей оси: иначе все деревья — близнецы.
+                part.transform.localRotation = model != null
+                    ? Quaternion.Euler(tilt * 0.5f, coord.Hash01(ItemSalt(i, 6)) * 360f, tilt * 0.5f)
+                    : Quaternion.Euler(0f, 0f, tilt);
+
+                decor.Add(new DecorPart
+                {
+                    Renderer = part,
+                    Tint = Mathf.Lerp(1f - decorTintJitter, 1f + decorTintJitter, coord.Hash01(ItemSalt(i, 5))),
+                    Textured = model != null
+                });
             }
+        }
+
+        /// <summary>
+        /// Радиус, который стек месторождения держит за собой. Ноль — месторождений на модели
+        /// нет, и декор раскладывается как раньше. Множитель не половина суммы габаритов: полное
+        /// расстояние разносит объекты слишком далеко, а лёгкое перекрытие силуэтов на глаз
+        /// читается как заросли, а не как ошибка.
+        /// </summary>
+        float DepositKeepOut(TileData tile)
+        {
+            for (var i = 0; i < tile.Deposits.Count; i++)
+                if (DepositModel(tile.Deposits[i].Type) != null)
+                    return (depositModelSize + treeSize) * 0.4f;
+
+            return 0f;
+        }
+
+        /// <summary>Точка занята стеком месторождения: декор туда не ставим.</summary>
+        bool OccupiedByDeposit(TileData tile, Vector2 point, float keepOut)
+        {
+            if (keepOut <= 0f)
+                return false;
+
+            for (var i = 0; i < tile.Deposits.Count; i++)
+            {
+                if (DepositModel(tile.Deposits[i].Type) == null)
+                    continue;
+
+                var home = DepositPosition(i, tile.Deposits.Count, 0f);
+                if (Vector2.Distance(point, new Vector2(home.x, home.z)) < keepOut)
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>Своя соль на каждый элемент и на каждое его свойство: иначе они ходили бы вместе.</summary>
         static int ItemSalt(int index, int channel) => 101 + index * 8 + channel;
 
+        /// <summary>
+        /// Форма декора по биому. На песке и лугу часть слотов отдана валунам: без них
+        /// низины остаются почти пустыми рядом с лесом и скалами, где стоят модели.
+        /// </summary>
         static DecorShape BiomeDecor(BiomeType biome, float roll)
         {
             switch (biome)
@@ -377,9 +474,65 @@ namespace Game.Grid
                 case BiomeType.Mountains:
                     return DecorShape.Ridge;
                 case BiomeType.Sand:
-                    return DecorShape.Dune;
+                    return roll < 0.25f ? DecorShape.LayeredPeak : DecorShape.Dune;
                 default:
-                    return DecorShape.Tussock;
+                    return roll < 0.18f ? DecorShape.LayeredPeak : DecorShape.Tussock;
+            }
+        }
+
+        /// <summary>Модель под форму декора. Null — рисуется процедурная фигура, как было.</summary>
+        Mesh DecorModel(DecorShape shape, float roll)
+        {
+            if (paletteMaterial == null)
+                return null;
+
+            switch (shape)
+            {
+                case DecorShape.Conifer:
+                case DecorShape.Broadleaf:
+                    return Pick(treeModels, roll);
+                case DecorShape.LayeredPeak:
+                case DecorShape.Ridge:
+                    return Pick(rockModels, roll);
+                default:
+                    return null;
+            }
+        }
+
+        float DecorTarget(DecorShape shape) =>
+            shape is DecorShape.LayeredPeak or DecorShape.Ridge ? rockSize : treeSize;
+
+        static Mesh Pick(Mesh[] models, float roll) =>
+            models == null || models.Length == 0 ? null : models[Mathf.Min((int)(roll * models.Length), models.Length - 1)];
+
+        /// <summary>
+        /// Модели пака сделаны под гекс радиуса около единицы, а у нас инрадиус 0.5, и дерево
+        /// с камнем отличаются габаритом впятеро. Поэтому масштаб не множитель, а приведение
+        /// наибольшего габарита меша к заданному размеру: одно правило на любую модель.
+        /// </summary>
+        static float ModelScale(Mesh model, float target)
+        {
+            var size = model.bounds.size;
+            var largest = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
+            return largest > 0.0001f ? target / largest : target;
+        }
+
+        /// <summary>Стек ресурса под тип месторождения. Null — процедурная фигура, как было.</summary>
+        Mesh DepositModel(ResourceType type)
+        {
+            if (resourceMaterial == null)
+                return null;
+
+            switch (type)
+            {
+                case ResourceType.Wood:
+                    return woodDepositModel;
+                case ResourceType.Stone:
+                    return stoneDepositModel;
+                case ResourceType.Ore:
+                    return oreDepositModel;
+                default:
+                    return null;
             }
         }
 
@@ -392,18 +545,28 @@ namespace Game.Grid
         {
             for (var i = 0; i < tile.Deposits.Count; i++)
             {
-                var home = DepositPosition(i, tile.Deposits.Count);
+                // Модель стека стоит основанием в нуле, процедурная фигура построена в квадрате
+                // с центром в нуле — ей нужен подъём на половину роста.
+                var model = DepositModel(tile.Deposits[i].Type);
+                var size = model != null ? ModelScale(model, depositModelSize) : depositScale;
+                var home = DepositPosition(i, tile.Deposits.Count, model != null ? 0f : depositScale * 0.5f);
                 var root = new GameObject($"Deposit {i}").transform;
                 root.SetParent(transform, false);
                 root.localPosition = home;
-                root.localScale = Vector3.one * depositScale;
+                root.localScale = Vector3.one * size;
 
                 deposits.Add(new DepositView
                 {
                     Root = root,
                     Home = home,
-                    Body = CreatePart(root, "Body", null, Vector3.zero, Vector3.one),
-                    Accent = CreatePart(root, "Accent", null, new Vector3(0f, 0f, AccentDepth), Vector3.one)
+                    Size = size,
+                    Rest = size,
+                    Textured = model != null,
+                    Body = CreatePart(root, "Body", model, Vector3.zero, Vector3.one, model != null ? resourceMaterial : null),
+                    // Огранка — приём плоской фигуры: у модели рельеф свой, второй меш не нужен.
+                    Accent = model != null
+                        ? null
+                        : CreatePart(root, "Accent", null, new Vector3(0f, 0f, AccentDepth), Vector3.one)
                 });
             }
         }
@@ -427,6 +590,16 @@ namespace Game.Grid
                 var depositState = spent
                     ? Vector2.Max(state, new Vector2(depletedFog, depletedFade))
                     : state;
+
+                if (view.Textured)
+                {
+                    // Цвет стека лежит в атласе, а форма у него одна на оба состояния: выработанный
+                    // стек уменьшается — дымки одной мало, чтобы прочитать «здесь уже пусто».
+                    view.Rest = spent ? view.Size * spentModelScale : view.Size;
+                    view.Root.localScale = Vector3.one * view.Rest;
+                    SetTile(view.Body, Color.white, depositState);
+                    continue;
+                }
 
                 view.Body.GetComponent<MeshFilter>().sharedMesh = ShapeMeshes.Deposit(deposit.Type, spent, false);
                 view.Accent.GetComponent<MeshFilter>().sharedMesh = ShapeMeshes.Deposit(deposit.Type, spent, true);
@@ -457,10 +630,8 @@ namespace Game.Grid
         /// Одна моделька в центре, две в ряд, три треугольником. Раскладка идёт по земле (x, z),
         /// а Y поднимает модельку на половину роста, чтобы она стояла, а не тонула.
         /// </summary>
-        Vector3 DepositPosition(int index, int count)
+        Vector3 DepositPosition(int index, int count, float stand)
         {
-            var stand = depositScale * 0.5f;
-
             if (count == 1)
                 return new Vector3(0f, stand, 0f);
 
@@ -478,7 +649,13 @@ namespace Game.Grid
             }
         }
 
-        MeshRenderer CreatePart(Transform parent, string partName, Mesh mesh, Vector3 localPosition, Vector3 localScale)
+        MeshRenderer CreatePart(
+            Transform parent,
+            string partName,
+            Mesh mesh,
+            Vector3 localPosition,
+            Vector3 localScale,
+            Material material = null)
         {
             var part = new GameObject(partName, typeof(MeshFilter), typeof(MeshRenderer));
             part.transform.SetParent(parent, false);
@@ -487,7 +664,7 @@ namespace Game.Grid
             part.GetComponent<MeshFilter>().sharedMesh = mesh;
 
             var partRenderer = part.GetComponent<MeshRenderer>();
-            partRenderer.sharedMaterial = Renderer.sharedMaterial;
+            partRenderer.sharedMaterial = material != null ? material : Renderer.sharedMaterial;
             // Разведка 3D: декор и модельки лежат чуть выше земли, и под наклонным светом
             // ровно они дают единственную тень на поле. Ради неё тени и включены.
             partRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
@@ -513,11 +690,26 @@ namespace Game.Grid
             target.SetPropertyBlock(propertyBlock);
         }
 
+        /// <summary>
+        /// Элемент декора. Текстурированной части цвет задаёт атлас, и код красит её белым
+        /// с разбросом тона; процедурная берёт цвет биома, как раньше.
+        /// </summary>
+        sealed class DecorPart
+        {
+            public MeshRenderer Renderer;
+            public float Tint;
+            public bool Textured;
+        }
+
         /// <summary>Моделька одного месторождения: тело и огранка под общим корнем.</summary>
         sealed class DepositView
         {
             public Transform Root;
             public Vector3 Home;
+            public float Size;
+            /// <summary>Масштаб покоя: полный размер или усохший, если месторождение выработано.</summary>
+            public float Rest;
+            public bool Textured;
             public MeshRenderer Body;
             public MeshRenderer Accent;
         }

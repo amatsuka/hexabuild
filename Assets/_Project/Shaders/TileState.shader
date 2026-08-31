@@ -7,6 +7,9 @@ Shader "Game/TileState"
     Properties
     {
         [MainColor] _BaseColor ("Цвет", Color) = (1, 1, 1, 1)
+        // Палитровый атлас моделей. Процедурные меши UV не пишут вовсе, у них uv = (0,0),
+        // и белая заглушка возвращает им ровно прежний цвет: слот просто остаётся пустым.
+        [MainTexture] _BaseMap ("Палитра", 2D) = "white" {}
         _FogColor ("Цвет дымки", Color) = (0.15, 0.16, 0.20, 1)
         _StateFog ("Туман", Range(0, 1)) = 0
         _StateFade ("Обесцвечивание", Range(0, 1)) = 0
@@ -31,10 +34,21 @@ Shader "Game/TileState"
             #pragma fragment Fragment
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            // Без этих двух ключевых слов шейдер в режиме Forward+ получает от `GetMainLight`
+            // чёрный свет: рендерер раскладывает источники по кластерам, а вариант шейдера
+            // собран под старую схему. Поле освещалось одним ambient. `_FORWARD_PLUS` — имя
+            // из URP 14–16, `_CLUSTER_LIGHT_LOOP` — то же самое в URP 17 (Unity 6).
+            #pragma multi_compile _ _FORWARD_PLUS
+            #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+            // Текстура одна на материал и в инстанс-буфер не кладётся: там только то, что
+            // меняется от рендерера к рендереру.
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
 
             UNITY_INSTANCING_BUFFER_START(Props)
                 UNITY_DEFINE_INSTANCED_PROP(float4, _BaseColor)
@@ -47,6 +61,7 @@ Shader "Game/TileState"
             {
                 float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;
+                float2 uv : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -55,6 +70,7 @@ Shader "Game/TileState"
                 float4 positionCS : SV_POSITION;
                 float3 positionWS : TEXCOORD0;
                 float3 normalWS : TEXCOORD1;
+                float2 uv : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -67,6 +83,7 @@ Shader "Game/TileState"
                 output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 output.positionCS = TransformWorldToHClip(output.positionWS);
                 output.normalWS = TransformObjectToWorldNormal(input.normalOS);
+                output.uv = input.uv;
                 return output;
             }
 
@@ -74,7 +91,8 @@ Shader "Game/TileState"
             {
                 UNITY_SETUP_INSTANCE_ID(input);
 
-                half4 baseColor = UNITY_ACCESS_INSTANCED_PROP(Props, _BaseColor);
+                half4 baseColor = UNITY_ACCESS_INSTANCED_PROP(Props, _BaseColor)
+                    * SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
                 half4 fogColor = UNITY_ACCESS_INSTANCED_PROP(Props, _FogColor);
                 half fog = UNITY_ACCESS_INSTANCED_PROP(Props, _StateFog);
                 half fade = UNITY_ACCESS_INSTANCED_PROP(Props, _StateFade);

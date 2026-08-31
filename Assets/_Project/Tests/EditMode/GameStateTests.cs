@@ -196,6 +196,40 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
         }
 
+        /// <summary>
+        /// Дорогу тянут от Метрополии. Оторванный участок не строится: щебень он тратил, маршрута
+        /// не давал, а снести его нельзя — и заметить ошибку было негде.
+        /// </summary>
+        [Test]
+        public void TryBuildRoad_OnATileTheRoadHasNotReached_IsRefusedAndKeepsGravel()
+        {
+            var state = NewGame(points: 200);
+            state.Begin();
+            state.TryRevealTile(new HexCoord(0, 1));
+            state.TryRevealTile(new HexCoord(0, 2));
+            var refusals = new List<string>();
+            state.ActionRefused += refusals.Add;
+
+            Assert.IsFalse(state.TryBuildRoad(new HexCoord(0, 2)));
+
+            Assert.IsFalse(state.Roads.HasRoad(new HexCoord(0, 2)));
+            Assert.AreEqual(3, state.Storage.CountOf(ResourceType.Gravel), "щебень остался на месте");
+            Assert.AreEqual(1, refusals.Count);
+        }
+
+        [Test]
+        public void TryBuildRoad_ContinuesFromAConnectedRoad()
+        {
+            var state = NewGame(points: 200, gravel: 5);
+            state.Begin();
+            state.TryRevealTile(new HexCoord(0, 1));
+            state.TryRevealTile(new HexCoord(0, 2));
+
+            Assert.IsTrue(state.TryBuildRoad(new HexCoord(0, 1)), "первая дорога стоит у Метрополии");
+            Assert.IsTrue(state.TryBuildRoad(new HexCoord(0, 2)), "вторая продолжает первую");
+            Assert.IsTrue(state.Roads.IsConnected(new HexCoord(0, 2)));
+        }
+
         [Test]
         public void TryBuildRoad_OnMetropolis_IsRejected()
         {

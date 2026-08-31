@@ -117,12 +117,13 @@ MonoBehaviour:
     rocksDecor: {r: 0.38, g: 0.37, b: 0.36, a: 1}
     mountainsDecor: {r: 0.74, g: 0.74, b: 0.79, a: 1}
   metropolisColor: {r: 0.2, g: 0.45, b: 0.85, a: 1}
-  hiddenDim: 0.26
-  availableDim: 0.62
-  hiddenDesaturation: 0.88
-  availableDesaturation: 0.45
-  depletedAlpha: 0.35
   shadeStrength: 0.08
+  hiddenFog: 0.78
+  hiddenFade: 0.85
+  availableFog: 0.45
+  availableFade: 0.45
+  depletedFog: 0.2
+  depletedFade: 0.85
   riverColor: {r: 0.28, g: 0.52, b: 0.74, a: 1}
   riverWidth: 0.22
   outlineColor: {r: 0.07, g: 0.07, b: 0.09, a: 1}
@@ -137,15 +138,33 @@ MonoBehaviour:
   trunkColor: {r: 0.36, g: 0.25, b: 0.17, a: 1}
   accentLift: 0.34
   depositScale: 0.42
-  depositOffset: 0.21
+  depositOffset: 0.26
+  resourceMaterial: {fileID: 2100000, guid: 494515026cf7c497cb8e285a0a958d0d, type: 2}
+  woodDepositModel: {fileID: 4928232979091749534, guid: 5026a41621e584937a2ff95e3efc45bc, type: 3}
+  stoneDepositModel: {fileID: -4135561926668461940, guid: 0c2672a15a9094a659469c7462490cf4, type: 3}
+  oreDepositModel: {fileID: -7228298196316864044, guid: 610805bedf51a454e94f8da0fa3d22f0, type: 3}
+  depositModelSize: 0.3
+  spentModelScale: 0.55
   extractionSeconds: 0.25
   extractionSquat: 0.26
   extractionHop: 0.07
   sparkScale: 0.08
   sparkRise: 0.24
-  decorMin: 2
-  decorMax: 5
-  decorScale: 0.26
+  paletteMaterial: {fileID: 2100000, guid: 59f27dbd63beb4dc6b699c43b242e09c, type: 2}
+  treeModels:
+  - {fileID: -3189140834629115801, guid: 973dc00d9188c4d6d885e6d499de66a1, type: 3}
+  - {fileID: 2795065170541143438, guid: ecfcbf34b3d274963bc3cc68526507dd, type: 3}
+  rockModels:
+  - {fileID: -3640708041525635837, guid: d90ff91dc7e754061a2c6440f947f0ef, type: 3}
+  - {fileID: -6771102107789436196, guid: 90981888684e94ac3b4832bb4ec502bf, type: 3}
+  - {fileID: -952404110119702382, guid: 74eb450feb4d6436bb0bbd1b1cc6c204, type: 3}
+  - {fileID: -1908972516316393811, guid: f252f27274ae342dd84ad1bf2a733d7a, type: 3}
+  - {fileID: 4580205229766308904, guid: 44b78dfb6fc8f4e4a888fc1c299207a4, type: 3}
+  treeSize: 0.44
+  rockSize: 0.24
+  decorMin: 3
+  decorMax: 6
+  decorScale: 0.32
   decorScaleJitter: 0.3
   decorInnerRadius: 0.13
   decorOuterRadius: 0.33

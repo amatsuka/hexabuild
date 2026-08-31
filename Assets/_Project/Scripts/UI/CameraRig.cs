@@ -6,9 +6,16 @@ namespace Game.UI
     [RequireComponent(typeof(Camera))]
     public sealed class CameraRig : MonoBehaviour
     {
+        /// <summary>Насколько вбок от центра уходит потерянный ресурс, в долях полукадра.</summary>
+        const float OffScreenSide = 0.85f;
+
+        /// <summary>Насколько ниже кромки кадра он оказывается, в долях высоты кадра.</summary>
+        const float OffScreenDrop = 0.35f;
+
         // Портрет узкий: на максимальном зуме поле влезает по высоте, ширину проходим паном.
         // Верхняя граница держит гекс крупным: при 6 юнитах он занимает около 160 px из 1080.
         [SerializeField] float minZoom = 3f;
+        [Tooltip("Нижняя граница верхнего предела. Если поле в неё не влезает, предел поднимается сам — до зума, на котором видно всё поле")]
         [SerializeField] float maxZoom = 6f;
         [SerializeField] float zoomStepPerScroll = 0.6f;
 
@@ -19,8 +26,18 @@ namespace Game.UI
         [Tooltip("Отвод камеры от земли. При ортографии влияет только на клиппинг и дальность теней")]
         [SerializeField] float distance = 20f;
 
+        /// <summary>Запас вокруг поля на самом дальнем зуме: край не должен лежать впритык к кромке.</summary>
+        const float FitMargin = 1.04f;
+
         Camera cameraComponent;
         Rect fieldBounds = new(-1000f, -1000f, 2000f, 2000f);
+
+        /// <summary>Зум, на котором поле видно целиком. Считается из габаритов в `SetFieldBounds`.</summary>
+        float fitZoom;
+
+        /// <summary>Соотношение сторон, при котором считался `fitZoom`.</summary>
+        float fitAspect;
+
         bool initialized;
 
         /// <summary>Точка земли, на которую смотрит камера: x вправо, y вглубь поля. Позиция выводится из неё.</summary>
@@ -49,7 +66,41 @@ namespace Game.UI
         {
             Initialize();
             fieldBounds = bounds;
+            fitAspect = Cam.aspect;
+            fitZoom = FitZoom(bounds);
             ClampPosition();
+        }
+
+        /// <summary>
+        /// Верхний предел зума. Не число из инспектора: поле должно влезать в кадр целиком,
+        /// а это зависит от соотношения сторон экрана и от наклона камеры. Заданное число
+        /// работает нижней границей — предел не опускается ниже него на маленьком поле.
+        /// </summary>
+        float MaxZoom
+        {
+            get
+            {
+                // Пересчёт при смене соотношения сторон: окно браузера тянут, телефон
+                // поворачивают, и на узком экране прежнего предела на всё поле уже не хватит.
+                if (!Mathf.Approximately(fitAspect, Cam.aspect))
+                {
+                    fitAspect = Cam.aspect;
+                    fitZoom = FitZoom(fieldBounds);
+                }
+
+                return Mathf.Max(maxZoom, fitZoom);
+            }
+        }
+
+        /// <summary>
+        /// Зум, при котором поле помещается и по ширине, и по глубине. По глубине кадр короче
+        /// в `Foreshortening` раз: земля наклонена, и в ту же высоту экрана её влезает меньше.
+        /// </summary>
+        float FitZoom(Rect bounds)
+        {
+            var byWidth = bounds.width / (2f * Mathf.Max(Cam.aspect, 0.01f));
+            var byDepth = bounds.height * Foreshortening * 0.5f;
+            return Mathf.Max(byWidth, byDepth) * FitMargin;
         }
 
         /// <summary>Поставить камеру к ближнему краю поля, где стоит Метрополия.</summary>
@@ -71,11 +122,30 @@ namespace Game.UI
             ClampPosition();
         }
 
+        /// <summary>
+        /// Точка на земле за нижней кромкой кадра. Туда улетает ресурс, которому не хватило
+        /// места на складе: он должен покинуть экран, а не растаять внутри него. `side` от −1
+        /// до 1 разводит такие ресурсы влево и вправо.
+        ///
+        /// Камера ортографическая, значит луч из точки за кромкой параллелен всем остальным
+        /// и упирается в землю ближе к наблюдателю — ровно там, куда экран уже не смотрит.
+        /// Точка зависит от зума, поэтому спрашивается каждый раз, а не считается один раз.
+        /// </summary>
+        public Vector3 OffScreenPoint(float side)
+        {
+            Initialize();
+
+            var ray = Cam.ViewportPointToRay(new Vector3(0.5f + side * OffScreenSide, -OffScreenDrop, 0f));
+            return new Plane(Vector3.up, Vector3.zero).Raycast(ray, out var distance)
+                ? ray.GetPoint(distance)
+                : transform.position + ray.direction * 20f;
+        }
+
         /// <summary>Шаг зума: ±1 от колеса мыши, дробное значение от щипка пальцами.</summary>
         public void Zoom(float steps)
         {
             Initialize();
-            Cam.orthographicSize = Mathf.Clamp(Cam.orthographicSize - steps * zoomStepPerScroll, minZoom, maxZoom);
+            Cam.orthographicSize = Mathf.Clamp(Cam.orthographicSize - steps * zoomStepPerScroll, minZoom, MaxZoom);
             ClampPosition();
         }
 

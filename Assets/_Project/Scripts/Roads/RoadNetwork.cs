@@ -40,6 +40,20 @@ namespace Game.Roads
             (parents.TryGetValue(from, out var fromParent) && fromParent == to)
             || (parents.TryGetValue(to, out var toParent) && toParent == from);
 
+        /// <summary>
+        /// Дорогу здесь есть от чего продолжить: рядом Метрополия или уже подключённая дорога.
+        /// Изолированный участок строить нельзя — он тратит щебень, маршрута не даёт, а снести
+        /// его потом невозможно.
+        /// </summary>
+        public bool CanExtendTo(HexCoord coord)
+        {
+            foreach (var neighbor in coord.Neighbors())
+                if (neighbor == HexCoord.Zero || connected.Contains(neighbor))
+                    return true;
+
+            return false;
+        }
+
         public bool Build(HexCoord coord)
         {
             if (!map.Contains(coord) || coord == HexCoord.Zero)

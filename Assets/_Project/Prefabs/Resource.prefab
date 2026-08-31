@@ -110,5 +110,20 @@ MonoBehaviour:
     board: {r: 0.55, g: 0.82, b: 0.5, a: 1}
     gravel: {r: 0.78, g: 0.78, b: 0.8, a: 1}
     ingot: {r: 0.95, g: 0.72, b: 0.42, a: 1}
+  models:
+    material: {fileID: 2100000, guid: 494515026cf7c497cb8e285a0a958d0d, type: 2}
+    wood: {fileID: 5101702725964522417, guid: 026f1eba99bda40c1a3aa568b375c808, type: 3}
+    stone: {fileID: -1088915438563738082, guid: 9ca7515af40c34652a0c7e27b7b9e573, type: 3}
+    ore: {fileID: 3721714261551542517, guid: d71b6b45ed0544a7f83c5d1e6c052b86, type: 3}
+    board: {fileID: -834712636936552883, guid: 90ec9544837ef4ae6962b425660e257c, type: 3}
+    gravel: {fileID: -1462188127252579583, guid: 3574fc91be6144d819406cf40f654345, type: 3}
+    ingot: {fileID: -2178825700470913138, guid: febacb6af8dd54a129594f9ced14cbaf, type: 3}
   scale: 0.34
-  depth: -0.08
+  height: 0.22
+  hopSeconds: 0.35
+  hopHeight: 0.7
+  missSpeed: 9
+  missSecondsRange: {x: 0.45, y: 1.4}
+  missRise: 0.5
+  missDrop: 2.2
+  missSpin: 480

@@ -97,9 +97,14 @@ namespace Game.Tutorial
             Changed?.Invoke();
         }
 
-        /// <summary>Открытая плитка без дороги: на ней и строят. Гора дорогу не примет.</summary>
+        /// <summary>
+        /// Открытая плитка без дороги, к которой дорогу есть от чего продолжить. Гора дорогу
+        /// не примет, а на оторванную плитку вести игрока нельзя: постройка там теперь
+        /// отказывается, и подсветка звала бы в никуда.
+        /// </summary>
         bool Buildable(TileData tile) =>
-            tile.State == TileState.Revealed && !tile.IsMetropolis && tile.IsPassable && !roads.HasRoad(tile.Coord);
+            tile.State == TileState.Revealed && !tile.IsMetropolis && tile.IsPassable
+            && !roads.HasRoad(tile.Coord) && roads.CanExtendTo(tile.Coord);
 
         /// <summary>
         /// Ближайшая к Метрополии подходящая плитка. Плитка с гарантированным камнем идёт вне

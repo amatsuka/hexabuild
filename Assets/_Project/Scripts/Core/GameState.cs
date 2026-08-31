@@ -118,6 +118,12 @@ namespace Game.Core
             if (Roads.HasRoad(coord))
                 return false;
 
+            if (!Roads.CanExtendTo(coord))
+            {
+                ActionRefused?.Invoke("Дорогу тянут от Метрополии: рядом нет подключённой дороги");
+                return false;
+            }
+
             var price = RoadPrice(tile);
             if (!Storage.TryRemove(ResourceType.Gravel, price))
             {
