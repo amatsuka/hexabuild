@@ -40,6 +40,27 @@ namespace Game.Tests.EditMode
             CollectionAssert.AreEqual(new[] { "issued" }, log);
         }
 
+        /// <summary>Закрытые контракты считаются за партию: их показывает финальный экран.</summary>
+        [Test]
+        public void CompletedCount_CountsOnlyClosedContracts()
+        {
+            contracts.Issue();
+            contracts.Count(ResourceType.Board);
+
+            Assert.AreEqual(0, contracts.CompletedCount, "сданный ресурс — ещё не закрытый контракт");
+
+            contracts.Count(ResourceType.Board);
+            Assert.AreEqual(1, contracts.CompletedCount);
+
+            // Следующий контракт выдан сразу же и провален по времени: провал в счёт не идёт.
+            contracts.Tick(Seconds);
+            Assert.AreEqual(1, contracts.CompletedCount);
+
+            contracts.Count(ResourceType.Board);
+            contracts.Count(ResourceType.Board);
+            Assert.AreEqual(2, contracts.CompletedCount);
+        }
+
         [Test]
         public void Count_BeforeTheFirstContract_ChangesNothing()
         {

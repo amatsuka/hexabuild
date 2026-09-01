@@ -87,9 +87,16 @@ namespace Game.Core
 
         public PriceSettings Prices => new(tileOpenCost, openCostStep, openCostGroup, roadCost, bridgeCost);
 
-        public MapGenerationSettings MapGenerationSettings => new(
+        public MapGenerationSettings MapGenerationSettings => MapGenerationSettingsFor(seed);
+
+        /// <summary>
+        /// Та же генерация своим сидом. Нужна кнопкам финального экрана: «Повторить карту»
+        /// перезапускает партию с сидом прошлой, а «Новая карта» — со свежим, и оба они не
+        /// вправе править ассет конфига.
+        /// </summary>
+        public MapGenerationSettings MapGenerationSettingsFor(int mapSeed) => new(
             fieldRows,
-            seed,
+            mapSeed,
             emptyWeight,
             singleDepositWeight,
             twoDepositsWeight,

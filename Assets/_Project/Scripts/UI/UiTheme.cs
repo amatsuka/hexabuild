@@ -52,6 +52,24 @@ namespace Game.UI
         [SerializeField] Color slotEdge = new(0.72f, 0.90f, 1f, 0.55f);
         [SerializeField] float slotRadius = 18f;
 
+        [Header("Кнопка")]
+        [Tooltip("Главная кнопка финального экрана: тёплая и непрозрачная, в отличие от стекла HUD")]
+        [SerializeField] Color primaryTop = new(1f, 0.78f, 0.30f, 1f);
+        [SerializeField] Color primaryBottom = new(0.93f, 0.47f, 0.07f, 1f);
+        [SerializeField] Color secondaryTop = new(0.36f, 0.72f, 1f, 1f);
+        [SerializeField] Color secondaryBottom = new(0.10f, 0.38f, 0.82f, 1f);
+        [SerializeField] Color buttonEdge = new(1f, 1f, 1f, 0.80f);
+        [Tooltip("Тень кнопки: то же свечение карточки, только тёмное и снесённое ниже")]
+        [SerializeField] Color buttonGlow = new(0.01f, 0.03f, 0.07f, 0.65f);
+        [SerializeField] float buttonRadius = 34f;
+
+        [Header("Плашка рекорда и разделители")]
+        [SerializeField] Color accentTop = new(1f, 0.86f, 0.42f, 0.26f);
+        [SerializeField] Color accentBottom = new(0.62f, 0.42f, 0.06f, 0.34f);
+        [SerializeField] Color accentEdge = new(1f, 0.86f, 0.42f, 0.85f);
+        [Tooltip("Тонкая линия между блоками карточки")]
+        [SerializeField] Color divider = new(0.76f, 0.92f, 1f, 0.22f);
+
         [Header("Полоса прогресса")]
         [SerializeField] Color barTrack = new(0.02f, 0.10f, 0.20f, 0.78f);
         [SerializeField] Color barFillTop = new(1f, 0.90f, 0.48f, 1f);
@@ -99,6 +117,26 @@ namespace Game.UI
         /// </summary>
         public UiPanelStyle Island => SlotEmpty;
 
+        /// <summary>
+        /// Главная кнопка: та же карточка, но непрозрачная и тёплая. Стеклом кнопка быть не
+        /// может — по референсу она единственное плотное пятно на экране, и именно этим
+        /// читается как нажимаемая.
+        /// </summary>
+        public UiPanelStyle ButtonPrimary => Button(primaryTop, primaryBottom);
+
+        /// <summary>Вторая кнопка: тот же объём холодным цветом.</summary>
+        public UiPanelStyle ButtonSecondary => Button(secondaryTop, secondaryBottom);
+
+        /// <summary>Плашка рекорда: стекло карточки с золотой кромкой.</summary>
+        public UiPanelStyle Accent => new(
+            accentTop, accentBottom, accentEdge, Color.clear, 22f, 2.5f, 0f, 0f, highlight, highlightSpread,
+            sheen * 0.6f, darken * 0.6f, backLight, spec, lightDirection);
+
+        /// <summary>Разделитель блоков: линия без кромки, объёма и свечения.</summary>
+        public UiPanelStyle Divider => new(
+            divider, divider, Color.clear, Color.clear, 1f, 0f, 0f, 0f, 0f, highlightSpread, 0f, 0f, 0f, 0f,
+            lightDirection);
+
         /// <summary>Жёлоб полосы прогресса: тёмный, без кромки и свечения.</summary>
         public UiPanelStyle BarTrack => new(
             barTrack, barTrack, Color.clear, Color.clear, 15f, 0f, 0f, 0f, 0f, highlightSpread, 0f, 0.85f, 0f, 0f, lightDirection);
@@ -108,6 +146,10 @@ namespace Game.UI
             barFillTop, barFillBottom, Color.clear, Color.clear, 12f, 0f, 0f, 0f, 0f, highlightSpread, 0f, 0f, 0f, 0f, lightDirection);
 
         public Color Text => text;
+
+        UiPanelStyle Button(Color top, Color bottom) => new(
+            top, bottom, buttonEdge, buttonGlow, buttonRadius, 3f, 26f, 10f, highlight, highlightSpread,
+            sheen * 1.4f, 1f, backLight, spec, lightDirection);
 
         public Color Muted => muted;
 

@@ -56,6 +56,30 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(2, produced);
         }
 
+        /// <summary>
+        /// Добытое за партию считает добыча: она — единственное место, где ресурс появляется.
+        /// Это число показывает финальный экран.
+        /// </summary>
+        [Test]
+        public void Mined_CountsEveryProducedResourceByType()
+        {
+            var wood = new HexCoord(0, 1);
+            var stone = new HexCoord(-1, 1);
+            var map = MapWithDeposits((wood, ResourceType.Wood, 5), (stone, ResourceType.Stone, 1));
+            var roads = new RoadNetwork(map);
+            roads.Build(wood);
+            roads.Build(stone);
+            var production = new ProductionSystem(map, roads, Interval);
+
+            Assert.AreEqual(0, production.MinedOf(ResourceType.Wood), "до первой выдачи добыто ничего");
+
+            production.Tick(Interval * 2f);
+
+            Assert.AreEqual(2, production.MinedOf(ResourceType.Wood));
+            Assert.AreEqual(1, production.MinedOf(ResourceType.Stone), "исчерпанное месторождение больше не выдаёт");
+            Assert.AreEqual(0, production.MinedOf(ResourceType.Ore), "руды на этом поле нет вовсе");
+        }
+
         [Test]
         public void DisconnectedTile_ProducesNothing()
         {

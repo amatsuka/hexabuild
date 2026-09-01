@@ -14,6 +14,13 @@ namespace Game.Economy
         readonly Dictionary<HexCoord, float> timers = new();
         readonly List<HexCoord> stopped = new();
 
+        /// <summary>
+        /// Сколько ресурсов каждого типа выдало поле за партию. Считает их именно добыча: это
+        /// единственное место, где ресурс появляется, а склад и доставка его уже только носят.
+        /// Итог показывает финальный экран.
+        /// </summary>
+        readonly int[] mined = new int[Enum.GetValues(typeof(ResourceType)).Length];
+
         public ProductionSystem(HexMap map, RoadNetwork roads, float interval)
         {
             this.map = map;
@@ -25,6 +32,9 @@ namespace Game.Economy
 
         /// <summary>Плитка исчерпана и больше не производит.</summary>
         public event Action<TileData> TileDepleted;
+
+        /// <summary>Сколько ресурсов этого типа добыто за партию.</summary>
+        public int MinedOf(ResourceType type) => mined[(int)type];
 
         public void Tick(float deltaTime)
         {
@@ -48,6 +58,7 @@ namespace Game.Economy
                     if (!tile.TryExtract(out var type))
                         break;
 
+                    mined[(int)type]++;
                     Produced?.Invoke(tile, type);
                     if (tile.State == TileState.Depleted)
                     {

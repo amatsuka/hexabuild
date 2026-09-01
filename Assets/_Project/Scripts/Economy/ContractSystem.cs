@@ -53,6 +53,9 @@ namespace Game.Economy
 
         public float SecondsLeft { get; private set; }
 
+        /// <summary>Сколько контрактов закрыто за партию: это показывает финальный экран.</summary>
+        public int CompletedCount { get; private set; }
+
         /// <summary>Первый контракт партии. Дальше система выдаёт их сама.</summary>
         public void Issue()
         {
@@ -94,6 +97,7 @@ namespace Game.Economy
                 return;
 
             IsActive = false;
+            CompletedCount++;
             wallet.AddPoints(Reward);
             Completed?.Invoke(Reward);
             Issue();

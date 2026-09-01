@@ -6,6 +6,7 @@ using Game.Roads;
 using Game.Storage;
 using Game.UI;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Game.Core
 {
@@ -39,6 +40,12 @@ namespace Game.Core
         /// <summary>Самая высокая крышка поля: отсюда начинает спуск луч клика.</summary>
         float fieldCeiling;
 
+        /// <summary>
+        /// Сид этой партии — уже разрешённый, а не ноль из конфига. По нему живут и карта, и
+        /// контракты, и его же забирает кнопка «Повторить карту» на финальном экране.
+        /// </summary>
+        int seed;
+
         GameState state;
         ProductionSystem production;
         DeliverySystem deliveries;
@@ -48,7 +55,9 @@ namespace Game.Core
 
         void Awake()
         {
-            var map = MapGenerator.Generate(config.MapGenerationSettings);
+            seed = SessionSeed.Take(config.Seed);
+
+            var map = MapGenerator.Generate(config.MapGenerationSettingsFor(seed));
             var wallet = new Wallet(config.StartingPoints);
             var storage = new StorageGrid(config.StorageSize);
             state = new GameState(map, wallet, storage, config.Prices);
@@ -62,7 +71,7 @@ namespace Game.Core
                 config.ContractGoal,
                 config.ContractSeconds,
                 config.ContractReward,
-                config.Seed);
+                seed);
             end = new GameEndSystem(
                 state, mergeRules, deliveries, config.LossPenalty, config.FullFieldBonus, config.FullDepositBonus);
 
@@ -70,6 +79,7 @@ namespace Game.Core
             SpawnWater(map);
             storageView.Bind(storage);
             hudView.Bind(state, contracts, storageView);
+            gameOverView.Bind(storageView, production, contracts);
             cameraRig.SetFieldBounds(FieldBounds(map));
             cameraRig.FocusOnBottom();
         }
@@ -77,8 +87,8 @@ namespace Game.Core
         void OnEnable()
         {
             input.Clicked += OnClicked;
-            input.Dragged += cameraRig.Pan;
-            input.Zoomed += cameraRig.Zoom;
+            input.Dragged += OnDragged;
+            input.Zoomed += OnZoomed;
             state.TileChanged += OnTileChanged;
             state.ActionRefused += hudView.ShowMessage;
             state.Roads.Changed += OnRoadsChanged;
@@ -90,13 +100,14 @@ namespace Game.Core
             merges.Merged += OnMerged;
             merges.Converted += OnConverted;
             end.Ended += OnGameEnded;
+            gameOverView.RestartRequested += Restart;
         }
 
         void OnDisable()
         {
             input.Clicked -= OnClicked;
-            input.Dragged -= cameraRig.Pan;
-            input.Zoomed -= cameraRig.Zoom;
+            input.Dragged -= OnDragged;
+            input.Zoomed -= OnZoomed;
             state.TileChanged -= OnTileChanged;
             state.ActionRefused -= hudView.ShowMessage;
             state.Roads.Changed -= OnRoadsChanged;
@@ -108,6 +119,7 @@ namespace Game.Core
             merges.Merged -= OnMerged;
             merges.Converted -= OnConverted;
             end.Ended -= OnGameEnded;
+            gameOverView.RestartRequested -= Restart;
         }
 
         void Start()
@@ -201,11 +213,17 @@ namespace Game.Core
             return new Rect(min, max - min);
         }
 
-        /// <summary>Клик разбирается по слоям: сначала склад, потом поле под ним.</summary>
+        /// <summary>
+        /// Клик разбирается по слоям: финальный экран, склад, поле под ним. После конца партии
+        /// поле не принимает ничего, а кнопки экрана принимают — это и есть правило 3.10.
+        /// </summary>
         void OnClicked(Vector2 screenPosition)
         {
             if (end.HasEnded)
+            {
+                gameOverView.HandleClick(screenPosition);
                 return;
+            }
 
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
@@ -236,6 +254,34 @@ namespace Game.Core
             height => input.CoordAt(screenPosition, height),
             coord => views.TryGetValue(coord, out var view) ? view.SurfaceHeight : null,
             fieldCeiling);
+
+        /// <summary>Камера замирает вместе с полем: после конца партии её тоже не двигают.</summary>
+        void OnDragged(Vector2 delta)
+        {
+            if (!end.HasEnded)
+                cameraRig.Pan(delta);
+        }
+
+        void OnZoomed(float amount)
+        {
+            if (!end.HasEnded)
+                cameraRig.Zoom(amount);
+        }
+
+        /// <summary>
+        /// Рестарт с финального экрана: сцена загружается заново. Сохранения партии в проекте
+        /// нет, поэтому «начать заново» и значит «собрать всё с нуля»; между загрузками живёт
+        /// только заказанный сид, и он решает, будет карта той же или новой.
+        /// </summary>
+        void Restart(bool sameMap)
+        {
+            if (sameMap)
+                SessionSeed.Repeat(seed);
+            else
+                SessionSeed.Renew();
+
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
 
         void OnTileChanged(TileData tile)
         {

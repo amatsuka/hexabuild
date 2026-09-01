@@ -720,6 +720,17 @@ MonoBehaviour:
     slotFilledBottom: {r: 0.1, g: 0.32, b: 0.52, a: 0.42}
     slotEdge: {r: 0.72, g: 0.9, b: 1, a: 0.55}
     slotRadius: 18
+    primaryTop: {r: 1, g: 0.78, b: 0.3, a: 1}
+    primaryBottom: {r: 0.93, g: 0.47, b: 0.07, a: 1}
+    secondaryTop: {r: 0.36, g: 0.72, b: 1, a: 1}
+    secondaryBottom: {r: 0.1, g: 0.38, b: 0.82, a: 1}
+    buttonEdge: {r: 1, g: 1, b: 1, a: 0.8}
+    buttonGlow: {r: 0.01, g: 0.03, b: 0.07, a: 0.65}
+    buttonRadius: 34
+    accentTop: {r: 1, g: 0.86, b: 0.42, a: 0.26}
+    accentBottom: {r: 0.62, g: 0.42, b: 0.06, a: 0.34}
+    accentEdge: {r: 1, g: 0.86, b: 0.42, a: 0.85}
+    divider: {r: 0.76, g: 0.92, b: 1, a: 0.22}
     barTrack: {r: 0.02, g: 0.1, b: 0.2, a: 0.78}
     barFillTop: {r: 1, g: 0.9, b: 0.48, a: 1}
     barFillBottom: {r: 0.98, g: 0.68, b: 0.16, a: 1}
@@ -730,6 +741,7 @@ MonoBehaviour:
     bad: {r: 1, g: 0.52, b: 0.46, a: 1}
     textOutline: {r: 0.02, g: 0.06, b: 0.12, a: 0.95}
     outlineWidth: 0.16
+    faceWeight: 0.16
     textShadow: {r: 0, g: 0, b: 0, a: 0.65}
     textShadowOffset: 0.18
     textShadowSoftness: 0.12
@@ -829,15 +841,62 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cfc83c868afa143538904fa9d65d128e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game.Runtime::Game.UI.GameOverView
-  backdropColor: {r: 0.04, g: 0.04, b: 0.06, a: 0.88}
-  titleColor: {r: 0.96, g: 0.92, b: 0.76, a: 1}
-  scoreColor: {r: 1, g: 0.84, b: 0.3, a: 1}
-  textColor: {r: 0.86, g: 0.86, b: 0.9, a: 1}
-  recordColor: {r: 0.55, g: 0.9, b: 0.6, a: 1}
-  titleSize: 56
-  scoreSize: 96
-  fontSize: 36
-  sideMargin: 48
+  theme:
+    panelShader: {fileID: 4800000, guid: 76f565094e98949a3af09cc711b77964, type: 3}
+    fillTop: {r: 0.3, g: 0.56, b: 0.74, a: 0.26}
+    fillBottom: {r: 0.05, g: 0.17, b: 0.3, a: 0.34}
+    edge: {r: 0.76, g: 0.92, b: 1, a: 1}
+    glow: {r: 0.01, g: 0.03, b: 0.07, a: 0.55}
+    radius: 26
+    edgeWidth: 3.5
+    glowSize: 34
+    glowOffset: 8
+    highlight: 0.85
+    highlightSpread: 0.65
+    sheen: 20
+    backLight: 0.5
+    spec: 0.3
+    lightDirection: {x: -0.45, y: 0.89}
+    darken: 0.62
+    slotEmptyTop: {r: 0.2, g: 0.4, b: 0.56, a: 0.22}
+    slotEmptyBottom: {r: 0.03, g: 0.12, b: 0.22, a: 0.3}
+    slotFilledTop: {r: 0.44, g: 0.72, b: 0.92, a: 0.34}
+    slotFilledBottom: {r: 0.1, g: 0.32, b: 0.52, a: 0.42}
+    slotEdge: {r: 0.72, g: 0.9, b: 1, a: 0.55}
+    slotRadius: 18
+    primaryTop: {r: 1, g: 0.78, b: 0.3, a: 1}
+    primaryBottom: {r: 0.93, g: 0.47, b: 0.07, a: 1}
+    secondaryTop: {r: 0.36, g: 0.72, b: 1, a: 1}
+    secondaryBottom: {r: 0.1, g: 0.38, b: 0.82, a: 1}
+    buttonEdge: {r: 1, g: 1, b: 1, a: 0.8}
+    buttonGlow: {r: 0.01, g: 0.03, b: 0.07, a: 0.65}
+    buttonRadius: 34
+    accentTop: {r: 1, g: 0.86, b: 0.42, a: 0.26}
+    accentBottom: {r: 0.62, g: 0.42, b: 0.06, a: 0.34}
+    accentEdge: {r: 1, g: 0.86, b: 0.42, a: 0.85}
+    divider: {r: 0.76, g: 0.92, b: 1, a: 0.22}
+    barTrack: {r: 0.02, g: 0.1, b: 0.2, a: 0.78}
+    barFillTop: {r: 1, g: 0.9, b: 0.48, a: 1}
+    barFillBottom: {r: 0.98, g: 0.68, b: 0.16, a: 1}
+    text: {r: 0.97, g: 0.99, b: 1, a: 1}
+    muted: {r: 0.8, g: 0.91, b: 0.97, a: 1}
+    gold: {r: 1, g: 0.84, b: 0.32, a: 1}
+    good: {r: 0.52, g: 0.96, b: 0.56, a: 1}
+    bad: {r: 1, g: 0.52, b: 0.46, a: 1}
+    textOutline: {r: 0.02, g: 0.06, b: 0.12, a: 0.95}
+    outlineWidth: 0.16
+    faceWeight: 0.16
+    textShadow: {r: 0, g: 0, b: 0, a: 0.65}
+    textShadowOffset: 0.18
+    textShadowSoftness: 0.12
+  backdropColor: {r: 0.03, g: 0.05, b: 0.09, a: 0.82}
+  coinMesh: {fileID: -1404034424411710094, guid: 62e5bb3bbd34c4b859f21d17cd5e050f, type: 3}
+  coinMaterial: {fileID: 2100000, guid: f1bb0e5dc62f14c55b3103dee4d61007, type: 2}
+  coinAngles: {x: -10, y: 90, z: 0}
+  scrollMaterial: {fileID: 2100000, guid: 8d451fbf64a4b4a99b210a801224f850, type: 2}
+  scrollAngles: {x: -14, y: 24, z: 0}
+  crownMaterial: {fileID: 2100000, guid: f1cc6cce68abf47f9b42f79ab9f82e80, type: 2}
+  crownAngles: {x: -8, y: 18, z: 0}
 --- !u!1 &1314927476
 GameObject:
   m_ObjectHideFlags: 0
@@ -959,6 +1018,17 @@ MonoBehaviour:
     slotFilledBottom: {r: 0.1, g: 0.32, b: 0.52, a: 0.42}
     slotEdge: {r: 0.72, g: 0.9, b: 1, a: 0.55}
     slotRadius: 18
+    primaryTop: {r: 1, g: 0.78, b: 0.3, a: 1}
+    primaryBottom: {r: 0.93, g: 0.47, b: 0.07, a: 1}
+    secondaryTop: {r: 0.36, g: 0.72, b: 1, a: 1}
+    secondaryBottom: {r: 0.1, g: 0.38, b: 0.82, a: 1}
+    buttonEdge: {r: 1, g: 1, b: 1, a: 0.8}
+    buttonGlow: {r: 0.01, g: 0.03, b: 0.07, a: 0.65}
+    buttonRadius: 34
+    accentTop: {r: 1, g: 0.86, b: 0.42, a: 0.26}
+    accentBottom: {r: 0.62, g: 0.42, b: 0.06, a: 0.34}
+    accentEdge: {r: 1, g: 0.86, b: 0.42, a: 0.85}
+    divider: {r: 0.76, g: 0.92, b: 1, a: 0.22}
     barTrack: {r: 0.02, g: 0.1, b: 0.2, a: 0.78}
     barFillTop: {r: 1, g: 0.9, b: 0.48, a: 1}
     barFillBottom: {r: 0.98, g: 0.68, b: 0.16, a: 1}
@@ -969,6 +1039,7 @@ MonoBehaviour:
     bad: {r: 1, g: 0.52, b: 0.46, a: 1}
     textOutline: {r: 0.02, g: 0.06, b: 0.12, a: 0.95}
     outlineWidth: 0.16
+    faceWeight: 0.16
     textShadow: {r: 0, g: 0, b: 0, a: 0.65}
     textShadowOffset: 0.18
     textShadowSoftness: 0.12
