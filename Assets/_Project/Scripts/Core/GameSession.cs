@@ -34,6 +34,9 @@ namespace Game.Core
         readonly Dictionary<Delivery, ResourceMover> movers = new();
         readonly List<HexCoord> path = new();
 
+        /// <summary>Самая высокая крышка поля: отсюда начинает спуск луч клика.</summary>
+        float fieldCeiling;
+
         GameState state;
         ProductionSystem production;
         DeliverySystem deliveries;
@@ -151,6 +154,7 @@ namespace Game.Core
                 var view = Instantiate(tilePrefab, tilesRoot);
                 view.Bind(tile);
                 views.Add(tile.Coord, view);
+                fieldCeiling = Mathf.Max(fieldCeiling, view.SurfaceHeight);
             }
         }
 
@@ -209,8 +213,17 @@ namespace Game.Core
             if (storageView.ContainsScreenPoint(screenPosition))
                 return;
 
-            state.HandleTileClick(input.CoordAt(screenPosition));
+            state.HandleTileClick(TileUnderPointer(screenPosition));
         }
+
+        /// <summary>
+        /// Плитка, по которой игрок целился. Луч по земле уходит на соседа тем дальше, чем выше
+        /// плитка, поэтому он спускается по рельефу от самой высокой крышки поля вниз.
+        /// </summary>
+        HexCoord TileUnderPointer(Vector2 screenPosition) => TilePicker.Resolve(
+            height => input.CoordAt(screenPosition, height),
+            coord => views.TryGetValue(coord, out var view) ? view.SurfaceHeight : null,
+            fieldCeiling);
 
         void OnTileChanged(TileData tile)
         {

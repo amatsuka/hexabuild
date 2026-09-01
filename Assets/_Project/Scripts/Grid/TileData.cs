@@ -17,7 +17,8 @@ namespace Game.Grid
             IReadOnlyList<Deposit> deposits = null,
             BiomeType biome = BiomeType.Meadow,
             float shade = 0f,
-            int riverMask = 0)
+            int riverMask = 0,
+            float elevation = 0f)
         {
             Coord = coord;
             IsMetropolis = isMetropolis;
@@ -25,6 +26,7 @@ namespace Game.Grid
             Biome = biome;
             Shade = shade;
             RiverMask = riverMask;
+            Elevation = elevation;
         }
 
         public HexCoord Coord { get; }
@@ -54,6 +56,14 @@ namespace Game.Grid
 
         /// <summary>Отклонение тона от −1 до 1, чтобы соседи одного биома не сливались в пятно.</summary>
         public float Shade { get; }
+
+        /// <summary>
+        /// Значение того же шума Перлина, который выбрал биом, от 0 до 1. Из него берётся высота
+        /// плитки: пока высота шла ступенями по биому, весь лес стоял на одном уровне — это были
+        /// пять плато, а не рельеф. Биом и высота обязаны идти из одного числа, иначе гора могла
+        /// бы оказаться ниже луга. Как число превращается в юниты — дело вью.
+        /// </summary>
+        public float Elevation { get; }
 
         public TileState State { get; private set; } = TileState.Hidden;
 

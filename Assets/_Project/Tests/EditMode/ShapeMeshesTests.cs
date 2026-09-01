@@ -69,8 +69,36 @@ namespace Game.Tests.EditMode
                 var mesh = ShapeMeshes.Decor(shape);
 
                 Assert.Greater(mesh.triangles.Length, 0, $"{shape}: пустой меш");
-                MeshAssert.FacesCamera(mesh);
-                MeshAssert.FitsUnitSquare(mesh);
+
+                if (ShapeMeshes.StandsOnGround(shape))
+                {
+                    MeshAssert.StandsOnGround(mesh);
+                    MeshAssert.FitsUnitFootprint(mesh);
+                }
+                else
+                {
+                    MeshAssert.FacesCamera(mesh);
+                    MeshAssert.FitsUnitSquare(mesh);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Трава и дюны — объёмные холмики, а не плоские фигуры. Пока они лежали в XY, под
+        /// наклоном камеры они были укорочены и с обратной стороны невидимы, а рядом с
+        /// объёмными моделями леса и скал читались наклейкой.
+        /// </summary>
+        [Test]
+        public void GrassAndDunes_AreVolumes_NotFlatCutouts()
+        {
+            foreach (var shape in new[] { DecorShape.Tussock, DecorShape.Dune })
+            {
+                Assert.IsTrue(ShapeMeshes.StandsOnGround(shape), $"{shape}: фигура обязана стоять на земле");
+
+                var size = ShapeMeshes.Decor(shape).bounds.size;
+                Assert.Greater(size.x, 0.1f, $"{shape}: нет ширины");
+                Assert.Greater(size.y, 0.1f, $"{shape}: нет высоты");
+                Assert.Greater(size.z, 0.1f, $"{shape}: фигура плоская — это снова наклейка");
             }
         }
 
@@ -102,6 +130,29 @@ namespace Game.Tests.EditMode
                 var signedArea = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
 
                 Assert.Less(signedArea, 0f, $"{mesh.name}: треугольник {i / 3} обходится против часовой");
+            }
+        }
+
+        /// <summary>
+        /// Объёмная фигура стоит основанием на земле: вью ставит её в `y = 0` и не поднимает
+        /// на половину роста, как плоскую. Утопленная в землю половина холмика — это дыра.
+        /// </summary>
+        public static void StandsOnGround(Mesh mesh)
+        {
+            var bounds = mesh.bounds;
+
+            Assert.AreEqual(0f, bounds.min.y, 1e-4f, $"{mesh.name}: основание не на земле");
+            Assert.Greater(bounds.max.y, 0f, $"{mesh.name}: фигура не имеет высоты");
+        }
+
+        /// <summary>След объёмной фигуры на земле умещается в квадрат 1×1: масштабирует её вью.</summary>
+        public static void FitsUnitFootprint(Mesh mesh)
+        {
+            foreach (var vertex in mesh.vertices)
+            {
+                Assert.LessOrEqual(Mathf.Abs(vertex.x), 0.5f + 1e-4f, $"{mesh.name}: вершина вылезла по ширине");
+                Assert.LessOrEqual(Mathf.Abs(vertex.z), 0.5f + 1e-4f, $"{mesh.name}: вершина вылезла по глубине");
+                Assert.LessOrEqual(vertex.y, 1f + 1e-4f, $"{mesh.name}: вершина вылезла по высоте");
             }
         }
 

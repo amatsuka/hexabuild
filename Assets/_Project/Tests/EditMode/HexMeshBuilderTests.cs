@@ -84,6 +84,67 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// Фаска: крышка ужата внутрь, полного радиуса плитка добирает ниже нуля. Иначе борт —
+        /// жёсткий перелом, а объём референсу дают именно толстые скруглённые борта.
+        /// </summary>
+        [Test]
+        public void Prism_Cap_IsInsetAndTheBorderReachesFullRadiusBelowZero()
+        {
+            var mesh = HexMeshBuilder.Prism(0.3f);
+            var vertices = mesh.vertices;
+
+            var widest = 0f;
+            foreach (var vertex in vertices)
+            {
+                var radius = Plane(vertex).magnitude;
+                widest = Mathf.Max(widest, radius);
+
+                // Центр крышки радиуса не имеет — проверяем её обод.
+                if (Mathf.Approximately(vertex.y, 0f) && radius > 1e-4f)
+                    Assert.AreEqual(
+                        HexCoord.Size - HexMeshBuilder.BevelInset, radius, 1e-4f,
+                        "на нуле лежит только ужатая крышка: полный радиус — это уже борт");
+            }
+
+            Assert.AreEqual(HexCoord.Size, widest, 1e-4f, "плитка обязана добирать до полного радиуса");
+        }
+
+        /// <summary>
+        /// Фаска гладкая: нормали борта разворачиваются от «вверх» на крышке до «наружу» на юбке
+        /// без единого скачка. Скачок и есть тот перелом, ради ухода от которого фаска заведена.
+        /// </summary>
+        [Test]
+        public void Prism_Bevel_TurnsFromUpToOutwardWithoutABreak()
+        {
+            var mesh = HexMeshBuilder.Prism(0.3f);
+            var normals = mesh.normals;
+            var vertices = mesh.vertices;
+
+            Assert.AreEqual(vertices.Length, normals.Length, "у борта обязаны быть свои нормали");
+
+            var flat = 0;
+            var outward = 0;
+            for (var i = 0; i < vertices.Length; i++)
+            {
+                Assert.AreEqual(1f, normals[i].magnitude, 1e-3f, $"нормаль {i} не единичная");
+
+                if (Mathf.Approximately(vertices[i].y, 0f))
+                {
+                    Assert.AreEqual(1f, normals[i].y, 1e-4f, "на уровне крышки нормаль смотрит вверх");
+                    flat++;
+                }
+                else if (vertices[i].y <= -HexMeshBuilder.BevelDrop + 1e-4f)
+                {
+                    Assert.AreEqual(0f, normals[i].y, 1e-4f, "ниже фаски нормаль смотрит строго наружу");
+                    outward++;
+                }
+            }
+
+            Assert.Greater(flat, 6, "крышка и верх фаски делят один уровень");
+            Assert.Greater(outward, 6, "юбка обязана остаться вертикальной");
+        }
+
         /// <summary>Призма: крышка на нуле, юбка уходит вниз — иначе гора читалась бы как яма.</summary>
         [Test]
         public void Prism_KeepsTheCapAtZeroAndDropsTheSkirtDown()

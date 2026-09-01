@@ -146,6 +146,64 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// Высота и биом идут из одного замера шума. Разойдись они — гора оказалась бы ниже луга,
+        /// а раскраска поля перестала бы совпадать с его рельефом.
+        /// </summary>
+        [Test]
+        public void Elevation_AgreesWithTheBiomeItChose()
+        {
+            for (var seed = 1; seed <= 30; seed++)
+                foreach (var tile in MapGenerator.Generate(Settings(seed)).Tiles.Values)
+                {
+                    Assert.GreaterOrEqual(tile.Elevation, 0f, $"{tile.Coord}: высота вне шума");
+                    Assert.LessOrEqual(tile.Elevation, 1f, $"{tile.Coord}: высота вне шума");
+
+                    // Метрополия и перевалы получают биом решением генератора, а не порогом:
+                    // город не бывает горой, а пробитая гора становится скалой на своей высоте.
+                    if (tile.IsMetropolis || tile.Biome == BiomeType.Rocks)
+                        continue;
+
+                    Assert.AreEqual(
+                        tile.Biome, BiomeOf(tile.Elevation),
+                        $"{tile.Coord}: биом {tile.Biome} не с той высоты {tile.Elevation}");
+                }
+        }
+
+        /// <summary>
+        /// Внутри биома высоты расходятся: пока они шли ступенями, весь лес стоял на одном
+        /// уровне — рельефа не было, были пять плато.
+        /// </summary>
+        [Test]
+        public void Elevation_VariesInsideOneBiome()
+        {
+            var lowest = float.MaxValue;
+            var highest = float.MinValue;
+
+            foreach (var tile in MapGenerator.Generate(Settings(7)).Tiles.Values)
+            {
+                if (tile.Biome != BiomeType.Forest)
+                    continue;
+
+                lowest = System.Math.Min(lowest, tile.Elevation);
+                highest = System.Math.Max(highest, tile.Elevation);
+            }
+
+            Assert.Greater(highest - lowest, 0.02f, "лес встал на одно плато: высота снова ступенька");
+        }
+
+        static BiomeType BiomeOf(float elevation)
+        {
+            if (elevation < MapGenerator.SandCeiling)
+                return BiomeType.Sand;
+            if (elevation < MapGenerator.MeadowCeiling)
+                return BiomeType.Meadow;
+            if (elevation < MapGenerator.ForestCeiling)
+                return BiomeType.Forest;
+
+            return elevation < MapGenerator.RocksCeiling ? BiomeType.Rocks : BiomeType.Mountains;
+        }
+
         [Test]
         public void Metropolis_IsNeverAMountain()
         {

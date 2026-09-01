@@ -161,17 +161,30 @@ namespace Game.Grid
                         .Triangle(new Vector2(-0.01f, 0.02f), 0.50f, 0.92f)
                         .Bake("Ridge");
 
+                // Кочка и бархан — единственный декор, который так и остался плоским после M14:
+                // моделей травы и песка в паке нет, а лежащая на боку фигура рядом с объёмным
+                // лесом читается наклейкой. Поэтому они собираются объёмными холмиками.
                 case DecorShape.Tussock:
-                    return new FlatMesh()
-                        .Blade(-0.17f, -0.13f, 0.09f, 0.72f)
-                        .Blade(0.02f, 0.06f, 0.10f, 0.92f)
-                        .Blade(0.18f, 0.15f, 0.08f, 0.64f)
+                    return new MoundMesh()
+                        .Dome(new Vector2(0f, 0f), 0.30f, 0.28f, 0.50f, 6, 2)
+                        .Dome(new Vector2(-0.28f, 0.12f), 0.20f, 0.19f, 0.32f, 6, 2)
+                        .Dome(new Vector2(0.25f, -0.14f), 0.18f, 0.17f, 0.26f, 6, 2)
                         .Bake("Tussock");
 
                 default:
-                    return new FlatMesh().Fan(new Vector2(0f, -0.24f), 0.50f, 0.30f, 10, 0f, 180f).Bake("Dune");
+                    return new MoundMesh()
+                        .Dome(new Vector2(-0.02f, 0.02f), 0.48f, 0.24f, 0.26f, 6, 2)
+                        .Dome(new Vector2(0.16f, -0.16f), 0.26f, 0.14f, 0.14f, 6, 2)
+                        .Bake("Dune");
             }
         }
+
+        /// <summary>
+        /// Фигура стоит основанием на земле, а не в плоскости XY: её не надо поднимать на
+        /// половину роста и кренить в плоскости экрана. Третья группа мешей — объёмный декор.
+        /// </summary>
+        public static bool StandsOnGround(DecorShape shape) =>
+            shape is DecorShape.Tussock or DecorShape.Dune;
 
         static Mesh BuildHexRing()
         {

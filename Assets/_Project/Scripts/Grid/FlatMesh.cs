@@ -95,13 +95,6 @@ namespace Game.Grid
                 new Vector2(center.x + halfWidth, center.y - halfHeight));
         }
 
-        /// <summary>Травинка: узкий клин от низа квадрата, завалённый вбок.</summary>
-        public FlatMesh Blade(float baseX, float lean, float width, float height) =>
-            Polygon(
-                new Vector2(baseX - width * 0.5f, -0.5f),
-                new Vector2(baseX + lean, -0.5f + height),
-                new Vector2(baseX + width * 0.5f, -0.5f));
-
         /// <summary>Выпуклый многоугольник, вершины по часовой стрелке. Разбивается веером.</summary>
         public FlatMesh Polygon(params Vector2[] points)
         {

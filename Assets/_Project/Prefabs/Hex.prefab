@@ -126,8 +126,6 @@ MonoBehaviour:
   depletedFade: 0.8
   riverColor: {r: 0.16, g: 0.5, b: 0.72, a: 1}
   riverWidth: 0.22
-  outlineColor: {r: 0.3, g: 0.36, b: 0.45, a: 1}
-  outlineScale: 0.89285713
   resources:
     wood: {r: 0.22, g: 0.6, b: 0.25, a: 1}
     stone: {r: 0.45, g: 0.45, b: 0.47, a: 1}

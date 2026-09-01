@@ -6,13 +6,12 @@ using UnityEngine;
 
 namespace Game.Grid
 {
-    /// <summary>Визуал плитки: ландшафт, обводка, декор биома и модельки месторождений.</summary>
+    /// <summary>Визуал плитки: ландшафт, рельеф, декор биома и модельки месторождений.</summary>
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public sealed class TileView : MonoBehaviour
     {
         // Земля — плоскость XZ, высота — ось Y. Порядок «кто поверх кого» стал порядком по
-        // высоте: обводка и русло лежат на крышке плитки, ободок подсветки выше дороги.
-        const float OutlineHeight = 0.003f;
+        // высоте: русло лежит на крышке плитки, ободок подсветки выше дороги.
         const float RiverHeight = 0.012f;
         const float HighlightHeight = 0.05f;
 
@@ -25,8 +24,8 @@ namespace Game.Grid
         static readonly int StateFogId = Shader.PropertyToID("_StateFog");
         static readonly int StateFadeId = Shader.PropertyToID("_StateFade");
 
-        // Разведка 3D: высота плитки по биому. Ноль возвращает прежнее плоское поле, поэтому
-        // весь объём откатывается одним числом `heightScale`.
+        // Высота плитки идёт из того же шума, что и биом. Ноль возвращает прежнее плоское поле,
+        // поэтому весь рельеф откатывается одним числом `heightScale`.
         [Header("Разведка 3D")]
         [Tooltip("Общий множитель высоты. 0 — плоское поле, как было")]
         [SerializeField, Range(0f, 1f)] float heightScale = 1f;
@@ -56,10 +55,6 @@ namespace Game.Grid
         [SerializeField] Color riverColor = new(0.28f, 0.52f, 0.74f);
         [Tooltip("Шире полотна дороги: иначе на переправе русло не читается вовсе")]
         [SerializeField] float riverWidth = 0.22f;
-
-        [Header("Обводка")]
-        [SerializeField] Color outlineColor = new(0.07f, 0.07f, 0.09f);
-        [SerializeField] float outlineScale = 1.06f;
 
         [Header("Цвета месторождений")]
         [SerializeField] ResourcePalette resources = new();
@@ -122,12 +117,17 @@ namespace Game.Grid
 
         MeshRenderer river;
         MeshRenderer meshRenderer;
-        MeshRenderer outline;
         MeshRenderer highlight;
         MeshRenderer spark;
         MaterialPropertyBlock propertyBlock;
 
         public HexCoord Coord { get; private set; }
+
+        /// <summary>
+        /// Мировая высота крышки плитки. По этой плоскости бьёт луч клика: по земле `y = 0` он
+        /// промахивается мимо приподнятой плитки на «высота / tg(pitch)».
+        /// </summary>
+        public float SurfaceHeight => transform.position.y;
 
         public void Bind(TileData tile)
         {
@@ -135,14 +135,13 @@ namespace Game.Grid
             name = $"Hex {tile.Coord}";
             // Высота плитки — это подъём её корня по Y. Дети едут вместе с ней и сохраняют свою
             // раскладку, а юбка добирает вниз до общего дна поля.
-            var height = BiomeHeight(tile) * heightScale;
+            var height = HeightOf(tile) * heightScale;
             var plane = tile.Coord.ToPlane();
             transform.localPosition = new Vector3(plane.x, height, plane.y);
             GetComponent<MeshFilter>().sharedMesh = height > 0f || baseSkirt > 0f
                 ? HexMeshBuilder.Prism(height + baseSkirt)
                 : HexMeshBuilder.Shared;
 
-            CreateOutline();
             CreateRiver(tile);
             CreateDecor(tile);
             CreateDeposits(tile);
@@ -157,7 +156,6 @@ namespace Game.Grid
             var state = tile.IsPassable ? StateOf(tile.State) : Vector2.zero;
 
             SetTile(Renderer, GroundColor(tile), state);
-            SetTile(outline, outlineColor, state);
 
             var decorColor = Shaded(biomes.Decor(tile.Biome), tile.Shade);
             var modelColor = Shaded(Color.white, tile.Shade);
@@ -256,26 +254,31 @@ namespace Game.Grid
             spark.gameObject.SetActive(false);
         }
 
-        /// <summary>Разведка 3D: гора выше скал, скалы выше леса, луг и песок лежат внизу.</summary>
-        static float BiomeHeight(TileData tile)
-        {
-            if (tile.IsMetropolis)
-                return 0.06f;
+        /// <summary>
+        /// Высота плитки в юнитах из шума, который выбрал ей биом. Ступени по биому давали не
+        /// рельеф, а пять плато: весь лес стоял на одном уровне. Кривая ломаная, и её узлы —
+        /// ровно пороги биомов: внутри биома высота идёт непрерывно, а на границе прибавляет
+        /// крутизны, поэтому горы всё так же возвышаются, а низины остаются плоскими.
+        /// Метрополия высоты не выбирает: город на своём холме сидел бы в яме между скал.
+        /// </summary>
+        public static float HeightOf(TileData tile) => HeightAt(tile.Elevation);
 
-            switch (tile.Biome)
-            {
-                case BiomeType.Mountains:
-                    return 0.44f;
-                case BiomeType.Rocks:
-                    return 0.20f;
-                case BiomeType.Forest:
-                    return 0.07f;
-                case BiomeType.Sand:
-                    return 0.02f;
-                default:
-                    return 0.04f;
-            }
+        /// <summary>Узлы кривой: порог биома — высота его верхней кромки в юнитах.</summary>
+        static float HeightAt(float elevation)
+        {
+            if (elevation < MapGenerator.SandCeiling)
+                return Mathf.Lerp(0f, 0.03f, elevation / MapGenerator.SandCeiling);
+            if (elevation < MapGenerator.MeadowCeiling)
+                return Mathf.Lerp(0.03f, 0.06f, Ratio(elevation, MapGenerator.SandCeiling, MapGenerator.MeadowCeiling));
+            if (elevation < MapGenerator.ForestCeiling)
+                return Mathf.Lerp(0.06f, 0.13f, Ratio(elevation, MapGenerator.MeadowCeiling, MapGenerator.ForestCeiling));
+            if (elevation < MapGenerator.RocksCeiling)
+                return Mathf.Lerp(0.13f, 0.24f, Ratio(elevation, MapGenerator.ForestCeiling, MapGenerator.RocksCeiling));
+
+            return Mathf.Lerp(0.24f, 0.44f, Ratio(elevation, MapGenerator.RocksCeiling, 1f));
         }
+
+        static float Ratio(float value, float from, float to) => Mathf.Clamp01((value - from) / (to - from));
 
         /// <summary>
         /// Состояние плитки для шейдера: x — доля дымки, y — обесцвечивание. Скрытая плитка не
@@ -305,18 +308,6 @@ namespace Game.Grid
 
         static Color Scaled(Color color, float factor) =>
             new(color.r * factor, color.g * factor, color.b * factor, color.a);
-
-        void CreateOutline()
-        {
-            if (outline != null)
-                return;
-
-            // На плоском поле обводкой был увеличенный гекс позади плитки. В 3D «позади» — это
-            // «ниже», и на ровном участке его целиком закрывают крышки соседей: граница пропадает
-            // там, где она нужнее всего. Поэтому обводка стала ободком, лежащим на крышке.
-            outline = CreatePart(transform, "Outline", ShapeMeshes.HexRing,
-                new Vector3(0f, OutlineHeight, 0f), Vector3.one * outlineScale);
-        }
 
         /// <summary>
         /// Русло идёт по поверхности плитки, как дорога: лента выходит из центра к серединам
@@ -394,22 +385,25 @@ namespace Game.Grid
                 if (OccupiedByDeposit(tile, spot, keepOut))
                     continue;
 
-                // Модель стоит основанием в нуле, её габарит приводится к заданному размеру.
-                // Процедурная фигура построена в квадрате с центром в нуле — её надо поднять
-                // на половину роста, иначе она наполовину утоплена в землю.
+                // Габарит модели из пака приводится к заданному размеру, холмик и плоская
+                // фигура построены в единичном квадрате и берут `decorScale` как есть.
                 var model = DecorModel(shape, coord.Hash01(ItemSalt(i, 7)));
+                // Объёмная фигура стоит основанием в нуле — и модель из пака, и процедурный
+                // холмик. Плоская фигура построена в квадрате с центром в нуле, её надо поднять
+                // на половину роста, иначе она наполовину утоплена в землю.
+                var grounded = model != null || ShapeMeshes.StandsOnGround(shape);
                 var part = CreatePart(
                     transform,
                     $"Decor {i}",
                     model != null ? model : ShapeMeshes.Decor(shape),
-                    new Vector3(spot.x, model != null ? 0f : scale * 0.5f, spot.y),
+                    new Vector3(spot.x, grounded ? 0f : scale * 0.5f, spot.y),
                     Vector3.one * (model != null ? ModelScale(model, DecorTarget(shape)) * jitter : scale),
                     model != null ? paletteMaterial : null);
 
-                // У плоской фигуры наклон был креном в плоскости экрана. У модели такой крен
+                // У плоской фигуры наклон был креном в плоскости экрана. У объёмной такой крен
                 // валит дерево набок, поэтому он раскладывается по осям земли, а тот же хеш
-                // вдобавок разворачивает модель вокруг своей оси: иначе все деревья — близнецы.
-                part.transform.localRotation = model != null
+                // вдобавок разворачивает фигуру вокруг своей оси: иначе все деревья — близнецы.
+                part.transform.localRotation = grounded
                     ? Quaternion.Euler(tilt * 0.5f, coord.Hash01(ItemSalt(i, 6)) * 360f, tilt * 0.5f)
                     : Quaternion.Euler(0f, 0f, tilt);
 

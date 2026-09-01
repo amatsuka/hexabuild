@@ -7,6 +7,14 @@ namespace Game.Grid
     /// <summary>Случайная раскладка месторождений и препятствий по разделам 2.1 и 2.3 спеки.</summary>
     public static class MapGenerator
     {
+        // Пороги шума по биомам подобраны на глаз: песок занимает низины, горы — вершины,
+        // между ними суша. Они же и есть узлы кривой высоты во вью: биом и рельеф идут из
+        // одного числа, и граница биома обязана быть той же точкой, где меняется крутизна.
+        public const float SandCeiling = 0.36f;
+        public const float MeadowCeiling = 0.50f;
+        public const float ForestCeiling = 0.60f;
+        public const float RocksCeiling = 0.645f;
+
         static readonly ResourceType[] DepositTypes = { ResourceType.Wood, ResourceType.Stone, ResourceType.Ore };
 
         /// <summary>
@@ -89,9 +97,16 @@ namespace Game.Grid
         {
             var noiseOrigin = new Vector2(random.Next(0, 9999) * 0.37f, random.Next(0, 9999) * 0.41f);
 
+            // Один и тот же замер шума даёт и биом, и высоту плитки: иначе гора могла бы
+            // оказаться ниже луга, а рельеф — спорить с ландшафтом.
+            var elevations = new Dictionary<HexCoord, float>();
             var biomes = new Dictionary<HexCoord, BiomeType>();
             foreach (var coord in HexMap.CoordsInFlare(settings.Rows))
-                biomes[coord] = RollBiome(coord, settings, noiseOrigin);
+            {
+                var elevation = Height(coord, settings.BiomeNoiseScale, noiseOrigin);
+                elevations[coord] = elevation;
+                biomes[coord] = BiomeAt(elevation);
+            }
 
             // Метрополия — город, а не ландшафт: горой она быть не может по правилам 2.1.
             biomes[HexCoord.Zero] = BiomeType.Meadow;
@@ -122,7 +137,8 @@ namespace Game.Grid
                     coord == HexCoord.Zero ? null : depositsByCoord[coord],
                     pair.Value,
                     coord == HexCoord.Zero ? 0f : RollShade(coord, noiseOrigin),
-                    rivers.TryGetValue(coord, out var mask) ? mask : 0));
+                    rivers.TryGetValue(coord, out var mask) ? mask : 0,
+                    elevations[coord]));
             }
 
             return new HexMap(settings.Rows, tiles);
@@ -132,25 +148,24 @@ namespace Game.Grid
         /// Ландшафт берётся из шума Перлина по мировым координатам плитки, поэтому биомы ложатся
         /// связными пятнами. Значение шума читается как высота: песок внизу, горы наверху.
         /// </summary>
-        static BiomeType RollBiome(HexCoord coord, MapGenerationSettings settings, Vector2 noiseOrigin)
+        static BiomeType BiomeAt(float height)
         {
-            var height = Height(coord, settings.BiomeNoiseScale, noiseOrigin);
-
-            // Пороги подобраны на глаз: песок занимает низины, горы — вершины, между ними суша.
-            if (height < 0.36f)
+            if (height < SandCeiling)
                 return BiomeType.Sand;
-            if (height < 0.50f)
+            if (height < MeadowCeiling)
                 return BiomeType.Meadow;
-            if (height < 0.60f)
+            if (height < ForestCeiling)
                 return BiomeType.Forest;
 
-            return height < 0.645f ? BiomeType.Rocks : BiomeType.Mountains;
+            return height < RocksCeiling ? BiomeType.Rocks : BiomeType.Mountains;
         }
 
         static float Height(HexCoord coord, float noiseScale, Vector2 noiseOrigin)
         {
             var world = coord.ToPlane() * noiseScale;
-            return Mathf.PerlinNoise(noiseOrigin.x + world.x, noiseOrigin.y + world.y);
+            // PerlinNoise изредка отдаёт значения за пределами [0,1] — порогам биомов это
+            // безразлично, а высоте нет: из отрицательного шума плитка ушла бы под поле.
+            return Mathf.Clamp01(Mathf.PerlinNoise(noiseOrigin.x + world.x, noiseOrigin.y + world.y));
         }
 
         /// <summary>Второй, более частый шум — мелкая разница тона внутри одного биома.</summary>

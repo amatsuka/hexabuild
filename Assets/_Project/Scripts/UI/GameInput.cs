@@ -11,9 +11,6 @@ namespace Game.UI
     /// </summary>
     public sealed class GameInput : MonoBehaviour
     {
-        /// <summary>Земля — плоскость y = 0: по ней и бьёт луч из-под пальца.</summary>
-        static readonly Plane FieldPlane = new(Vector3.up, Vector3.zero);
-
         [SerializeField] Camera worldCamera;
         [SerializeField] float clickThresholdPixels = 12f;
         [SerializeField] float pinchSensitivity = 0.01f;
@@ -32,14 +29,17 @@ namespace Game.UI
         /// <summary>Зум: положительное значение приближает.</summary>
         public event Action<float> Zoomed;
 
-        /// <summary>Плитка под экранной точкой.</summary>
-        public HexCoord CoordAt(Vector2 screenPosition)
+        /// <summary>
+        /// Плитка под экранной точкой на заданной высоте. Камера смотрит на поле под углом,
+        /// поэтому отсчёт по её глубине не даёт точку земли — берём пересечение луча с
+        /// горизонтальной плоскостью. Высота здесь не украшение: по плоскости `y = 0` луч
+        /// промахивается мимо приподнятой плитки, а какую именно плоскость брать, решает
+        /// <see cref="Game.Grid.TilePicker"/> — он же и знает высоты поля.
+        /// </summary>
+        public HexCoord CoordAt(Vector2 screenPosition, float groundHeight)
         {
-            // Камера смотрит на поле под углом, поэтому отсчёт по её глубине не даёт точку земли —
-            // берём пересечение луча с плоскостью y = 0. Плитка на высоте даёт параллакс: клик по
-            // горе промахивается тем сильнее, чем она выше. Горы не кликаются, но знать про это надо.
             var ray = worldCamera.ScreenPointToRay(screenPosition);
-            if (!FieldPlane.Raycast(ray, out var distance))
+            if (!new Plane(Vector3.up, new Vector3(0f, groundHeight, 0f)).Raycast(ray, out var distance))
                 return HexCoord.Zero;
 
             return HexCoord.FromWorld(ray.GetPoint(distance));
