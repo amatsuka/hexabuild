@@ -28,19 +28,25 @@ namespace Game.UI
         const float StripPadding = 16f;
         const float IconSize = 56f;
         const float CoinSize = 64f;
-        const float ScrollSize = 60f;
-        // Карточка контракта уже полосы ресурсов и прижата к тому же правому краю: в референсе
-        // она не спорит с ней шириной и не отъедает четверть экрана.
-        const float CardWidth = 430f;
-        const float CardHeight = 288f;
-        const float CardPadding = 20f;
-        /// <summary>Левая колонка карточки под свиток; текст идёт правее неё.</summary>
-        const float CardColumn = 92f;
+        const float ScrollSize = 56f;
+        // Карточка контракта прижата к правому краю и узкая: её ширину задаёт шапка — свиток
+        // и слово «Контракт», — а не самая длинная строка внутри. Решение человека: карточка
+        // не должна отъедать половину верха экрана, поле под ней важнее.
+        const float CardWidth = 300f;
+        const float CardHeight = 302f;
+        const float CardPadding = 18f;
+        /// <summary>Левая колонка карточки под свиток; текст шапки идёт правее неё.</summary>
+        const float CardColumn = 84f;
+        /// <summary>
+        /// Отступ карточки от верхней полосы. Он заметно больше зазора между карточками сверху:
+        /// карточка контракта висит сама по себе, и прижатая к полосе она читалась её продолжением.
+        /// </summary>
+        const float CardTopGap = 44f;
         const float GainWidth = 250f;
         const float MessageWidth = 470f;
         const float ToastHeight = 92f;
         const float BarHeight = 26f;
-        const float ProgressWidth = 110f;
+        const float ProgressWidth = 76f;
         const float BarInset = 3f;
 
         [SerializeField] UiTheme theme = new();
@@ -422,7 +428,7 @@ namespace Game.UI
         {
             contractCard = UiPanel.Create("Contract", transform, theme).rectTransform;
             Place(contractCard, new Vector2(1f, 1f),
-                new Vector2(-Margin, -(Margin + TopHeight + 16f)), new Vector2(CardWidth, CardHeight));
+                new Vector2(-Margin, -(Margin + TopHeight + CardTopGap)), new Vector2(CardWidth, CardHeight));
 
             // Прозрачность всей карточки разом: у неё своя графика, три иконки и пять строк,
             // и гасить их по отдельности значило бы держать список того, что гасить.
@@ -430,49 +436,50 @@ namespace Game.UI
             contractCard.gameObject.SetActive(false);
 
             var inner = CardWidth - CardPadding * 2f;
-            var textWidth = CardWidth - CardColumn - CardPadding;
+            var headWidth = CardWidth - CardColumn - CardPadding;
 
-            // Свиток — левая колонка во всю высоту заголовка и первой пары, как в референсе.
+            // Шапка: свиток слева, слово «Контракт» справа от него. Ширина карточки посчитана
+            // ровно по этой строке — с запасом на пробел, но без места на что-то ещё.
             var scroll = CreateIcon("ScrollIcon", contractCard, ScrollSize);
             Place((RectTransform)scroll.transform, new Vector2(0f, 1f),
-                new Vector2(CardPadding, -20f), new Vector2(ScrollSize, ScrollSize));
+                new Vector2(CardPadding, -18f), new Vector2(ScrollSize, ScrollSize));
             storageView.ShowIcon(scroll, ScrollMesh.Shared, scrollMaterial, scrollAngles);
 
-            Column(UiText.Bold("Title", contractCard, theme, 36f, theme.Text, TextAlignmentOptions.Left),
-                CardColumn, 22f, textWidth, 44f).text = "Контракт";
+            Column(UiText.Bold("Title", contractCard, theme, 34f, theme.Text, TextAlignmentOptions.Left),
+                CardColumn, 18f, headWidth, 42f).text = "Контракт";
 
-            // Таймер уходит в шапку справа: в референсе его нет вовсе, а строку под полосой он
-            // занимал зря — там место счётчика.
+            // Таймер сошёл со строки заголовка под неё: в шапку узкой карточки он больше не
+            // влезает, а место под заголовком всё равно пустует — слева там свиток.
             contractTimer = Column(
-                UiText.Label("Timer", contractCard, theme, 26f, theme.Muted, TextAlignmentOptions.Right),
-                CardColumn, 30f, textWidth, 32f);
+                UiText.Label("Timer", contractCard, theme, 24f, theme.Muted, TextAlignmentOptions.Right),
+                CardColumn, 58f, headWidth, 28f);
 
-            // Пары «подпись — значение» идут в столбик: подпись сверху, иконка со значением под
-            // ней. Так они стоят в референсе, и так значение читается крупнее подписи.
-            Column(UiText.Label("GoalLabel", contractCard, theme, 26f, theme.Muted, TextAlignmentOptions.Left),
-                CardColumn, 72f, textWidth, 32f).text = "Добыть";
-            contractIcon = CreateIcon("GoalIcon", contractCard, 46f);
+            // Пары «подпись — значение» идут в столбик под шапкой во всю ширину карточки:
+            // левая колонка ниже свитка свободна, и отступать от неё узкой карточке нечем.
+            Column(UiText.Label("GoalLabel", contractCard, theme, 24f, theme.Muted, TextAlignmentOptions.Left),
+                CardPadding, 96f, inner, 30f).text = "Добыть";
+            contractIcon = CreateIcon("GoalIcon", contractCard, 44f);
             Place((RectTransform)contractIcon.transform, new Vector2(0f, 1f),
-                new Vector2(CardColumn, -104f), new Vector2(46f, 46f));
+                new Vector2(CardPadding, -124f), new Vector2(44f, 44f));
             contractGoal = Column(
-                UiText.Bold("GoalValue", contractCard, theme, 40f, theme.Text, TextAlignmentOptions.Left),
-                CardColumn + 58f, 106f, textWidth - 58f, 44f);
+                UiText.Bold("GoalValue", contractCard, theme, 36f, theme.Text, TextAlignmentOptions.Left),
+                CardPadding + 54f, 126f, inner - 54f, 40f);
 
-            Column(UiText.Label("RewardLabel", contractCard, theme, 26f, theme.Muted, TextAlignmentOptions.Left),
-                CardColumn, 154f, textWidth, 32f).text = "Награда";
-            var rewardIcon = CreateIcon("RewardIcon", contractCard, 46f);
+            Column(UiText.Label("RewardLabel", contractCard, theme, 24f, theme.Muted, TextAlignmentOptions.Left),
+                CardPadding, 174f, inner, 30f).text = "Награда";
+            var rewardIcon = CreateIcon("RewardIcon", contractCard, 44f);
             Place((RectTransform)rewardIcon.transform, new Vector2(0f, 1f),
-                new Vector2(CardColumn, -186f), new Vector2(46f, 46f));
+                new Vector2(CardPadding, -202f), new Vector2(44f, 44f));
             storageView.ShowIcon(rewardIcon, coinMesh, coinMaterial, coinAngles);
             contractReward = Column(
-                UiText.Bold("RewardValue", contractCard, theme, 40f, theme.Gold, TextAlignmentOptions.Left),
-                CardColumn + 58f, 188f, textWidth - 58f, 44f);
+                UiText.Bold("RewardValue", contractCard, theme, 36f, theme.Gold, TextAlignmentOptions.Left),
+                CardPadding + 54f, 204f, inner - 54f, 40f);
 
             // Счётчик стоит справа от полосы на одной с ней строке, а не под ней.
             contractProgress = Column(
-                UiText.Bold("Progress", contractCard, theme, 28f, theme.Text, TextAlignmentOptions.Right),
-                CardWidth - CardPadding - ProgressWidth, 238f, ProgressWidth, 32f);
-            BuildContractBar(inner - ProgressWidth - 12f);
+                UiText.Bold("Progress", contractCard, theme, 26f, theme.Text, TextAlignmentOptions.Right),
+                CardWidth - CardPadding - ProgressWidth, 252f, ProgressWidth, 30f);
+            BuildContractBar(inner - ProgressWidth - 10f);
         }
 
         /// <summary>
@@ -482,7 +489,7 @@ namespace Game.UI
         void BuildContractBar(float width)
         {
             var track = UiPanel.Create("Bar", contractCard, theme, theme.BarTrack).rectTransform;
-            Place(track, new Vector2(0f, 1f), new Vector2(CardPadding, -240f), new Vector2(width, BarHeight));
+            Place(track, new Vector2(0f, 1f), new Vector2(CardPadding, -254f), new Vector2(width, BarHeight));
 
             contractBarFill = UiPanel.Create("Fill", track, theme, theme.BarFill);
             var fill = contractBarFill.rectTransform;
