@@ -12,10 +12,8 @@ namespace Game.Grid
     public static class ShapeMeshes
     {
         /// <summary>Толщина ободка гекса в долях его радиуса.</summary>
-        const float RingWidth = 0.12f;
 
         static Mesh triangle;
-        static Mesh hexRing;
 
         static readonly Dictionary<(ResourceType Type, bool Exhausted, bool Accent), Mesh> deposits = new();
         static readonly Dictionary<DecorShape, Mesh> decor = new();
@@ -24,12 +22,6 @@ namespace Game.Grid
         public static Mesh Triangle => triangle != null
             ? triangle
             : triangle = new FlatMesh().Triangle(Vector2.zero, 1f, 1f).Bake("Triangle");
-
-        /// <summary>
-        /// Ободок по границе гекса. Увеличенный гекс позади плитки не годится: соседние плитки
-        /// вплотную закрывают его, и виден только край поля.
-        /// </summary>
-        public static Mesh HexRing => hexRing != null ? hexRing : hexRing = BuildHexRing();
 
         /// <summary>
         /// Моделька месторождения в квадрате 1×1: дерево, кучка валунов или кристаллы.
@@ -185,38 +177,5 @@ namespace Game.Grid
         /// </summary>
         public static bool StandsOnGround(DecorShape shape) =>
             shape is DecorShape.Tussock or DecorShape.Dune;
-
-        static Mesh BuildHexRing()
-        {
-            var vertices = new Vector3[12];
-            for (var i = 0; i < 6; i++)
-            {
-                var angle = Mathf.Deg2Rad * (60f * i - 30f);
-                var direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
-                vertices[i] = direction * HexCoord.Size;
-                vertices[i + 6] = direction * (HexCoord.Size * (1f + RingWidth));
-            }
-
-            // Ободок лежит на земле, как крышка гекса: внутренний угол, следующий внутренний,
-            // следующий внешний, внешний — при таком обходе нормаль смотрит вверх.
-            var triangles = new int[36];
-            for (var i = 0; i < 6; i++)
-            {
-                var next = (i + 1) % 6;
-                triangles[i * 6] = i;
-                triangles[i * 6 + 1] = next;
-                triangles[i * 6 + 2] = next + 6;
-                triangles[i * 6 + 3] = i;
-                triangles[i * 6 + 4] = next + 6;
-                triangles[i * 6 + 5] = i + 6;
-            }
-
-            var mesh = new Mesh { name = "HexRing" };
-            mesh.SetVertices(vertices);
-            mesh.SetTriangles(triangles, 0);
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            return mesh;
-        }
     }
 }

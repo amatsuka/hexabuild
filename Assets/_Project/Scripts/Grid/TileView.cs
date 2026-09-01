@@ -11,10 +11,9 @@ namespace Game.Grid
     public sealed class TileView : MonoBehaviour
     {
         // Земля — плоскость XZ, высота — ось Y. Порядок «кто поверх кого» стал порядком по
-        // высоте: русло лежит на крышке плитки, ободок подсветки выше дороги.
+        // высоте: русло лежит на крышке плитки, дорога выше русла.
         const float RiverHeight = 0.012f;
         const float RiverBankHeight = 0.006f;
-        const float HighlightHeight = 0.05f;
 
         /// <summary>
         /// Урез воды в мировых координатах. Ноль выбран не для красоты: по этой же плоскости
@@ -160,7 +159,6 @@ namespace Game.Grid
         MeshRenderer river;
         MeshRenderer riverBank;
         MeshRenderer meshRenderer;
-        MeshRenderer highlight;
         MeshRenderer spark;
         MaterialPropertyBlock propertyBlock;
 
@@ -232,24 +230,6 @@ namespace Game.Grid
                     StartCoroutine(Extract(deposits[i], resources.Get(type)));
                     return;
                 }
-        }
-
-        /// <summary>Ободок подсветки обучения поверх плитки. Прозрачный цвет прячет его.</summary>
-        public void SetHighlight(Color color)
-        {
-            if (color.a <= 0f)
-            {
-                if (highlight != null)
-                    highlight.gameObject.SetActive(false);
-
-                return;
-            }
-
-            highlight ??= CreatePart(
-                transform, "Highlight", ShapeMeshes.HexRing, new Vector3(0f, HighlightHeight, 0f), Vector3.one);
-
-            highlight.gameObject.SetActive(true);
-            SetColor(highlight, color);
         }
 
         MeshRenderer Renderer => meshRenderer != null ? meshRenderer : meshRenderer = GetComponent<MeshRenderer>();
@@ -751,8 +731,8 @@ namespace Game.Grid
         }
 
         /// <summary>
-        /// Цвет без состояния: подсветка обучения и искра добычи туманом не гасятся. Нули пишутся
-        /// явно, а не полагаются на дефолт материала: блок переиспользуется между рендерерами.
+        /// Цвет без состояния: искра добычи туманом не гасится. Нули пишутся явно, а не
+        /// полагаются на дефолт материала: блок переиспользуется между рендерерами.
         /// </summary>
         void SetColor(MeshRenderer target, Color color) => SetTile(target, color, Vector2.zero);
 

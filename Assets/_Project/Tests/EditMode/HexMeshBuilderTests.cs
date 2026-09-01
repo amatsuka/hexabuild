@@ -53,35 +53,17 @@ namespace Game.Tests.EditMode
         public void GroundMeshes_FaceUp()
         {
             AssertFacesUp(HexMeshBuilder.Shared);
-            AssertFacesUp(ShapeMeshes.HexRing);
         }
 
         /// <summary>
         /// Модельки и декор стоят вертикально в плоскости XY и остаются обращёнными к камере:
-        /// на землю переехали только крышка плитки, ободок и ленты дорог.
+        /// на землю переехали только крышка плитки и ленты дорог.
         /// </summary>
         [Test]
         public void UprightShapes_StillFaceTheCamera()
         {
             AssertFacesCamera(ShapeMeshes.Triangle);
             AssertFacesCamera(ShapeMeshes.Decor(DecorShape.Conifer));
-        }
-
-        [Test]
-        public void HexRing_HugsTheTileBorderFromOutside()
-        {
-            var vertices = ShapeMeshes.HexRing.vertices;
-
-            Assert.AreEqual(12, vertices.Length);
-
-            for (var i = 0; i < 6; i++)
-            {
-                var inner = Plane(vertices[i]).magnitude;
-                var outer = Plane(vertices[i + 6]).magnitude;
-
-                Assert.AreEqual(HexCoord.Size, inner, 1e-4f, "внутренний край ободка лежит на границе плитки");
-                Assert.Greater(outer, inner, "внешний край ободка выходит за плитку");
-            }
         }
 
         /// <summary>

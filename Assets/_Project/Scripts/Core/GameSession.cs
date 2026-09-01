@@ -4,7 +4,6 @@ using Game.Grid;
 using Game.Merge;
 using Game.Roads;
 using Game.Storage;
-using Game.Tutorial;
 using Game.UI;
 using UnityEngine;
 
@@ -30,7 +29,6 @@ namespace Game.Core
         [SerializeField] CameraRig cameraRig;
         [SerializeField] StorageView storageView;
         [SerializeField] HudView hudView;
-        [SerializeField] TutorialView tutorialView;
         [SerializeField] GameOverView gameOverView;
 
         readonly Dictionary<HexCoord, TileView> views = new();
@@ -45,7 +43,6 @@ namespace Game.Core
         ProductionSystem production;
         DeliverySystem deliveries;
         MergeSystem merges;
-        TutorialSystem tutorial;
         ContractSystem contracts;
         GameEndSystem end;
 
@@ -69,13 +66,10 @@ namespace Game.Core
             end = new GameEndSystem(
                 state, mergeRules, deliveries, config.LossPenalty, config.FullFieldBonus, config.FullDepositBonus);
 
-            tutorial = new TutorialSystem(map, storage, state.Roads, mergeRules);
-
             SpawnTiles(map);
             SpawnWater(map);
             storageView.Bind(storage);
             hudView.Bind(state, contracts);
-            tutorialView.Bind(tutorial, views, storageView);
             cameraRig.SetFieldBounds(FieldBounds(map));
             cameraRig.FocusOnBottom();
         }
@@ -95,7 +89,6 @@ namespace Game.Core
             merges.Refused += hudView.ShowMessage;
             merges.Merged += OnMerged;
             merges.Converted += OnConverted;
-            state.Storage.Changed += tutorial.Refresh;
             end.Ended += OnGameEnded;
         }
 
@@ -114,7 +107,6 @@ namespace Game.Core
             merges.Refused -= hudView.ShowMessage;
             merges.Merged -= OnMerged;
             merges.Converted -= OnConverted;
-            state.Storage.Changed -= tutorial.Refresh;
             end.Ended -= OnGameEnded;
         }
 
@@ -137,15 +129,11 @@ namespace Game.Core
         }
 
         /// <summary>
-        /// Контракты ждут конца обучения: шесть шагов и так занимают весь экран, а первый контракт
-        /// сгорел бы, пока игрок разбирается с первой дорогой. Дальше система выдаёт их сама,
-        /// поэтому `Issue` срабатывает здесь ровно один раз — на самый первый контракт партии.
+        /// Дальше контракты система выдаёт сама, поэтому `Issue` срабатывает здесь ровно один
+        /// раз — на самый первый контракт партии.
         /// </summary>
         void TickContracts()
         {
-            if (tutorial.IsRunning)
-                return;
-
             if (contracts.IsActive)
                 contracts.Tick(Time.deltaTime);
             else
@@ -219,12 +207,6 @@ namespace Game.Core
             if (end.HasEnded)
                 return;
 
-            if (tutorialView.ContainsSkipPoint(screenPosition))
-            {
-                tutorial.Skip();
-                return;
-            }
-
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
                 var content = state.Storage[cell];
@@ -259,12 +241,6 @@ namespace Game.Core
         {
             if (views.TryGetValue(tile.Coord, out var view))
                 view.Apply(tile);
-
-            // Открытая плитка закрывает шаг обучения, любая другая правка поля — только двигает цель.
-            if (tile.State == TileState.Revealed && !tile.IsMetropolis)
-                tutorial.Notify(TutorialTrigger.TileRevealed);
-            else
-                tutorial.Refresh();
         }
 
         /// <summary>Дороги перерисовываются целиком: их немного, а связность меняется всей цепочкой.</summary>
@@ -282,8 +258,6 @@ namespace Game.Core
                 var links = LinkMask(coord);
                 roadView.Show(coord, state.Roads.IsConnected(coord), links, BridgeMask(coord, links));
             }
-
-            tutorial.Notify(TutorialTrigger.RoadBuilt);
         }
 
         /// <summary>
@@ -333,14 +307,9 @@ namespace Game.Core
         void OnMerged(MergeReport report)
         {
             storageView.PlayMerge(report.ConsumedCells, report.ResultCells, report.Outcome.Source);
-            tutorial.Notify(TutorialTrigger.Merged);
         }
 
-        void OnConverted(ResourceType type, int points)
-        {
-            contracts.Count(type);
-            tutorial.Notify(TutorialTrigger.Converted);
-        }
+        void OnConverted(ResourceType type, int points) => contracts.Count(type);
 
         /// <summary>Заработать больше нечем: поле замирает, на экране остаётся счёт.</summary>
         void OnGameEnded(FinalScore score) => gameOverView.Show(score);
@@ -370,11 +339,7 @@ namespace Game.Core
             mover.HopTo(storageView.CellWorldPoint(cell, Camera.main), () => OnResourceLanded(cell));
         }
 
-        /// <summary>Кружок долетел: клетка проявляется, обучение засчитывает шаг с доставкой.</summary>
-        void OnResourceLanded(int cell)
-        {
-            storageView.ReleaseCell(cell);
-            tutorial.Notify(TutorialTrigger.ResourceLanded);
-        }
+        /// <summary>Кружок долетел: клетка склада проявляется.</summary>
+        void OnResourceLanded(int cell) => storageView.ReleaseCell(cell);
     }
 }
