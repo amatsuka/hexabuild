@@ -69,7 +69,7 @@ namespace Game.Core
             SpawnTiles(map);
             SpawnWater(map);
             storageView.Bind(storage);
-            hudView.Bind(state, contracts);
+            hudView.Bind(state, contracts, storageView);
             cameraRig.SetFieldBounds(FieldBounds(map));
             cameraRig.FocusOnBottom();
         }
@@ -309,7 +309,16 @@ namespace Game.Core
             storageView.PlayMerge(report.ConsumedCells, report.ResultCells, report.Outcome.Source);
         }
 
-        void OnConverted(ResourceType type, int points) => contracts.Count(type);
+        /// <summary>
+        /// Крафт обменян на очки: сначала плашка о прибавке, потом зачёт контракту. Порядок
+        /// важен — зачёт может закрыть контракт, и его награда должна лечь плашкой следом,
+        /// а не перед тем, за что она пришла.
+        /// </summary>
+        void OnConverted(ResourceType type, int points)
+        {
+            hudView.ShowGain(points, type);
+            contracts.Count(type);
+        }
 
         /// <summary>Заработать больше нечем: поле замирает, на экране остаётся счёт.</summary>
         void OnGameEnded(FinalScore score) => gameOverView.Show(score);

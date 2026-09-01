@@ -1,13 +1,16 @@
 using System.Collections;
 using System.Collections.Generic;
 using Game.Economy;
+using Game.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace Game.Storage
 {
-    /// <summary>Полоса склада внизу: сетка клеток и красная вспышка при потере ресурса.</summary>
-    [RequireComponent(typeof(Image))]
+    /// <summary>
+    /// Полоса склада внизу: сетка клеток и красная вспышка при потере ресурса. Панель и клетки
+    /// собраны той же карточкой, что и HUD, — тень, светлая кромка, тёмная заливка.
+    /// </summary>
     public sealed class StorageView : MonoBehaviour
     {
         [SerializeField] ResourcePalette palette;
@@ -19,10 +22,7 @@ namespace Game.Storage
         [SerializeField] Vector3 snapshotAngles = new(25f, 35f, 0f);
         [Tooltip("Запас вокруг модели в снимке, доля габарита")]
         [SerializeField, Range(1f, 2f)] float snapshotMargin = 1.2f;
-        [SerializeField] Color panelColor = new(0.12f, 0.12f, 0.14f, 0.9f);
-        [SerializeField] Color emptyCellColor = new(0.22f, 0.22f, 0.25f);
-        [Tooltip("Подложка занятой клетки: иконка лежит на ней, поэтому она чуть светлее пустой")]
-        [SerializeField] Color filledCellColor = new(0.30f, 0.30f, 0.34f);
+        [SerializeField] UiTheme theme = new();
         [SerializeField] Color lossFlashColor = new(0.75f, 0.15f, 0.15f, 0.95f);
         [SerializeField] float flashSeconds = 0.4f;
         [SerializeField] int columns = 8;
@@ -38,8 +38,9 @@ namespace Game.Storage
 
         readonly HashSet<int> pendingCells = new();
 
-        Image panel;
-        Image[] cells;
+        Image panelFill;
+        RectTransform[] cells;
+        Image[] cellFills;
         ResourceIcon[] icons;
         StorageGrid grid;
         ResourceIconBaker snapshots;
@@ -76,7 +77,7 @@ namespace Game.Storage
             if (!isActiveAndEnabled || !grid[index].HasValue)
                 return;
 
-            cells[index].rectTransform.localScale = Vector3.zero;
+            cells[index].localScale = Vector3.zero;
             StartCoroutine(PopCells(new[] { index }));
         }
 
@@ -94,18 +95,18 @@ namespace Game.Storage
 
         IEnumerator AnimateMerge(IReadOnlyList<int> consumedCells, IReadOnlyList<int> resultCells, ResourceType movedType)
         {
-            var target = cells[resultCells[0]].rectTransform.position;
+            var target = cells[resultCells[0]].position;
             var flying = new List<RectTransform>(consumedCells.Count);
             var origins = new List<Vector3>(consumedCells.Count);
             foreach (var index in consumedCells)
             {
-                var origin = cells[index].rectTransform.position;
+                var origin = cells[index].position;
                 origins.Add(origin);
                 flying.Add(CreateFlyingCopy(origin, movedType));
             }
 
             foreach (var index in resultCells)
-                cells[index].rectTransform.localScale = Vector3.zero;
+                cells[index].localScale = Vector3.zero;
 
             for (var elapsed = 0f; elapsed < flySeconds; elapsed += Time.deltaTime)
             {
@@ -136,13 +137,13 @@ namespace Game.Storage
                     : Mathf.Lerp(popScale, 1f, (progress - 0.5f) * 2f);
 
                 foreach (var index in popped)
-                    cells[index].rectTransform.localScale = Vector3.one * scale;
+                    cells[index].localScale = Vector3.one * scale;
 
                 yield return null;
             }
 
             foreach (var index in popped)
-                cells[index].rectTransform.localScale = Vector3.one;
+                cells[index].localScale = Vector3.one;
         }
 
         /// <summary>
@@ -165,7 +166,7 @@ namespace Game.Storage
         public bool TryGetCellIndex(Vector2 screenPosition, out int index)
         {
             for (index = 0; index < cells.Length; index++)
-                if (RectTransformUtility.RectangleContainsScreenPoint(cells[index].rectTransform, screenPosition))
+                if (RectTransformUtility.RectangleContainsScreenPoint(cells[index], screenPosition))
                     return true;
 
             index = -1;
@@ -177,7 +178,7 @@ namespace Game.Storage
         {
             // Камера наклонена, поэтому цель прыжка берётся пересечением луча с землёй,
             // а не отсчётом по глубине камеры.
-            var screenPoint = RectTransformUtility.WorldToScreenPoint(null, cells[index].rectTransform.position);
+            var screenPoint = RectTransformUtility.WorldToScreenPoint(null, cells[index].position);
             var ray = worldCamera.ScreenPointToRay(screenPoint);
             return new Plane(Vector3.up, Vector3.zero).Raycast(ray, out var distance)
                 ? ray.GetPoint(distance)
@@ -215,16 +216,13 @@ namespace Game.Storage
             if (flashTimer > 0f)
             {
                 flashTimer = Mathf.Max(0f, flashTimer - Time.deltaTime);
-                panel.color = Color.Lerp(panelColor, lossFlashColor, flashTimer / flashSeconds);
+                panelFill.color = Color.Lerp(theme.PanelFill, lossFlashColor, flashTimer / flashSeconds);
             }
         }
 
         void BuildPanel()
         {
             var rows = Mathf.CeilToInt((float)grid.Capacity / columns);
-
-            panel = GetComponent<Image>();
-            panel.color = panelColor;
 
             var rect = (RectTransform)transform;
             rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0.5f, 0f);
@@ -233,20 +231,26 @@ namespace Game.Storage
                 columns * cellSize + (columns - 1) * spacing + padding * 2f,
                 rows * cellSize + (rows - 1) * spacing + padding * 2f);
 
-            var layout = gameObject.AddComponent<GridLayoutGroup>();
+            // Слои карточки лежат детьми, а сетка — своим ребёнком поверх них: `GridLayoutGroup`
+            // растащил бы тень и кромку по клеткам, окажись они прямыми детьми панели.
+            panelFill = UiPanel.FillOf(UiPanel.Create("Panel", transform, theme).Stretch());
+
+            var cellsRoot = UiPanel.NewRect("Cells", transform).Stretch();
+            var layout = cellsRoot.gameObject.AddComponent<GridLayoutGroup>();
             layout.cellSize = Vector2.one * cellSize;
             layout.spacing = Vector2.one * spacing;
             layout.padding = new RectOffset((int)padding, (int)padding, (int)padding, (int)padding);
             layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             layout.constraintCount = columns;
 
-            cells = new Image[grid.Capacity];
+            cells = new RectTransform[grid.Capacity];
+            cellFills = new Image[grid.Capacity];
             icons = new ResourceIcon[grid.Capacity];
             for (var i = 0; i < cells.Length; i++)
             {
-                var cell = new GameObject($"Cell {i}", typeof(RectTransform), typeof(Image));
-                cell.transform.SetParent(transform, false);
-                cells[i] = cell.GetComponent<Image>();
+                cellFills[i] = UiPanel.CreateSlot($"Cell {i}", cellsRoot, theme);
+                var cell = cellFills[i].transform.parent.gameObject;
+                cells[i] = (RectTransform)cell.transform;
 
                 // Иконка — ребёнок подложки: она едет вместе с ней на пульсации и на выскакивании
                 // масштабом, а `GridLayoutGroup` раскладывает только прямых детей панели.
@@ -270,7 +274,7 @@ namespace Game.Storage
             {
                 var content = grid[i];
                 var shown = content.HasValue && !pendingCells.Contains(i);
-                cells[i].color = shown ? filledCellColor : emptyCellColor;
+                cellFills[i].color = shown ? theme.SlotFilled : theme.SlotEmpty;
 
                 if (shown)
                     ShowIcon(icons[i], content.Value);
@@ -280,10 +284,12 @@ namespace Game.Storage
         }
 
         /// <summary>
-        /// У модели цвет уже лежит в палитре текстуры, и красить снимок цветом ресурса нельзя —
-        /// он перемножится. Крафтовый ресурс модели не имеет и красится, как раньше.
+        /// Иконка ресурса: снимок модели, если он есть. У модели цвет уже лежит в палитре
+        /// текстуры, и красить снимок цветом ресурса нельзя — он перемножится. Крафтовый ресурс
+        /// модели не имеет и красится, как раньше. Публичный: HUD берёт иконки отсюда же,
+        /// второй пекарь снимков на партию — это второй набор `RenderTexture` ни за чем.
         /// </summary>
-        void ShowIcon(ResourceIcon icon, ResourceType type)
+        public void ShowIcon(ResourceIcon icon, ResourceType type)
         {
             var snapshot = snapshots?.Get(type);
             icon.Show(type, snapshot != null ? Color.white : palette.Get(type), snapshot);
