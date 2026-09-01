@@ -106,27 +106,27 @@ MonoBehaviour:
   heightScale: 1
   baseSkirt: 0.14
   biomes:
-    sand: {r: 0.85, g: 0.78, b: 0.55, a: 1}
-    meadow: {r: 0.55, g: 0.7, b: 0.4, a: 1}
-    forest: {r: 0.35, g: 0.56, b: 0.34, a: 1}
-    rocks: {r: 0.55, g: 0.54, b: 0.52, a: 1}
-    mountains: {r: 0.33, g: 0.32, b: 0.36, a: 1}
-    sandDecor: {r: 0.72, g: 0.63, b: 0.4, a: 1}
-    meadowDecor: {r: 0.47, g: 0.62, b: 0.33, a: 1}
-    forestDecor: {r: 0.18, g: 0.34, b: 0.2, a: 1}
-    rocksDecor: {r: 0.38, g: 0.37, b: 0.36, a: 1}
-    mountainsDecor: {r: 0.74, g: 0.74, b: 0.79, a: 1}
+    sand: {r: 0.743, g: 0.681, b: 0.635, a: 1}
+    meadow: {r: 0.505, g: 0.699, b: 0.427, a: 1}
+    forest: {r: 0.316, g: 0.51, b: 0.355, a: 1}
+    rocks: {r: 0.538, g: 0.601, b: 0.734, a: 1}
+    mountains: {r: 0.31, g: 0.373, b: 0.505, a: 1}
+    sandDecor: {r: 0.639, g: 0.545, b: 0.457, a: 1}
+    meadowDecor: {r: 0.404, g: 0.594, b: 0.299, a: 1}
+    forestDecor: {r: 0.237, g: 0.408, b: 0.249, a: 1}
+    rocksDecor: {r: 0.387, g: 0.433, b: 0.528, a: 1}
+    mountainsDecor: {r: 0.527, g: 0.634, b: 0.859, a: 1}
   metropolisColor: {r: 0.2, g: 0.45, b: 0.85, a: 1}
   shadeStrength: 0.08
-  hiddenFog: 0.78
-  hiddenFade: 0.85
-  availableFog: 0.45
-  availableFade: 0.45
-  depletedFog: 0.2
-  depletedFade: 0.85
-  riverColor: {r: 0.28, g: 0.52, b: 0.74, a: 1}
+  hiddenFog: 0.836
+  hiddenFade: 0.65
+  availableFog: 0.548
+  availableFade: 0.4
+  depletedFog: 0.393
+  depletedFade: 0.8
+  riverColor: {r: 0.16, g: 0.5, b: 0.72, a: 1}
   riverWidth: 0.22
-  outlineColor: {r: 0.07, g: 0.07, b: 0.09, a: 1}
+  outlineColor: {r: 0.3, g: 0.36, b: 0.45, a: 1}
   outlineScale: 0.89285713
   resources:
     wood: {r: 0.22, g: 0.6, b: 0.25, a: 1}

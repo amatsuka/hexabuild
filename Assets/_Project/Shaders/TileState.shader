@@ -13,6 +13,18 @@ Shader "Game/TileState"
         _FogColor ("Цвет дымки", Color) = (0.15, 0.16, 0.20, 1)
         _StateFog ("Туман", Range(0, 1)) = 0
         _StateFade ("Обесцвечивание", Range(0, 1)) = 0
+
+        // Голый ламберт гасит неосвещённую грань в ноль, и мультяшный объём на этом кончается.
+        // Заворот тянет свет за терминатор: 0 — прежний ламберт, 1 — полный half-lambert.
+        _LightWrap ("Заворот света", Range(0, 1)) = 1
+        // В тени цвет уходит не в чёрный, а в холодный подтон: так тень остаётся цветом,
+        // а не дырой. Прибавляется, а не умножается, иначе это просто ещё одно затемнение.
+        _ShadowColor ("Цвет тени", Color) = (0.13, 0.17, 0.26, 1)
+        // Ободок по силуэту. Ради него он и заведён: тёмное дерево на тёмной плитке
+        // отличается от неё только контуром.
+        _RimColor ("Цвет ободка", Color) = (0.62, 0.78, 0.95, 1)
+        _RimPower ("Резкость ободка", Range(0.5, 8)) = 3
+        _RimStrength ("Сила ободка", Range(0, 1)) = 0.22
     }
 
     SubShader
@@ -49,6 +61,16 @@ Shader "Game/TileState"
             // меняется от рендерера к рендереру.
             TEXTURE2D(_BaseMap);
             SAMPLER(sampler_BaseMap);
+
+            // Тон материала одинаков для всех плиток и в инстанс-буфер не кладётся: там
+            // только то, что меняется от рендерера к рендереру. Отдельным `UnityPerMaterial`
+            // они тоже не объявлены — неполный буфер сбил бы SRP Batcher с толку, а батчинг
+            // тут держит инстансинг.
+            half _LightWrap;
+            half4 _ShadowColor;
+            half4 _RimColor;
+            half _RimPower;
+            half _RimStrength;
 
             UNITY_INSTANCING_BUFFER_START(Props)
                 UNITY_DEFINE_INSTANCED_PROP(float4, _BaseColor)
@@ -104,9 +126,20 @@ Shader "Game/TileState"
                 float3 normalWS = normalize(input.normalWS);
                 Light mainLight = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
 
-                half lambert = saturate(dot(normalWS, mainLight.direction));
+                half ndl = dot(normalWS, mainLight.direction);
+                // Заворот: ламберт `saturate(ndl)` при wrap = 0, half-lambert при wrap = 1.
+                half wrapped = saturate(lerp(ndl, ndl * 0.5h + 0.5h, _LightWrap));
                 half attenuation = mainLight.shadowAttenuation * mainLight.distanceAttenuation;
-                half3 lit = albedo * (mainLight.color * (lambert * attenuation) + SampleSH(normalWS));
+                half key = wrapped * attenuation;
+
+                // Заливка: небо сверху плюс окрашенная тень там, где ключа нет.
+                half3 fill = SampleSH(normalWS) + _ShadowColor.rgb * (1.0h - key);
+                half3 lit = albedo * (mainLight.color.rgb * key + fill);
+
+                // Ободок гасится в тумане вместе со всем остальным: `lerp` ниже общий.
+                half3 viewWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
+                half rim = pow(1.0h - saturate(dot(normalWS, viewWS)), _RimPower) * _RimStrength;
+                lit += _RimColor.rgb * rim;
 
                 return half4(lerp(lit, fogColor.rgb, fog), 1.0h);
             }
