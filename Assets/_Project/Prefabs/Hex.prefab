@@ -106,6 +106,7 @@ MonoBehaviour:
   heightScale: 1
   baseSkirt: 0.14
   biomes:
+    water: {r: 0.62, g: 0.6, b: 0.55, a: 1}
     sand: {r: 0.743, g: 0.681, b: 0.635, a: 1}
     meadow: {r: 0.505, g: 0.699, b: 0.427, a: 1}
     forest: {r: 0.316, g: 0.51, b: 0.355, a: 1}
@@ -116,7 +117,7 @@ MonoBehaviour:
     forestDecor: {r: 0.237, g: 0.408, b: 0.249, a: 1}
     rocksDecor: {r: 0.387, g: 0.433, b: 0.528, a: 1}
     mountainsDecor: {r: 0.527, g: 0.634, b: 0.859, a: 1}
-  metropolisColor: {r: 0.2, g: 0.45, b: 0.85, a: 1}
+  metropolisColor: {r: 0.7, g: 0.56, b: 0.42, a: 1}
   shadeStrength: 0.08
   hiddenFog: 0.836
   hiddenFade: 0.65
@@ -126,6 +127,8 @@ MonoBehaviour:
   depletedFade: 0.8
   riverColor: {r: 0.16, g: 0.5, b: 0.72, a: 1}
   riverWidth: 0.22
+  riverBankColor: {r: 0.7, g: 0.66, b: 0.53, a: 1}
+  riverBankWidth: 0.3
   resources:
     wood: {r: 0.22, g: 0.6, b: 0.25, a: 1}
     stone: {r: 0.45, g: 0.45, b: 0.47, a: 1}

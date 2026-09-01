@@ -220,6 +220,33 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// Подложка воды — первая группа мешей: лежит в XZ нормалью вверх, как крышка плитки.
+        /// Ошибись группой — плоскость либо встанет стеной, либо будет срезана culling.
+        /// </summary>
+        [Test]
+        public void Water_LiesFlatOnTheGround_FacingUp()
+        {
+            var mesh = WaterMesh.Build(80f);
+            var vertices = mesh.vertices;
+            var triangles = mesh.triangles;
+
+            foreach (var vertex in vertices)
+                Assert.AreEqual(0f, vertex.y, 1e-4f, "подложка воды вышла из плоскости XZ");
+
+            Assert.AreEqual(80f, mesh.bounds.size.x, 1e-3f);
+            Assert.AreEqual(80f, mesh.bounds.size.z, 1e-3f);
+
+            for (var i = 0; i < triangles.Length; i += 3)
+            {
+                var normal = Vector3.Cross(
+                    vertices[triangles[i + 1]] - vertices[triangles[i]],
+                    vertices[triangles[i + 2]] - vertices[triangles[i]]);
+
+                Assert.Greater(normal.y, 0f, $"треугольник {i / 3} подложки смотрит вниз");
+            }
+        }
+
         static void AssertFacesCamera(Mesh mesh)
         {
             var vertices = mesh.vertices;

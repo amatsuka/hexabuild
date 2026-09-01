@@ -204,6 +204,8 @@ MonoBehaviour:
   roadPrefab: {fileID: 74272935220182515, guid: 958dd9f4164ce45b8825472ca6582d79, type: 3}
   moverPrefab: {fileID: 8914290426641312651, guid: ed1538939bdc846de91bc2b306d1c598, type: 3}
   tilesRoot: {fileID: 1314927477}
+  waterMaterial: {fileID: 2100000, guid: 6943fdc771d1f46bf8ecd09c50354d7d, type: 2}
+  waterMargin: 40
   moversRoot: {fileID: 494033976}
   input: {fileID: 127816812}
   cameraRig: {fileID: 381356108}

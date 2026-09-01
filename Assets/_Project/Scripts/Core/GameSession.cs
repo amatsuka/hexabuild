@@ -21,6 +21,10 @@ namespace Game.Core
         [SerializeField] RoadView roadPrefab;
         [SerializeField] ResourceMover moverPrefab;
         [SerializeField] Transform tilesRoot;
+        [Tooltip("Материал `Game/Water` на подложку. Пусто — воды нет и виден фон камеры")]
+        [SerializeField] Material waterMaterial;
+        [Tooltip("Насколько подложка выступает за поле. Камера зажата границами поля, но зумом отходит от них")]
+        [SerializeField] float waterMargin = 40f;
         [SerializeField] Transform moversRoot;
         [SerializeField] GameInput input;
         [SerializeField] CameraRig cameraRig;
@@ -68,6 +72,7 @@ namespace Game.Core
             tutorial = new TutorialSystem(map, storage, state.Roads, mergeRules);
 
             SpawnTiles(map);
+            SpawnWater(map);
             storageView.Bind(storage);
             hudView.Bind(state, contracts);
             tutorialView.Bind(tutorial, views, storageView);
@@ -156,6 +161,31 @@ namespace Game.Core
                 views.Add(tile.Coord, view);
                 fieldCeiling = Mathf.Max(fieldCeiling, view.SurfaceHeight);
             }
+        }
+
+        /// <summary>
+        /// Подложка воды под всем полем: на ней лежит карта, и за её краем фона камеры уже нет.
+        /// Плоскость одна на партию и стоит на урезе — глубину шейдер берёт из буфера глубины,
+        /// то есть из того, насколько дно под ней ниже. Тени она не отбрасывает: горизонтальная
+        /// плоскость на урезе накрыла бы тенью всё поле разом.
+        /// </summary>
+        void SpawnWater(HexMap map)
+        {
+            if (waterMaterial == null)
+                return;
+
+            var bounds = FieldBounds(map);
+            var size = Mathf.Max(bounds.width, bounds.height) + waterMargin * 2f;
+
+            var water = new GameObject("Water", typeof(MeshFilter), typeof(MeshRenderer));
+            water.transform.SetParent(tilesRoot, false);
+            water.transform.localPosition = new Vector3(bounds.center.x, TileView.WaterSurface, bounds.center.y);
+            water.GetComponent<MeshFilter>().sharedMesh = WaterMesh.Build(size);
+
+            var waterRenderer = water.GetComponent<MeshRenderer>();
+            waterRenderer.sharedMaterial = waterMaterial;
+            waterRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            waterRenderer.receiveShadows = false;
         }
 
         /// <summary>

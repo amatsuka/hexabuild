@@ -13,7 +13,45 @@ namespace Game.Grid
         // Земля — плоскость XZ, высота — ось Y. Порядок «кто поверх кого» стал порядком по
         // высоте: русло лежит на крышке плитки, ободок подсветки выше дороги.
         const float RiverHeight = 0.012f;
+        const float RiverBankHeight = 0.006f;
         const float HighlightHeight = 0.05f;
+
+        /// <summary>
+        /// Урез воды в мировых координатах. Ноль выбран не для красоты: по этой же плоскости
+        /// `TilePicker` отвечает, когда спуск по рельефу не встретил ни одной плитки, — то есть
+        /// клик мимо суши попадает ровно в поверхность моря. Одно число на рельеф, клик и подложку.
+        /// </summary>
+        public const float WaterSurface = 0f;
+
+        /// <summary>
+        /// Куда садится берег. Суша ниже уреза не опускается: отмель, пробитая перевалом сквозь
+        /// воду, обязана выйти над водой, иначе по ней предлагалось бы строить дорогу под водой.
+        ///
+        /// Взято не «чуть выше нуля», а выше глубины фаски `HexMeshBuilder.BevelDrop`: между
+        /// двумя соседними плитками борта сходятся канавкой на эту глубину, и на первом замере
+        /// самая низкая суша пустила в неё воду. Каждая плитка получила бирюзовую обводку из
+        /// пены — ровно ту обводку, которую M16 убирала как ложащуюся поперёк объёма.
+        /// </summary>
+        public const float ShoreHeight = 0.09f;
+
+        /// <summary>Дно самой глубокой воды. От него же меряется юбка: дно у поля общее.</summary>
+        public const float SeaFloor = -0.16f;
+
+        /// <summary>Самая мелкая вода. Выше неё дно не поднимается: вода обязана остаться водой.</summary>
+        public const float SeaEdge = -0.02f;
+
+        /// <summary>
+        /// На сколько плитка с рекой садится ниже своего рельефа. Русло рисуется лентой по
+        /// крышке, и утопить саму ленту нельзя — крышка непрозрачная и лежит над ней. Тонет
+        /// поэтому вся плитка: соседи остаются выше, и лента читается со дна канавы.
+        /// </summary>
+        const float RiverSink = 0.05f;
+
+        /// <summary>
+        /// Ниже этого русло не садится: река течёт над водой, а не под ней — и канавка фаски
+        /// у неё тоже, иначе плитка с рекой обзаведётся той самой пенной обводкой.
+        /// </summary>
+        const float RiverFloor = 0.075f;
 
         /// <summary>Огранка стоит перед телом модельки. Моделька плоская, поэтому это её локальный z.</summary>
         const float AccentDepth = -0.005f;
@@ -34,7 +72,8 @@ namespace Game.Grid
 
         [Header("Ландшафт")]
         [SerializeField] BiomePalette biomes = new();
-        [SerializeField] Color metropolisColor = new(0.20f, 0.45f, 0.85f);
+        [Tooltip("Не синий: рядом с водой синий гекс читается заливом, а не городом")]
+        [SerializeField] Color metropolisColor = new(0.70f, 0.56f, 0.42f);
         [SerializeField, Range(0f, 0.3f)] float shadeStrength = 0.08f;
 
         // Состояние плитки выражает шейдер `Game/TileState`: `_StateFog` подмешивает цвет дымки
@@ -55,6 +94,9 @@ namespace Game.Grid
         [SerializeField] Color riverColor = new(0.28f, 0.52f, 0.74f);
         [Tooltip("Шире полотна дороги: иначе на переправе русло не читается вовсе")]
         [SerializeField] float riverWidth = 0.22f;
+        [Tooltip("Светлая кромка берега под лентой русла: без неё канава читается дырой")]
+        [SerializeField] Color riverBankColor = new(0.70f, 0.66f, 0.53f);
+        [SerializeField] float riverBankWidth = 0.30f;
 
         [Header("Цвета месторождений")]
         [SerializeField] ResourcePalette resources = new();
@@ -116,6 +158,7 @@ namespace Game.Grid
         readonly List<DecorPart> decor = new();
 
         MeshRenderer river;
+        MeshRenderer riverBank;
         MeshRenderer meshRenderer;
         MeshRenderer highlight;
         MeshRenderer spark;
@@ -138,8 +181,11 @@ namespace Game.Grid
             var height = HeightOf(tile) * heightScale;
             var plane = tile.Coord.ToPlane();
             transform.localPosition = new Vector3(plane.x, height, plane.y);
-            GetComponent<MeshFilter>().sharedMesh = height > 0f || baseSkirt > 0f
-                ? HexMeshBuilder.Prism(height + baseSkirt)
+            // Юбка меряется от общего дна поля, а не от нуля: с водой самая низкая крышка ушла
+            // под урез, и «height + baseSkirt» дал бы у неё юбку отрицательной длины.
+            var skirt = height - SeaFloor * heightScale + baseSkirt;
+            GetComponent<MeshFilter>().sharedMesh = skirt > 0f
+                ? HexMeshBuilder.Prism(skirt)
                 : HexMeshBuilder.Shared;
 
             CreateRiver(tile);
@@ -161,6 +207,9 @@ namespace Game.Grid
             var modelColor = Shaded(Color.white, tile.Shade);
             for (var i = 0; i < decor.Count; i++)
                 SetTile(decor[i].Renderer, Scaled(decor[i].Textured ? modelColor : decorColor, decor[i].Tint), state);
+
+            if (riverBank != null)
+                SetTile(riverBank, Shaded(riverBankColor, tile.Shade), state);
 
             if (river != null)
                 SetTile(river, Shaded(riverColor, tile.Shade), state);
@@ -261,21 +310,43 @@ namespace Game.Grid
         /// крутизны, поэтому горы всё так же возвышаются, а низины остаются плоскими.
         /// Метрополия высоты не выбирает: город на своём холме сидел бы в яме между скал.
         /// </summary>
-        public static float HeightOf(TileData tile) => HeightAt(tile.Elevation);
-
-        /// <summary>Узлы кривой: порог биома — высота его верхней кромки в юнитах.</summary>
-        static float HeightAt(float elevation)
+        public static float HeightOf(TileData tile)
         {
-            if (elevation < MapGenerator.SandCeiling)
-                return Mathf.Lerp(0f, 0.03f, elevation / MapGenerator.SandCeiling);
-            if (elevation < MapGenerator.MeadowCeiling)
-                return Mathf.Lerp(0.03f, 0.06f, Ratio(elevation, MapGenerator.SandCeiling, MapGenerator.MeadowCeiling));
-            if (elevation < MapGenerator.ForestCeiling)
-                return Mathf.Lerp(0.06f, 0.13f, Ratio(elevation, MapGenerator.MeadowCeiling, MapGenerator.ForestCeiling));
-            if (elevation < MapGenerator.RocksCeiling)
-                return Mathf.Lerp(0.13f, 0.24f, Ratio(elevation, MapGenerator.ForestCeiling, MapGenerator.RocksCeiling));
+            var height = TerrainHeight(tile.Elevation);
 
-            return Mathf.Lerp(0.24f, 0.44f, Ratio(elevation, MapGenerator.RocksCeiling, 1f));
+            // Вода — единственный биом, которому позволено лежать под урезом: она и есть дно.
+            // И обязана там остаться: перевал меняет биом, но не высоту, и обратная замена
+            // суши на воду вынесла бы дно на поверхность.
+            if (tile.Biome == BiomeType.Water)
+                return Mathf.Min(height, SeaEdge);
+
+            // Суша всплывает на берег. Перевал, пробитый сквозь залив, оставляет плитке её
+            // низинную высоту, и без этого он вышел бы отмелью под водой — проходимой по
+            // правилам и невидимой на экране.
+            height = Mathf.Max(height, ShoreHeight);
+
+            return tile.HasRiver ? Mathf.Max(height - RiverSink, RiverFloor) : height;
+        }
+
+        /// <summary>
+        /// Узлы кривой: порог биома — высота его верхней кромки в юнитах. Низины ушли под урез
+        /// вместе с водой, поэтому кривая начинается со дна моря, а не с нуля; берег стартует
+        /// сразу над урезом, и переход через воду — единственный разрыв на всей кривой.
+        /// </summary>
+        public static float TerrainHeight(float elevation)
+        {
+            if (elevation < MapGenerator.WaterCeiling)
+                return Mathf.Lerp(SeaFloor, SeaEdge, Ratio(elevation, 0f, MapGenerator.WaterCeiling));
+            if (elevation < MapGenerator.SandCeiling)
+                return Mathf.Lerp(ShoreHeight, 0.12f, Ratio(elevation, MapGenerator.WaterCeiling, MapGenerator.SandCeiling));
+            if (elevation < MapGenerator.MeadowCeiling)
+                return Mathf.Lerp(0.12f, 0.17f, Ratio(elevation, MapGenerator.SandCeiling, MapGenerator.MeadowCeiling));
+            if (elevation < MapGenerator.ForestCeiling)
+                return Mathf.Lerp(0.17f, 0.24f, Ratio(elevation, MapGenerator.MeadowCeiling, MapGenerator.ForestCeiling));
+            if (elevation < MapGenerator.RocksCeiling)
+                return Mathf.Lerp(0.24f, 0.33f, Ratio(elevation, MapGenerator.ForestCeiling, MapGenerator.RocksCeiling));
+
+            return Mathf.Lerp(0.33f, 0.48f, Ratio(elevation, MapGenerator.RocksCeiling, 1f));
         }
 
         static float Ratio(float value, float from, float to) => Mathf.Clamp01((value - from) / (to - from));
@@ -317,8 +388,19 @@ namespace Game.Grid
         /// </summary>
         void CreateRiver(TileData tile)
         {
-            if (tile.RiverMask == 0)
+            // Устье впадает в воду: на самой водной плитке ленту рисовать нечем и незачем —
+            // она лежала бы на дне под морем.
+            if (tile.RiverMask == 0 || tile.Biome == BiomeType.Water)
                 return;
+
+            // Два слоя, как у дороги, только наоборот: широкая светлая кромка берега снизу,
+            // узкая тёмная вода поверх. Кромка и делает канаву руслом, а не дырой в плитке.
+            riverBank = CreatePart(
+                transform,
+                "RiverBank",
+                RoadMeshBuilder.Get(tile.RiverMask, riverBankWidth),
+                new Vector3(0f, RiverBankHeight, 0f),
+                Vector3.one);
 
             river = CreatePart(
                 transform,
@@ -353,7 +435,9 @@ namespace Game.Grid
         /// </summary>
         void CreateDecor(TileData tile)
         {
-            if (tile.IsMetropolis)
+            // Дну декор не положен: под водой его всё равно не разглядеть, а торчащая сквозь
+            // урез верхушка холмика читалась бы мусором посреди моря.
+            if (tile.IsMetropolis || tile.Biome == BiomeType.Water)
                 return;
 
             var coord = tile.Coord;

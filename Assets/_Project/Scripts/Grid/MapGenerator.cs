@@ -7,9 +7,11 @@ namespace Game.Grid
     /// <summary>Случайная раскладка месторождений и препятствий по разделам 2.1 и 2.3 спеки.</summary>
     public static class MapGenerator
     {
-        // Пороги шума по биомам подобраны на глаз: песок занимает низины, горы — вершины,
+        // Пороги шума по биомам подобраны на глаз: вода занимает низины, горы — вершины,
         // между ними суша. Они же и есть узлы кривой высоты во вью: биом и рельеф идут из
         // одного числа, и граница биома обязана быть той же точкой, где меняется крутизна.
+        // `WaterCeiling` — ещё и урез: ниже него дно уходит под воду, выше начинается берег.
+        public const float WaterCeiling = 0.27f;
         public const float SandCeiling = 0.36f;
         public const float MeadowCeiling = 0.50f;
         public const float ForestCeiling = 0.60f;
@@ -20,9 +22,18 @@ namespace Game.Grid
         /// <summary>
         /// Какую долю поля обязан покрывать обход по проходимым плиткам от Метрополии. Отрезанных
         /// кусков не бывает — их соединяют перевалы, — поэтому порог считает ровно одно: сколько
-        /// поля заняли сами горы. Ниже — карта негодная, играть будет не во что.
+        /// поля заняли стены ландшафта. Ниже — карта негодная, играть будет не во что.
+        ///
+        /// С M17 стен две, и порог пришлось опустить с 85%: по сырому шуму вода занимает 13.3%
+        /// поля, горы — 13.4%, то есть медианная карта отдаёт стенам 26.5%, а каждая четвёртая —
+        /// больше 36%. С прежним порогом генератор браковал любую карту с нормальным заливом и
+        /// двадцатью попытками сползал на первую попавшуюся: на замере оставалось 4.6% воды
+        /// вместо 13.3% — порог молча вычёркивал ровно тот биом, ради которого делалась стадия.
+        /// 0.65 читается как «стены не берут больше трети поля». Отбор всё равно смещает выборку
+        /// в сторону сухих карт — принято: замер на 200 сидах даёт 9.1% воды и 76.0% проходимого
+        /// поля при минимуме 65.1%.
         /// </summary>
-        const float MinPassableShare = 0.85f;
+        const float MinPassableShare = 0.65f;
 
         /// <summary>Попыток перегенерации с новым смещением шума, прежде чем взять что вышло.</summary>
         const int MaxAttempts = 20;
@@ -108,7 +119,7 @@ namespace Game.Grid
                 biomes[coord] = BiomeAt(elevation);
             }
 
-            // Метрополия — город, а не ландшафт: горой она быть не может по правилам 2.1.
+            // Метрополия — город, а не ландшафт: ни горой, ни водой она быть не может по 2.1.
             biomes[HexCoord.Zero] = BiomeType.Meadow;
 
             // Перевалы пробиваются до рек: исток обязан остаться горой, а гора на пути перевала
@@ -121,7 +132,7 @@ namespace Game.Grid
             var depositsByCoord = new Dictionary<HexCoord, List<Deposit>>();
             foreach (var pair in biomes)
                 if (pair.Key != HexCoord.Zero)
-                    depositsByCoord[pair.Key] = pair.Value == BiomeType.Mountains || rivers.ContainsKey(pair.Key)
+                    depositsByCoord[pair.Key] = !TileData.IsPassableBiome(pair.Value) || rivers.ContainsKey(pair.Key)
                         ? new List<Deposit>()
                         : RollDeposits(random, settings);
 
@@ -150,6 +161,8 @@ namespace Game.Grid
         /// </summary>
         static BiomeType BiomeAt(float height)
         {
+            if (height < WaterCeiling)
+                return BiomeType.Water;
             if (height < SandCeiling)
                 return BiomeType.Sand;
             if (height < MeadowCeiling)
@@ -209,7 +222,7 @@ namespace Game.Grid
                 for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
                 {
                     var neighbor = current.Neighbor(direction);
-                    if (!biomes.TryGetValue(neighbor, out var biome) || biome == BiomeType.Mountains)
+                    if (!biomes.TryGetValue(neighbor, out var biome) || !TileData.IsPassableBiome(biome))
                         continue;
 
                     if (visited.Add(neighbor))
@@ -224,7 +237,7 @@ namespace Game.Grid
         static HexCoord? FirstCutOff(IReadOnlyDictionary<HexCoord, BiomeType> biomes, HashSet<HexCoord> reachable)
         {
             foreach (var pair in biomes)
-                if (pair.Value != BiomeType.Mountains && !reachable.Contains(pair.Key))
+                if (TileData.IsPassableBiome(pair.Value) && !reachable.Contains(pair.Key))
                     return pair.Key;
 
             return null;
@@ -265,7 +278,7 @@ namespace Game.Grid
                     if (!biomes.TryGetValue(neighbor, out var biome))
                         continue;
 
-                    var step = cost[current] + (biome == BiomeType.Mountains ? 1 : 0);
+                    var step = cost[current] + (TileData.IsPassableBiome(biome) ? 0 : 1);
                     if (cost.TryGetValue(neighbor, out var known) && known <= step)
                         continue;
 
@@ -280,8 +293,11 @@ namespace Game.Grid
             }
 
             for (var coord = cutOff; cameFrom.ContainsKey(coord); coord = cameFrom[coord])
-                if (biomes[coord] == BiomeType.Mountains)
-                    biomes[coord] = BiomeType.Rocks;
+                if (!TileData.IsPassableBiome(biomes[coord]))
+                    // Стена выводится в соседнюю по высоте ступень, а не в произвольный биом:
+                    // гора оседает до скал седловиной, вода — до песка отмелью. Высота у плитки
+                    // при этом остаётся своя, и урез воды её потом поднимет на берег.
+                    biomes[coord] = biomes[coord] == BiomeType.Mountains ? BiomeType.Rocks : BiomeType.Sand;
         }
 
         /// <summary>
@@ -391,6 +407,12 @@ namespace Game.Grid
                     var next = picks[0];
                     var merges = rivers.ContainsKey(next);
                     Link(tile, next, rivers);
+
+                    // Устье не только на кромке: дойдя до воды, река впадает в неё и кончается.
+                    // Иначе русло тянулось бы дальше по дну — под водой его всё равно не видно,
+                    // а плитки оно занимало бы настоящие.
+                    if (terrain.IsWater(next))
+                        break;
 
                     if (!merges && branches > 0 && step >= MinStepsBeforeBranch && picks.Count > 1
                         && tile.Hash01(BranchSalt) < BranchChance)
@@ -543,6 +565,9 @@ namespace Game.Grid
 
             public bool Contains(HexCoord coord) => biomes.ContainsKey(coord);
 
+            /// <summary>Плитка залита водой: сюда река впадает и на этом кончается.</summary>
+            public bool IsWater(HexCoord coord) => biomes[coord] == BiomeType.Water;
+
             /// <summary>Плитка на кромке поля: хотя бы один сосед лежит за его границей.</summary>
             public bool IsBorder(HexCoord coord) => inland[coord] == 0;
 
@@ -670,8 +695,8 @@ namespace Game.Grid
             random.Next(settings.MinReserve, settings.MaxReserve + 1);
 
         /// <summary>
-        /// Без камня рядом с Метрополией партия не стартует экономически. Гора в соседях
-        /// не годится: месторождений она не несёт и дорогу не примет. Плитка с рекой — тоже:
+        /// Без камня рядом с Метрополией партия не стартует экономически. Гора и вода в соседях
+        /// не годятся: месторождений они не несут и дорогу не примут. Плитка с рекой — тоже:
         /// месторождений на ней не бывает вовсе.
         /// </summary>
         static void EnsureStoneNextToMetropolis(
@@ -687,7 +712,7 @@ namespace Game.Grid
                 if (!depositsByCoord.TryGetValue(coord, out var deposits))
                     continue;
 
-                if (biomes[coord] == BiomeType.Mountains || rivers.ContainsKey(coord))
+                if (!TileData.IsPassableBiome(biomes[coord]) || rivers.ContainsKey(coord))
                     continue;
 
                 foreach (var deposit in deposits)

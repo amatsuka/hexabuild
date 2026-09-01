@@ -46,7 +46,16 @@ namespace Game.Grid
         public int RiverMask { get; }
 
         /// <summary>Горы дорогу не принимают и за очки не открываются: это стена, а не секрет.</summary>
-        public bool IsPassable => Biome != BiomeType.Mountains;
+        public bool IsPassable => IsPassableBiome(Biome);
+
+        /// <summary>
+        /// Стена ландшафта: гора и вода. Правило у них одно на двоих — месторождений не несут,
+        /// дорогу не принимают, за очки не открываются, — и разводить его по двум предикатам
+        /// нельзя: генератор, гарантии проходимости и перевалы спрашивают об этом до того, как
+        /// появится сама `TileData`, и должны спрашивать ровно то же.
+        /// </summary>
+        public static bool IsPassableBiome(BiomeType biome) =>
+            biome != BiomeType.Mountains && biome != BiomeType.Water;
 
         /// <summary>
         /// Через плитку течёт река. Лента дороги идёт через центр плитки, русло — тоже, значит

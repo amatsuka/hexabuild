@@ -80,7 +80,7 @@ namespace Game.Core
 
             if (!tile.IsPassable)
             {
-                ActionRefused?.Invoke("Гора непроходима");
+                ActionRefused?.Invoke(ImpassableReason(tile));
                 return false;
             }
 
@@ -98,6 +98,13 @@ namespace Game.Core
             return true;
         }
 
+        /// <summary>
+        /// Стена ландшафта у горы и воды одна, а отказ разный: игроку надо сказать, во что он
+        /// упёрся, иначе «гора непроходима» на заливе читается как ошибка игры.
+        /// </summary>
+        static string ImpassableReason(TileData tile) =>
+            tile.Biome == BiomeType.Water ? "Вода непроходима" : "Гора непроходима";
+
         public bool TryBuildRoad(HexCoord coord)
         {
             if (!Map.TryGetTile(coord, out var tile) || tile.IsMetropolis)
@@ -105,7 +112,7 @@ namespace Game.Core
 
             if (!tile.IsPassable)
             {
-                ActionRefused?.Invoke("Гора непроходима");
+                ActionRefused?.Invoke(ImpassableReason(tile));
                 return false;
             }
 

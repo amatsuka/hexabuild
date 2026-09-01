@@ -364,6 +364,45 @@ namespace Game.Tests.EditMode
             CollectionAssert.Contains(refusals, "Гора непроходима");
         }
 
+        // --- M17: вода ---
+
+        /// <summary>
+        /// Вода — та же стена, что гора, и правило у них общее. Отдельный тест нужен из-за
+        /// отказа: он называет игроку то, во что тот упёрся, а «гора непроходима» на заливе
+        /// читалась бы ошибкой игры.
+        /// </summary>
+        [Test]
+        public void TryRevealTile_OnWater_IsRefusedAndCostsNothing()
+        {
+            var state = NewGame(map: FlatMap(biome: c => c == new HexCoord(0, 1) ? BiomeType.Water : BiomeType.Meadow));
+            state.Begin();
+            var refusals = new List<string>();
+            state.ActionRefused += refusals.Add;
+
+            Assert.IsFalse(state.TryRevealTile(new HexCoord(0, 1)));
+
+            state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
+            Assert.AreEqual(TileState.Available, tile.State, "вода остаётся закрытой навсегда");
+            Assert.AreEqual(40, state.Wallet.Points);
+            CollectionAssert.Contains(refusals, "Вода непроходима");
+        }
+
+        /// <summary>Мост через воду не платится: мост остался у реки, вода дорогу не принимает вовсе.</summary>
+        [Test]
+        public void TryBuildRoad_OnWater_IsRefused_AndNoBridgeIsCharged()
+        {
+            var state = NewGame(map: FlatMap(biome: c => c == new HexCoord(0, 1) ? BiomeType.Water : BiomeType.Meadow));
+            state.Begin();
+            var refusals = new List<string>();
+            state.ActionRefused += refusals.Add;
+
+            Assert.IsFalse(state.TryBuildRoad(new HexCoord(0, 1)));
+
+            Assert.IsFalse(state.Roads.HasRoad(new HexCoord(0, 1)));
+            Assert.AreEqual(3, state.Storage.CountOf(ResourceType.Gravel), "за отказ щебень не списывается");
+            CollectionAssert.Contains(refusals, "Вода непроходима");
+        }
+
         /// <summary>Гора никого не открывает: за ней поле остаётся закрытым, это и делает её стеной.</summary>
         [Test]
         public void Mountain_DoesNotOpenTheWayBehindIt()

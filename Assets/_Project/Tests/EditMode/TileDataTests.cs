@@ -110,5 +110,23 @@ namespace Game.Tests.EditMode
             Assert.IsFalse(tile.TryExtract(out _));
             Assert.AreEqual(TileState.Revealed, tile.State);
         }
+
+        /// <summary>
+        /// Стена ландшафта — гора и вода: правило у них одно, и предикат обязан быть общим.
+        /// Генератор спрашивает его до того, как появится сама плитка, и разойдись эти два
+        /// ответа — карта считалась бы проходимой не там, где её проходит игрок.
+        /// </summary>
+        [Test]
+        public void MountainsAndWater_AreTheOnlyImpassableBiomes()
+        {
+            foreach (BiomeType biome in System.Enum.GetValues(typeof(BiomeType)))
+            {
+                var expected = biome is not (BiomeType.Mountains or BiomeType.Water);
+                var tile = new TileData(new HexCoord(1, 0), false, null, biome);
+
+                Assert.AreEqual(expected, TileData.IsPassableBiome(biome), $"{biome}");
+                Assert.AreEqual(expected, tile.IsPassable, $"{biome}: плитка спорит с предикатом");
+            }
+        }
     }
 }
