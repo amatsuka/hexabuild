@@ -17,13 +17,15 @@ namespace Game.Storage
         /// </summary>
         static readonly Vector3 Stage = new(0f, -1000f, 0f);
 
-        readonly Dictionary<ResourceType, RenderTexture> baked = new();
+        readonly Dictionary<Mesh, RenderTexture> baked = new();
         readonly ResourceModels models;
         readonly int resolution;
         readonly Quaternion view;
         readonly float margin;
 
-        bool ready;
+        GameObject stage;
+        MeshFilter stageFilter;
+        Camera stageCamera;
 
         public ResourceIconBaker(ResourceModels models, int resolution, Vector3 viewAngles, float margin)
         {
@@ -34,12 +36,22 @@ namespace Game.Storage
         }
 
         /// <summary>Снимок модели ресурса или null, если модели нет и рисовать надо полигоном.</summary>
-        public Texture Get(ResourceType type)
-        {
-            if (!ready)
-                Bake();
+        public Texture Get(ResourceType type) => Get(models.Get(type), models.Material, view);
 
-            return baked.TryGetValue(type, out var texture) ? texture : null;
+        /// <summary>
+        /// Снимок произвольной модели своим разворотом: так HUD берёт монету и свиток, которых
+        /// в `ResourceType` нет. Печётся по требованию и запоминается по мешу.
+        /// </summary>
+        public Texture Get(Mesh model, Material material, Quaternion rotation)
+        {
+            if (model == null || material == null)
+                return null;
+
+            if (baked.TryGetValue(model, out var cached) && cached != null)
+                return cached;
+
+            EnsureStage();
+            return baked[model] = Render(model, material, rotation);
         }
 
         public void Dispose()
@@ -49,64 +61,72 @@ namespace Game.Storage
                     texture.Release();
 
             baked.Clear();
-            ready = false;
+            DestroyStage();
         }
 
-        void Bake()
+        /// <summary>Один снимок: модель ставится в кадр по центру своих габаритов и рендерится.</summary>
+        RenderTexture Render(Mesh model, Material material, Quaternion rotation)
         {
-            ready = true;
-            if (models == null || models.Material == null)
+            var scale = ResourceModels.ScaleFor(model, 1f);
+            stageFilter.sharedMesh = model;
+            stageFilter.GetComponent<MeshRenderer>().sharedMaterial = material;
+            stage.transform.rotation = rotation;
+            stage.transform.localScale = Vector3.one * scale;
+            // Пивот у моделей разный: бревно центрировано, кирпич стоит на основании.
+            // Ведём кадр по центру габаритов, а не по пивоту.
+            stage.transform.position = Stage - rotation * (model.bounds.center * scale);
+
+            var texture = new RenderTexture(resolution, resolution, 24, RenderTextureFormat.ARGB32,
+                RenderTextureReadWrite.sRGB) { name = model.name + " icon" };
+            stageCamera.targetTexture = texture;
+            stageCamera.Render();
+            stageCamera.targetTexture = null;
+            return texture;
+        }
+
+        void EnsureStage()
+        {
+            if (stage != null)
                 return;
 
-            var stage = new GameObject("ResourceIconStage", typeof(MeshFilter), typeof(MeshRenderer));
-            stage.hideFlags = HideFlags.HideAndDontSave;
+            stage = new GameObject("ResourceIconStage", typeof(MeshFilter), typeof(MeshRenderer))
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
             stage.transform.position = Stage;
-            stage.transform.rotation = view;
+            stageFilter = stage.GetComponent<MeshFilter>();
 
             var stageRenderer = stage.GetComponent<MeshRenderer>();
-            stageRenderer.sharedMaterial = models.Material;
             stageRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             stageRenderer.receiveShadows = false;
 
-            var cameraObject = new GameObject("ResourceIconCamera", typeof(Camera));
-            cameraObject.hideFlags = HideFlags.HideAndDontSave;
-            var camera = cameraObject.GetComponent<Camera>();
-            camera.enabled = false;
-            camera.orthographic = true;
-            camera.orthographicSize = 0.5f * margin;
-            camera.nearClipPlane = 0.01f;
-            camera.farClipPlane = 10f;
-            camera.clearFlags = CameraClearFlags.SolidColor;
+            var cameraObject = new GameObject("ResourceIconCamera", typeof(Camera))
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            stageCamera = cameraObject.GetComponent<Camera>();
+            stageCamera.enabled = false;
+            stageCamera.orthographic = true;
+            stageCamera.orthographicSize = 0.5f * margin;
+            stageCamera.nearClipPlane = 0.01f;
+            stageCamera.farClipPlane = 10f;
+            stageCamera.clearFlags = CameraClearFlags.SolidColor;
             // Прозрачный фон: шейдер пишет альфу 1 на самой модели, вокруг остаётся ноль.
-            camera.backgroundColor = new Color(0f, 0f, 0f, 0f);
+            stageCamera.backgroundColor = new Color(0f, 0f, 0f, 0f);
             cameraObject.transform.position = Stage - Vector3.forward * 5f;
             cameraObject.transform.rotation = Quaternion.identity;
+        }
 
-            var filter = stage.GetComponent<MeshFilter>();
-            foreach (ResourceType type in System.Enum.GetValues(typeof(ResourceType)))
-            {
-                var model = models.Get(type);
-                if (model == null)
-                    continue;
-
-                var scale = ResourceModels.ScaleFor(model, 1f);
-                filter.sharedMesh = model;
-                stage.transform.localScale = Vector3.one * scale;
-                // Пивот у моделей разный: бревно центрировано, кирпич стоит на основании.
-                // Ведём кадр по центру габаритов, а не по пивоту.
-                stage.transform.position = Stage - view * (model.bounds.center * scale);
-
-                var texture = new RenderTexture(resolution, resolution, 24, RenderTextureFormat.ARGB32,
-                    RenderTextureReadWrite.sRGB);
-                texture.name = $"{type} icon";
-                camera.targetTexture = texture;
-                camera.Render();
-                camera.targetTexture = null;
-                baked[type] = texture;
-            }
+        void DestroyStage()
+        {
+            if (stage == null)
+                return;
 
             Object.DestroyImmediate(stage);
-            Object.DestroyImmediate(cameraObject);
+            Object.DestroyImmediate(stageCamera.gameObject);
+            stage = null;
+            stageFilter = null;
+            stageCamera = null;
         }
     }
 }

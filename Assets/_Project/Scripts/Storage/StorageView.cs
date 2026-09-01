@@ -23,7 +23,8 @@ namespace Game.Storage
         [Tooltip("Запас вокруг модели в снимке, доля габарита")]
         [SerializeField, Range(1f, 2f)] float snapshotMargin = 1.2f;
         [SerializeField] UiTheme theme = new();
-        [SerializeField] Color lossFlashColor = new(0.75f, 0.15f, 0.15f, 0.95f);
+        [Tooltip("Во что красится вся панель на потере ресурса. Белый — цвет без изменений")]
+        [SerializeField] Color lossFlashTint = new(1f, 0.30f, 0.26f, 1f);
         [SerializeField] float flashSeconds = 0.4f;
         [SerializeField] int columns = 8;
         [SerializeField] float cellSize = 88f;
@@ -38,9 +39,9 @@ namespace Game.Storage
 
         readonly HashSet<int> pendingCells = new();
 
-        Image panelFill;
+        UiPanelGraphic panel;
         RectTransform[] cells;
-        Image[] cellFills;
+        UiPanelGraphic[] cellPanels;
         ResourceIcon[] icons;
         StorageGrid grid;
         ResourceIconBaker snapshots;
@@ -216,7 +217,9 @@ namespace Game.Storage
             if (flashTimer > 0f)
             {
                 flashTimer = Mathf.Max(0f, flashTimer - Time.deltaTime);
-                panelFill.color = Color.Lerp(theme.PanelFill, lossFlashColor, flashTimer / flashSeconds);
+                // Красится вершинным цветом, то есть вся карточка разом: шейдер домножает на него
+                // и градиент, и кромку, и свечение. Белый — панель в своём цвете.
+                panel.color = Color.Lerp(Color.white, lossFlashTint, flashTimer / flashSeconds);
             }
         }
 
@@ -233,7 +236,8 @@ namespace Game.Storage
 
             // Слои карточки лежат детьми, а сетка — своим ребёнком поверх них: `GridLayoutGroup`
             // растащил бы тень и кромку по клеткам, окажись они прямыми детьми панели.
-            panelFill = UiPanel.FillOf(UiPanel.Create("Panel", transform, theme).Stretch());
+            panel = UiPanel.Create("Panel", transform, theme);
+            panel.rectTransform.Stretch();
 
             var cellsRoot = UiPanel.NewRect("Cells", transform).Stretch();
             var layout = cellsRoot.gameObject.AddComponent<GridLayoutGroup>();
@@ -244,13 +248,13 @@ namespace Game.Storage
             layout.constraintCount = columns;
 
             cells = new RectTransform[grid.Capacity];
-            cellFills = new Image[grid.Capacity];
+            cellPanels = new UiPanelGraphic[grid.Capacity];
             icons = new ResourceIcon[grid.Capacity];
             for (var i = 0; i < cells.Length; i++)
             {
-                cellFills[i] = UiPanel.CreateSlot($"Cell {i}", cellsRoot, theme);
-                var cell = cellFills[i].transform.parent.gameObject;
-                cells[i] = (RectTransform)cell.transform;
+                cellPanels[i] = UiPanel.Create($"Cell {i}", cellsRoot, theme, theme.SlotEmpty);
+                var cell = cellPanels[i].gameObject;
+                cells[i] = cellPanels[i].rectTransform;
 
                 // Иконка — ребёнок подложки: она едет вместе с ней на пульсации и на выскакивании
                 // масштабом, а `GridLayoutGroup` раскладывает только прямых детей панели.
@@ -274,7 +278,7 @@ namespace Game.Storage
             {
                 var content = grid[i];
                 var shown = content.HasValue && !pendingCells.Contains(i);
-                cellFills[i].color = shown ? theme.SlotFilled : theme.SlotEmpty;
+                cellPanels[i].Apply(theme.PanelShader, shown ? theme.SlotFilled : theme.SlotEmpty);
 
                 if (shown)
                     ShowIcon(icons[i], content.Value);
@@ -294,6 +298,13 @@ namespace Game.Storage
             var snapshot = snapshots?.Get(type);
             icon.Show(type, snapshot != null ? Color.white : palette.Get(type), snapshot);
         }
+
+        /// <summary>
+        /// Иконка по произвольной модели: так HUD берёт монету и свиток. Печёт тот же пекарь —
+        /// второй набор `RenderTexture` на партию заводить незачем.
+        /// </summary>
+        public void ShowIcon(ResourceIcon icon, Mesh model, Material material, Vector3 angles) =>
+            icon.Show(snapshots?.Get(model, material, Quaternion.Euler(angles)), Color.white);
 
         void OnResourceLost(ResourceType type) => flashTimer = flashSeconds;
     }
