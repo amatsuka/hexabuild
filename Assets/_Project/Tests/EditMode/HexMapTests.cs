@@ -19,35 +19,85 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void FourteenRows_Hold105Tiles()
+        public void FourteenRows_Hold83Tiles()
         {
-            Assert.AreEqual(105, Build(Rows).Count);
+            Assert.AreEqual(83, Build(Rows).Count);
         }
 
+        /// <summary>У самой Метрополии кривая упирается в потолок роста: там ряд шире нижнего ровно на плитку.</summary>
         [TestCase(1, 1)]
         [TestCase(2, 3)]
         [TestCase(3, 6)]
-        public void EachRow_AddsOneTileToTheFlare(int rows, int expected)
+        public void FirstRows_AddOneTileEach(int rows, int expected)
         {
             Assert.AreEqual(expected, Build(rows).Count);
         }
 
+        /// <summary>
+        /// Ряд не бывает шире нижнего больше чем на плитку и не бывает уже: иначе плитки повисли бы
+        /// в воздухе, а поле пошло бы бочкой вместо раструба.
+        /// </summary>
         [Test]
-        public void RowWidth_GrowsUpwardFromTheMetropolis()
+        public void RowWidth_GrowsUpwardByOneTileAtMost()
+        {
+            var perRow = WidthPerRow(Build(Rows));
+
+            Assert.AreEqual(1, perRow[0], "нижний ряд — одна Метрополия");
+            for (var row = 1; row < Rows; row++)
+            {
+                Assert.GreaterOrEqual(perRow[row], perRow[row - 1], $"ряд {row} уже нижнего");
+                Assert.LessOrEqual(perRow[row], perRow[row - 1] + 1, $"ряд {row} шире нижнего больше чем на плитку");
+            }
+        }
+
+        /// <summary>
+        /// Раструб замедленный: он раскрывается у Метрополии и упирается в потолок ширины наверху,
+        /// а не растёт линейно до самой кромки. Без этого поле не влезает в вертикальный экран.
+        /// </summary>
+        [Test]
+        public void Flare_SlowsDownTowardsTheTopRow()
+        {
+            var perRow = WidthPerRow(Build(Rows));
+
+            Assert.AreEqual(HexMap.TopRowTiles, perRow[Rows - 1], "верхний ряд шире потолка");
+            Assert.Less(perRow[Rows - 1] - perRow[Rows / 2], perRow[Rows / 2] - perRow[0],
+                "верхняя половина поля расширяется не медленнее нижней — раструб линейный");
+        }
+
+        /// <summary>Поле выше, чем шире: игра идёт в вертикальной ориентации.</summary>
+        [Test]
+        public void Field_IsTallerThanItIsWide()
         {
             var map = Build(Rows);
-            var perRow = new Dictionary<int, int>();
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
 
+            foreach (var coord in map.Tiles.Keys)
+            {
+                var plane = coord.ToPlane();
+                min = Vector2.Min(min, plane);
+                max = Vector2.Max(max, plane);
+            }
+
+            Assert.Less(max.x - min.x, max.y - min.y, "поле шире, чем выше");
+        }
+
+        static Dictionary<int, int> WidthPerRow(HexMap map)
+        {
+            var perRow = new Dictionary<int, int>();
             foreach (var coord in map.Tiles.Keys)
                 perRow[coord.R] = perRow.GetValueOrDefault(coord.R) + 1;
 
-            for (var row = 0; row < Rows; row++)
-                Assert.AreEqual(row + 1, perRow[row], $"ряд {row}");
+            return perRow;
         }
 
-        /// <summary>Раструб симметричен: ряд стоит по центру над Метрополией, а не уезжает вбок.</summary>
+        /// <summary>
+        /// Раструб не уезжает вбок: ряд стоит по оси Метрополии или в полуплитке от неё — ряду
+        /// такой же ширины, как нижний, на оси места нет вовсе, — и стороны ухода чередуются,
+        /// так что поле в среднем остаётся на оси.
+        /// </summary>
         [Test]
-        public void EveryRow_IsCentredOverTheMetropolis()
+        public void EveryRow_StaysOnTheMetropolisAxis()
         {
             var map = Build(Rows);
             var span = new Dictionary<int, (float Min, float Max)>();
@@ -60,8 +110,15 @@ namespace Game.Tests.EditMode
                     : (x, x);
             }
 
+            var drift = 0f;
             foreach (var row in span)
-                Assert.AreEqual(0f, row.Value.Min + row.Value.Max, 1e-4f, $"ряд {row.Key} сместился вбок");
+            {
+                var centre = (row.Value.Min + row.Value.Max) * 0.5f;
+                Assert.LessOrEqual(Mathf.Abs(centre), 0.5f + 1e-4f, $"ряд {row.Key} уехал больше чем на полплитки");
+                drift += centre;
+            }
+
+            Assert.LessOrEqual(Mathf.Abs(drift / span.Count), 0.15f, "поле в целом сползло с оси Метрополии");
         }
 
         [Test]
@@ -81,8 +138,8 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Замедленный раструб шире нижнего ряда на одну плитку, поэтому каждая плитка стоит на
-        /// плитке ряда ниже. Это и держит поле связным.
+        /// Ряд шире нижнего не больше чем на плитку и уходит вбок не больше чем на полплитки,
+        /// поэтому каждая плитка стоит на плитке ряда ниже. Это и держит поле связным.
         /// </summary>
         [Test]
         public void EveryTile_LeansOnTheRowBelow()

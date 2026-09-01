@@ -15,11 +15,11 @@ namespace Game.Tests.EditMode
             new(Rows, seed, empty, single, two, three, 8, 20);
 
         [Test]
-        public void Generates105TilesWithMetropolisAtTheBottom()
+        public void Generates83TilesWithMetropolisAtTheBottom()
         {
             var map = MapGenerator.Generate(Settings(1));
 
-            Assert.AreEqual(105, map.Count);
+            Assert.AreEqual(83, map.Count);
             Assert.AreEqual(0, map.Metropolis.Coord.R);
             Assert.IsTrue(map.Metropolis.IsMetropolis);
             Assert.IsEmpty(map.Metropolis.Deposits);

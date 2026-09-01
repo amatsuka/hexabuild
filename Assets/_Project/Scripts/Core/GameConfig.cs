@@ -11,7 +11,7 @@ namespace Game.Core
     public sealed class GameConfig : ScriptableObject
     {
         [Header("Поле")]
-        [SerializeField] int fieldRows = 14;
+        [SerializeField] int fieldRows = 18;
         [SerializeField] int seed;
 
         [Header("Генерация месторождений")]
