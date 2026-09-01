@@ -71,6 +71,8 @@ namespace Game.Core
                 config.ContractGoal,
                 config.ContractSeconds,
                 config.ContractReward,
+                config.ContractPauseMin,
+                config.ContractPauseMax,
                 seed);
             end = new GameEndSystem(
                 state, mergeRules, deliveries, config.LossPenalty, config.FullFieldBonus, config.FullDepositBonus);
@@ -127,6 +129,10 @@ namespace Game.Core
             state.Begin();
             for (var i = 0; i < config.StartingGravel; i++)
                 state.Storage.TryStore(ResourceType.Gravel);
+
+            // Первый контракт партии идёт без паузы (3.8). Дальше система выдаёт их сама,
+            // отмолчав между ними случайную паузу.
+            contracts.Issue();
         }
 
         void Update()
@@ -136,20 +142,8 @@ namespace Game.Core
 
             production.Tick(Time.deltaTime);
             deliveries.Tick(Time.deltaTime);
-            TickContracts();
+            contracts.Tick(Time.deltaTime);
             end.Tick();
-        }
-
-        /// <summary>
-        /// Дальше контракты система выдаёт сама, поэтому `Issue` срабатывает здесь ровно один
-        /// раз — на самый первый контракт партии.
-        /// </summary>
-        void TickContracts()
-        {
-            if (contracts.IsActive)
-                contracts.Tick(Time.deltaTime);
-            else
-                contracts.Issue();
         }
 
         void SpawnTiles(HexMap map)
@@ -356,13 +350,18 @@ namespace Game.Core
         }
 
         /// <summary>
-        /// Крафт обменян на очки: сначала плашка о прибавке, потом зачёт контракту. Порядок
-        /// важен — зачёт может закрыть контракт, и его награда должна лечь плашкой следом,
-        /// а не перед тем, за что она пришла.
+        /// Крафт обменян на очки: плашка о прибавке, полёт ресурса в карточку контракта, потом
+        /// зачёт. Порядок важен дважды: зачёт может закрыть контракт, и его награда должна лечь
+        /// плашкой следом, а не перед тем, за что она пришла; полёт же запускается до зачёта,
+        /// пока карточка того контракта, в который ресурс летит, ещё на экране.
         /// </summary>
-        void OnConverted(ResourceType type, int points)
+        void OnConverted(int cell, ResourceType type, int points)
         {
             hudView.ShowGain(points, type);
+
+            if (contracts.IsActive && contracts.Type == type)
+                hudView.PlayContractDelivery(storageView.CellPoint(cell), type);
+
             contracts.Count(type);
         }
 

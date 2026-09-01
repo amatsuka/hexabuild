@@ -9,6 +9,8 @@ namespace Game.Tests.EditMode
         const int Goal = 2;
         const float Seconds = 10f;
         const int Reward = 40;
+        const float MinPause = 5f;
+        const float MaxPause = 20f;
 
         static readonly ResourceType[] OneType = { ResourceType.Board };
 
@@ -20,7 +22,7 @@ namespace Game.Tests.EditMode
         public void SetUp()
         {
             wallet = new Wallet(0);
-            contracts = new ContractSystem(wallet, OneType, Goal, Seconds, Reward, seed: 1);
+            contracts = new ContractSystem(wallet, OneType, Goal, Seconds, Reward, MinPause, MaxPause, seed: 1);
             log = new List<string>();
             contracts.Issued += () => log.Add("issued");
             contracts.Progressed += () => log.Add("progressed");
@@ -52,10 +54,13 @@ namespace Game.Tests.EditMode
             contracts.Count(ResourceType.Board);
             Assert.AreEqual(1, contracts.CompletedCount);
 
-            // Следующий контракт выдан сразу же и провален по времени: провал в счёт не идёт.
+            // Следующий контракт приходит после паузы и проваливается по времени: провал
+            // в счёт не идёт.
+            contracts.Tick(MaxPause);
             contracts.Tick(Seconds);
             Assert.AreEqual(1, contracts.CompletedCount);
 
+            contracts.Tick(MaxPause);
             contracts.Count(ResourceType.Board);
             contracts.Count(ResourceType.Board);
             Assert.AreEqual(2, contracts.CompletedCount);
@@ -67,6 +72,19 @@ namespace Game.Tests.EditMode
             contracts.Count(ResourceType.Board);
 
             Assert.AreEqual(0, contracts.Delivered);
+            CollectionAssert.IsEmpty(log);
+        }
+
+        /// <summary>
+        /// Сама по себе система партию не начинает: первый контракт выдаёт `Issue` (3.8).
+        /// Иначе после конца партии тик продолжал бы плодить контракты в пустоту.
+        /// </summary>
+        [Test]
+        public void Tick_BeforeTheFirstContract_IssuesNothing()
+        {
+            contracts.Tick(MaxPause * 2f);
+
+            Assert.IsFalse(contracts.IsActive);
             CollectionAssert.IsEmpty(log);
         }
 
@@ -98,8 +116,13 @@ namespace Game.Tests.EditMode
             CollectionAssert.DoesNotContain(log, "progressed");
         }
 
+        /// <summary>
+        /// Между контрактами Метрополия молчит: следующий приходит не в тот же кадр, а после
+        /// случайной паузы. Сплошная очередь контрактов не оставляла игроку ни минуты, когда
+        /// он играет в своё.
+        /// </summary>
         [Test]
-        public void CompletedContract_IsFollowedByAFreshOne()
+        public void CompletedContract_IsFollowedByAPauseAndThenAFreshOne()
         {
             contracts.Issue();
             contracts.Count(ResourceType.Board);
@@ -107,9 +130,38 @@ namespace Game.Tests.EditMode
 
             contracts.Count(ResourceType.Board);
 
-            Assert.IsTrue(contracts.IsActive, "активный контракт всегда один, и он есть");
+            Assert.IsFalse(contracts.IsActive, "сразу за закрытым контрактом нового не бывает");
+            Assert.GreaterOrEqual(contracts.SecondsToNext, MinPause);
+            Assert.LessOrEqual(contracts.SecondsToNext, MaxPause);
+
+            contracts.Tick(MinPause - 0.1f);
+            Assert.IsFalse(contracts.IsActive, "пауза ещё идёт");
+
+            contracts.Tick(MaxPause);
+
+            Assert.IsTrue(contracts.IsActive, "пауза кончилась, контракт выдан");
             Assert.AreEqual(0, contracts.Delivered);
             Assert.AreEqual(Seconds, contracts.SecondsLeft, "таймер нового контракта полный");
+        }
+
+        /// <summary>Пауза случайная, но в своих границах, и на каждом круге считается заново.</summary>
+        [Test]
+        public void PauseBetweenContracts_StaysWithinItsBounds()
+        {
+            var pauses = new List<float>();
+
+            for (var round = 0; round < 20; round++)
+            {
+                contracts.Issue();
+                contracts.Count(ResourceType.Board);
+                contracts.Count(ResourceType.Board);
+
+                pauses.Add(contracts.SecondsToNext);
+                Assert.GreaterOrEqual(contracts.SecondsToNext, MinPause);
+                Assert.LessOrEqual(contracts.SecondsToNext, MaxPause);
+            }
+
+            CollectionAssert.AllItemsAreUnique(pauses, "пауза не случайная, а одна и та же");
         }
 
         [Test]
@@ -122,6 +174,11 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(0, wallet.Points, "провал ничем не штрафует");
             CollectionAssert.Contains(log, "failed");
+            Assert.IsFalse(contracts.IsActive, "после провала Метрополия молчит паузу");
+            Assert.GreaterOrEqual(contracts.SecondsToNext, MinPause);
+
+            contracts.Tick(MaxPause);
+
             Assert.IsTrue(contracts.IsActive, "следом выдан новый контракт");
             Assert.AreEqual(0, contracts.Delivered);
         }
@@ -142,7 +199,7 @@ namespace Game.Tests.EditMode
         public void Type_IsAlwaysOneOfTheCraftedTypes()
         {
             var types = new[] { ResourceType.Board, ResourceType.Gravel, ResourceType.Ingot };
-            var system = new ContractSystem(wallet, types, Goal, Seconds, Reward, seed: 7);
+            var system = new ContractSystem(wallet, types, Goal, Seconds, Reward, MinPause, MaxPause, seed: 7);
 
             for (var i = 0; i < 50; i++)
             {

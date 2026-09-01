@@ -61,6 +61,22 @@ namespace Game.UI
         [Tooltip("Больше плашек столбец не держит: самая старая уходит сразу")]
         [SerializeField] int maxToasts = 3;
 
+        [Header("Анимация карточки контракта")]
+        [Tooltip("Сколько карточка выезжает при выдаче контракта")]
+        [SerializeField] float cardShowSeconds = 0.28f;
+        [Tooltip("Сколько она уходит, когда контракт закрыт или провален")]
+        [SerializeField] float cardHideSeconds = 0.22f;
+        [Tooltip("С какого масштаба карточка появляется и до какого схлопывается")]
+        [SerializeField, Range(0.5f, 1f)] float cardMinScale = 0.82f;
+        [Tooltip("Перелёт карточки за единицу масштаба: без него появление читается вялым")]
+        [SerializeField, Range(1f, 1.3f)] float cardOvershoot = 1.06f;
+        [Tooltip("Сколько сданный ресурс летит из клетки склада в карточку контракта")]
+        [SerializeField] float deliveryFlySeconds = 0.42f;
+        [Tooltip("Насколько высоко ресурс выгибает дугу по пути, пиксели канваса")]
+        [SerializeField] float deliveryArc = 140f;
+        [Tooltip("Во сколько раз иконка цели подскакивает, приняв ресурс")]
+        [SerializeField, Range(1f, 1.6f)] float goalPunch = 1.35f;
+
         readonly List<GameObject> toasts = new();
         readonly TextMeshProUGUI[] stripCounts = new TextMeshProUGUI[StripTypes.Length];
 
@@ -73,6 +89,13 @@ namespace Game.UI
         TextMeshProUGUI contractTimer;
         UiPanelGraphic contractBarFill;
         RectTransform toastColumn;
+
+        CanvasGroup contractFade;
+        Coroutine cardAnimation;
+        bool cardShown;
+
+        /// <summary>Сколько ресурсов сейчас летит в карточку: пока летят, она не уходит.</summary>
+        int flyingToContract;
 
         int shownSeconds = -1;
         ContractSystem contracts;
@@ -133,6 +156,70 @@ namespace Game.UI
             storageView.ShowIcon(icon, source);
         }
 
+        /// <summary>
+        /// Сданный по контракту ресурс летит из своей клетки склада в карточку: без этого
+        /// прогресс менялся сам по себе, и связь между кликом на складе и полосой контракта
+        /// игрок читал только по числу. Пока ресурс в пути, карточка не уходит с экрана, даже
+        /// если этот же ресурс контракт и закрыл.
+        /// </summary>
+        public void PlayContractDelivery(Vector3 origin, ResourceType type)
+        {
+            if (!isActiveAndEnabled || !contractCard.gameObject.activeSelf)
+                return;
+
+            flyingToContract++;
+            StartCoroutine(FlyToContract(origin, type));
+        }
+
+        IEnumerator FlyToContract(Vector3 origin, ResourceType type)
+        {
+            var flying = CreateIcon("Delivery", transform, IconSize);
+            flying.rectTransform.SetAsLastSibling();
+            flying.rectTransform.position = origin;
+            storageView.ShowIcon(flying, type);
+
+            var target = (RectTransform)contractIcon.transform;
+
+            for (var elapsed = 0f; elapsed < deliveryFlySeconds; elapsed += Time.deltaTime)
+            {
+                var progress = Mathf.Clamp01(elapsed / deliveryFlySeconds);
+                var eased = Mathf.SmoothStep(0f, 1f, progress);
+
+                // Цель берётся каждый кадр: карточка в это время может ещё выезжать.
+                var point = Vector3.Lerp(origin, target.position, eased);
+
+                // Дуга — половина синуса: ресурс уходит вверх и падает в карточку, а не ползёт
+                // по прямой через полэкрана.
+                point.y += Mathf.Sin(eased * Mathf.PI) * deliveryArc;
+                flying.rectTransform.position = point;
+                flying.rectTransform.localScale = Vector3.one * Mathf.Lerp(1f, 0.7f, eased);
+                yield return null;
+            }
+
+            Destroy(flying.gameObject);
+            flyingToContract--;
+
+            if (contractCard.gameObject.activeSelf)
+                yield return Punch(target, goalPunch);
+        }
+
+        /// <summary>Иконка цели принимает ресурс: короткий подскок масштабом и обратно.</summary>
+        IEnumerator Punch(RectTransform rect, float scale)
+        {
+            const float PunchSeconds = 0.16f;
+
+            for (var elapsed = 0f; elapsed < PunchSeconds; elapsed += Time.deltaTime)
+            {
+                var progress = elapsed / PunchSeconds;
+                rect.localScale = Vector3.one * (progress < 0.5f
+                    ? Mathf.Lerp(1f, scale, progress * 2f)
+                    : Mathf.Lerp(scale, 1f, (progress - 0.5f) * 2f));
+                yield return null;
+            }
+
+            rect.localScale = Vector3.one;
+        }
+
         void OnDestroy()
         {
             if (wallet == null)
@@ -169,12 +256,12 @@ namespace Game.UI
         {
             if (!contracts.IsActive)
             {
-                contractCard.gameObject.SetActive(false);
+                HideContractCard();
                 shownSeconds = -1;
                 return;
             }
 
-            contractCard.gameObject.SetActive(true);
+            ShowContractCard();
             shownSeconds = Mathf.CeilToInt(contracts.SecondsLeft);
 
             storageView.ShowIcon(contractIcon, contracts.Type);
@@ -190,6 +277,102 @@ namespace Game.UI
 
         /// <summary>Контракт закрыт: награда всплывает плашкой с иконкой того же крафта.</summary>
         void OnContractCompleted(int reward) => ShowGain(reward, contracts.Type);
+
+        /// <summary>
+        /// Контракт выдан: карточка выезжает масштабом и прозрачностью. Между контрактами
+        /// Метрополия молчит (3.9), и карточки в это время нет вовсе — появляться ей теперь
+        /// есть откуда, поэтому появление и показывается, а не включается кадром.
+        /// </summary>
+        void ShowContractCard()
+        {
+            if (cardShown)
+                return;
+
+            cardShown = true;
+            contractCard.gameObject.SetActive(true);
+
+            if (!Animate(ShowCard()))
+                SetCard(1f, 1f);
+        }
+
+        /// <summary>
+        /// Контракт закрыт или провален: карточка уходит. Уходит она не раньше, чем долетит
+        /// последний сданный ресурс, — иначе он падал бы в пустое место.
+        /// </summary>
+        void HideContractCard()
+        {
+            if (!cardShown)
+                return;
+
+            cardShown = false;
+
+            if (!Animate(HideCard()))
+            {
+                SetCard(0f, 1f);
+                contractCard.gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>
+        /// Анимация карточки всегда одна: новая обрывает недоигранную прежнюю. На выключенном
+        /// HUD корутина не заводится вовсе — тогда вызвавший ставит конечное состояние сам,
+        /// иначе карточка застыла бы прозрачной.
+        /// </summary>
+        bool Animate(IEnumerator animation)
+        {
+            if (cardAnimation != null)
+                StopCoroutine(cardAnimation);
+
+            cardAnimation = null;
+            if (!isActiveAndEnabled)
+                return false;
+
+            cardAnimation = StartCoroutine(animation);
+            return true;
+        }
+
+        /// <summary>Прозрачность и масштаб карточки разом: конец любой её анимации.</summary>
+        void SetCard(float alpha, float scale)
+        {
+            contractFade.alpha = alpha;
+            contractCard.localScale = Vector3.one * scale;
+        }
+
+        IEnumerator ShowCard()
+        {
+            for (var elapsed = 0f; elapsed < cardShowSeconds; elapsed += Time.deltaTime)
+            {
+                var progress = Mathf.Clamp01(elapsed / cardShowSeconds);
+                contractFade.alpha = progress;
+
+                // Перелёт за единицу и возврат: карточка «доезжает» до места, а не тормозит в нём.
+                contractCard.localScale = Vector3.one * (progress < 0.7f
+                    ? Mathf.Lerp(cardMinScale, cardOvershoot, progress / 0.7f)
+                    : Mathf.Lerp(cardOvershoot, 1f, (progress - 0.7f) / 0.3f));
+                yield return null;
+            }
+
+            SetCard(1f, 1f);
+            cardAnimation = null;
+        }
+
+        IEnumerator HideCard()
+        {
+            while (flyingToContract > 0)
+                yield return null;
+
+            for (var elapsed = 0f; elapsed < cardHideSeconds; elapsed += Time.deltaTime)
+            {
+                var progress = Mathf.Clamp01(elapsed / cardHideSeconds);
+                contractFade.alpha = 1f - progress;
+                contractCard.localScale = Vector3.one * Mathf.Lerp(1f, cardMinScale, progress);
+                yield return null;
+            }
+
+            SetCard(0f, 1f);
+            contractCard.gameObject.SetActive(false);
+            cardAnimation = null;
+        }
 
         void BuildPointsCard()
         {
@@ -240,6 +423,11 @@ namespace Game.UI
             contractCard = UiPanel.Create("Contract", transform, theme).rectTransform;
             Place(contractCard, new Vector2(1f, 1f),
                 new Vector2(-Margin, -(Margin + TopHeight + 16f)), new Vector2(CardWidth, CardHeight));
+
+            // Прозрачность всей карточки разом: у неё своя графика, три иконки и пять строк,
+            // и гасить их по отдельности значило бы держать список того, что гасить.
+            contractFade = contractCard.gameObject.AddComponent<CanvasGroup>();
+            contractCard.gameObject.SetActive(false);
 
             var inner = CardWidth - CardPadding * 2f;
             var textWidth = CardWidth - CardColumn - CardPadding;

@@ -24,8 +24,11 @@ namespace Game.Merge
 
         public event Action<MergeReport> Merged;
 
-        /// <summary>Крафтовый ресурс превращён в очки.</summary>
-        public event Action<ResourceType, int> Converted;
+        /// <summary>
+        /// Крафтовый ресурс превращён в очки: из какой клетки, что и на сколько. Клетка нужна
+        /// не правилам, а виду: из неё ресурс улетает в карточку контракта.
+        /// </summary>
+        public event Action<int, ResourceType, int> Converted;
 
         public bool TryMerge(ResourceType type)
         {
@@ -68,7 +71,7 @@ namespace Game.Merge
 
             storage.TryRemoveAt(cellIndex);
             wallet.AddPoints(rules.CraftedPoints);
-            Converted?.Invoke(content.Value, rules.CraftedPoints);
+            Converted?.Invoke(cellIndex, content.Value, rules.CraftedPoints);
             return true;
         }
     }

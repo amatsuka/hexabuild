@@ -50,6 +50,9 @@ namespace Game.Core
         [SerializeField] float contractSeconds = 45f;
         [Tooltip("Награда сверх обычных очков за обмен")]
         [SerializeField] int contractReward = 40;
+        [Tooltip("Сколько Метрополия молчит между контрактами: случайно в этих границах")]
+        [SerializeField] float contractPauseMin = 5f;
+        [SerializeField] float contractPauseMax = 20f;
 
         [Header("Финальный счёт")]
         [Tooltip("Штраф за каждый ресурс, уничтоженный переполненным складом")]
@@ -78,6 +81,10 @@ namespace Game.Core
         public float ContractSeconds => contractSeconds;
 
         public int ContractReward => contractReward;
+
+        public float ContractPauseMin => contractPauseMin;
+
+        public float ContractPauseMax => contractPauseMax;
 
         public int LossPenalty => lossPenalty;
 

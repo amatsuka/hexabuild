@@ -174,6 +174,12 @@ namespace Game.Storage
             return false;
         }
 
+        /// <summary>
+        /// Точка клетки на канвасе: отсюда сданный ресурс улетает в карточку контракта.
+        /// Мировая точка сцены для этого не годится — карточка живёт в канвасе, а не на поле.
+        /// </summary>
+        public Vector3 CellPoint(int index) => cells[index].position;
+
         /// <summary>Мировая точка клетки: туда прыгает доехавший до Метрополии ресурс.</summary>
         public Vector3 CellWorldPoint(int index, Camera worldCamera)
         {
