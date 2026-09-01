@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Game.Economy;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace Game.Storage
 {
@@ -78,6 +80,25 @@ namespace Game.Storage
 
             var texture = new RenderTexture(resolution, resolution, 24, RenderTextureFormat.ARGB32,
                 RenderTextureReadWrite.sRGB) { name = model.name + " icon" };
+
+            // Текстура чистится до кадра: свежая `RenderTexture` содержит мусор видеопамяти, и
+            // если рендер по какой-то причине не состоится, иконка обязана выйти пустой, а не
+            // раскрашенной чужим буфером. Ровно так веб-сборка и показывала кляксы.
+            var previous = RenderTexture.active;
+            RenderTexture.active = texture;
+            GL.Clear(true, true, Color.clear);
+            RenderTexture.active = previous;
+
+            // Кадр просится у самого конвейера, а не `Camera.Render()`: в SRP тот идёт мимо
+            // конвейера, и в плеере отдаёт не то, что в редакторе. `StandardRequest` живёт
+            // в ядре рендера, ссылки на пакет URP для него не нужно.
+            var request = new RenderPipeline.StandardRequest { destination = texture };
+            if (RenderPipeline.SupportsRenderRequest(stageCamera, request))
+            {
+                RenderPipeline.SubmitRenderRequest(stageCamera, request);
+                return texture;
+            }
+
             stageCamera.targetTexture = texture;
             stageCamera.Render();
             stageCamera.targetTexture = null;
@@ -115,6 +136,17 @@ namespace Game.Storage
             stageCamera.backgroundColor = new Color(0f, 0f, 0f, 0f);
             cameraObject.transform.position = Stage - Vector3.forward * 5f;
             cameraObject.transform.rotation = Quaternion.identity;
+
+            // Камере снимка не нужно ничего из того, что конвейер делает ради кадра игры:
+            // ни постобработки, ни теней, ни копий глубины и цвета. Каждый такой проход пишет
+            // в свои цели, и в вебе именно они оставались в текстуре вместо самой модели —
+            // иконки выходили кислотными. Модель освещена ключевым светом сцены, и этого хватает.
+            var cameraData = stageCamera.GetUniversalAdditionalCameraData();
+            cameraData.renderPostProcessing = false;
+            cameraData.renderShadows = false;
+            cameraData.antialiasing = AntialiasingMode.None;
+            cameraData.requiresDepthOption = CameraOverrideOption.Off;
+            cameraData.requiresColorOption = CameraOverrideOption.Off;
         }
 
         void DestroyStage()
