@@ -8,7 +8,7 @@ namespace Game.Grid
     public sealed class BiomePalette
     {
         [Tooltip("Дно под водой: сама вода — это шейдер поверх, а не цвет плитки")]
-        [SerializeField] Color water = new(0.60f, 0.60f, 0.55f);
+        [SerializeField] Color water = new(0.50f, 0.47f, 0.42f);
         [SerializeField] Color sand = new(0.85f, 0.78f, 0.55f);
         [SerializeField] Color meadow = new(0.55f, 0.70f, 0.40f);
         [SerializeField] Color forest = new(0.35f, 0.56f, 0.34f);

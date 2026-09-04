@@ -13,11 +13,18 @@ namespace Game.UI
         const float OffScreenDrop = 0.35f;
 
         // Портрет узкий: на максимальном зуме поле влезает по высоте, ширину проходим паном.
-        // Верхняя граница держит гекс крупным: при 6 юнитах он занимает около 160 px из 1080.
-        [SerializeField] float minZoom = 3f;
+        // Нижняя граница держит гекс крупным: при 6 юнитах он занимает около 160 px из 1080,
+        // при 2 — заполняет треть экрана, и это ближний предел разглядывания плитки.
+        [SerializeField] float minZoom = 2f;
         [Tooltip("Нижняя граница верхнего предела. Если поле в неё не влезает, предел поднимается сам — до зума, на котором видно всё поле")]
         [SerializeField] float maxZoom = 6f;
+        [Tooltip("Во сколько раз можно отъехать дальше зума, на котором поле видно целиком")]
+        [SerializeField, Range(1f, 2f)] float zoomOutSlack = 1.3f;
         [SerializeField] float zoomStepPerScroll = 0.6f;
+
+        [Header("Запас хода")]
+        [Tooltip("Насколько камера заходит за край поля, в долях свободной от интерфейса части кадра. 0.5 — край поля доезжает до её середины, 1 — до дальней кромки")]
+        [SerializeField, Range(0f, 1f)] float panSlack = 0.5f;
 
         // Наклон камеры к земле. 90 — прежний вид строго сверху, поэтому вся стадия
         // откатывается одним числом.
@@ -29,8 +36,20 @@ namespace Game.UI
         /// <summary>Запас вокруг поля на самом дальнем зуме: край не должен лежать впритык к кромке.</summary>
         const float FitMargin = 1.04f;
 
+        /// <summary>Больше этой доли кадра одна полоса интерфейса не съедает — иначе кадр вырождается.</summary>
+        const float MaxInset = 0.4f;
+
+        /// <summary>Меньше этой доли кадра под поле не остаётся: на ней считается зум «видно всё».</summary>
+        const float MinFreeShare = 0.3f;
+
         Camera cameraComponent;
         Rect fieldBounds = new(-1000f, -1000f, 2000f, 2000f);
+
+        // Полосы интерфейса поверх кадра, в долях его высоты: сверху HUD, снизу панель склада.
+        // Кадр под ними показывает то же поле, поэтому клампа считает не весь кадр, а только
+        // свободную часть — иначе крайние ряды поля навсегда остаются под панелями.
+        float insetTop;
+        float insetBottom;
 
         /// <summary>Зум, на котором поле видно целиком. Считается из габаритов в `SetFieldBounds`.</summary>
         float fitZoom;
@@ -55,6 +74,15 @@ namespace Game.UI
         /// <summary>Половина видимой глубины поля в мировых единицах, уже с поправкой на наклон.</summary>
         float HalfDepth => Cam.orthographicSize / Foreshortening;
 
+        /// <summary>Полоса HUD сверху кадра, в мировых единицах глубины.</summary>
+        float TopBand => insetTop * 2f * HalfDepth;
+
+        /// <summary>Полоса склада снизу кадра, в мировых единицах глубины.</summary>
+        float BottomBand => insetBottom * 2f * HalfDepth;
+
+        /// <summary>Глубина той части кадра, где поле не закрыто интерфейсом.</summary>
+        float FreeDepth => Mathf.Max(2f * HalfDepth - TopBand - BottomBand, 0.1f);
+
         void Awake()
         {
             Initialize();
@@ -68,7 +96,23 @@ namespace Game.UI
             fieldBounds = bounds;
             fitAspect = Cam.aspect;
             fitZoom = FitZoom(bounds);
-            ClampPosition();
+            // Через зум, а не сразу клампой: новые габариты меняют и предел зума, и текущий
+            // размер кадра может оказаться за ним.
+            Zoom(0f);
+        }
+
+        /// <summary>
+        /// Полосы интерфейса поверх кадра — HUD сверху, панель склада снизу, в долях высоты
+        /// экрана. Камера доводит поле до их кромки, а не до кромки кадра, и на дальнем зуме
+        /// вмещает поле в свободный просвет между ними. Пересказывать при смене размера окна.
+        /// </summary>
+        public void SetViewportInsets(float topShare, float bottomShare)
+        {
+            Initialize();
+            insetTop = Mathf.Clamp(topShare, 0f, MaxInset);
+            insetBottom = Mathf.Clamp(bottomShare, 0f, MaxInset);
+            fitZoom = FitZoom(fieldBounds);
+            Zoom(0f);
         }
 
         /// <summary>
@@ -88,18 +132,21 @@ namespace Game.UI
                     fitZoom = FitZoom(fieldBounds);
                 }
 
-                return Mathf.Max(maxZoom, fitZoom);
+                return Mathf.Max(maxZoom, fitZoom * zoomOutSlack);
             }
         }
 
         /// <summary>
         /// Зум, при котором поле помещается и по ширине, и по глубине. По глубине кадр короче
         /// в `Foreshortening` раз: земля наклонена, и в ту же высоту экрана её влезает меньше.
+        /// Считается по свободному просвету, а не по всему кадру: под полосами интерфейса поле
+        /// хоть и нарисовано, но не видно.
         /// </summary>
         float FitZoom(Rect bounds)
         {
+            var freeShare = Mathf.Max(1f - insetTop - insetBottom, MinFreeShare);
             var byWidth = bounds.width / (2f * Mathf.Max(Cam.aspect, 0.01f));
-            var byDepth = bounds.height * Foreshortening * 0.5f;
+            var byDepth = bounds.height * Foreshortening * 0.5f / freeShare;
             return Mathf.Max(byWidth, byDepth) * FitMargin;
         }
 
@@ -107,7 +154,7 @@ namespace Game.UI
         public void FocusOnBottom()
         {
             Initialize();
-            focus = new Vector2(fieldBounds.center.x, fieldBounds.yMin + HalfDepth);
+            focus = new Vector2(fieldBounds.center.x, fieldBounds.yMin + HalfDepth - BottomBand);
             ClampPosition();
         }
 
@@ -167,12 +214,14 @@ namespace Game.UI
 
         void ClampPosition()
         {
-            var halfDepth = HalfDepth;
             var halfWidth = Cam.orthographicSize * Cam.aspect;
+            var depthSlack = FreeDepth * panSlack;
+            var widthSlack = halfWidth * 2f * panSlack;
 
             focus = new Vector2(
-                ClampAxis(focus.x, fieldBounds.xMin, fieldBounds.xMax, halfWidth),
-                ClampAxis(focus.y, fieldBounds.yMin, fieldBounds.yMax, halfDepth));
+                ClampAxis(focus.x, fieldBounds.xMin, fieldBounds.xMax, halfWidth, widthSlack, widthSlack),
+                ClampAxis(focus.y, fieldBounds.yMin, fieldBounds.yMax, HalfDepth,
+                    BottomBand + depthSlack, TopBand + depthSlack));
 
             ApplyTransform();
         }
@@ -185,13 +234,20 @@ namespace Game.UI
             transform.position = new Vector3(focus.x, 0f, focus.y) - rotation * Vector3.forward * distance;
         }
 
-        /// <summary>Если поле уже обзора, камера стоит по центру этой оси.</summary>
-        static float ClampAxis(float value, float min, float max, float halfSize)
+        /// <summary>
+        /// Предел фокуса по оси. `half` — полкадра, `lowMargin` и `highMargin` — насколько
+        /// камере разрешено уйти за край поля с каждой стороны: там полоса интерфейса, за
+        /// которой поле не видно, плюс запас хода. При запасе в половину просвета промежуток
+        /// вырождается в сам отрезок поля: фокус ходит от края до края независимо от зума,
+        /// то есть карту можно утащить до середины экрана. Меньший запас на дальнем зуме
+        /// промежуток схлопывает — тогда поле встаёт по центру просвета.
+        /// </summary>
+        static float ClampAxis(float value, float min, float max, float half, float lowMargin, float highMargin)
         {
-            if (max - min <= halfSize * 2f)
-                return (min + max) * 0.5f;
+            var low = min + half - lowMargin;
+            var high = max - half + highMargin;
 
-            return Mathf.Clamp(value, min + halfSize, max - halfSize);
+            return low > high ? (low + high) * 0.5f : Mathf.Clamp(value, low, high);
         }
     }
 }

@@ -6,8 +6,9 @@ using UnityEngine.InputSystem;
 namespace Game.UI
 {
     /// <summary>
-    /// Единственный читатель ввода. На телефоне работает палец, в редакторе — мышь:
-    /// одиночное касание тянет камеру, щипок двумя пальцами зумит, короткий тап — это клик.
+    /// Единственный читатель ввода. Работает любым указателем: палец на телефоне, мышь в
+    /// редакторе и в браузере на десктопе. Одиночное нажатие тянет камеру, щипок двумя
+    /// пальцами и колесо зумят, короткое нажатие без протяжки — это клик.
     /// </summary>
     public sealed class GameInput : MonoBehaviour
     {
@@ -15,10 +16,14 @@ namespace Game.UI
         [SerializeField] float clickThresholdPixels = 12f;
         [SerializeField] float pinchSensitivity = 0.01f;
 
+        // Указатель, который держит нажатие. Нажатие целиком принадлежит ему: браузер на
+        // десктопе заводит устройство `Touchscreen` рядом с мышью, и разбор «сначала палец,
+        // потом мышь» ронял мышиное нажатие нетронутым пальцем в тот же кадр.
+        Pointer holding;
+
+        Vector2 lastPosition;
         float draggedDistance;
         float previousPinchDistance;
-        bool pressed;
-        bool pinching;
 
         /// <summary>Короткое касание или клик без перетаскивания: экранная позиция.</summary>
         public event Action<Vector2> Clicked;
@@ -47,14 +52,16 @@ namespace Game.UI
 
         void Update()
         {
-            if (ReadTouch())
+            if (ReadPinch())
                 return;
 
-            ReadMouse();
+            previousPinchDistance = 0f;
+            ReadWheel();
+            ReadPointer();
         }
 
-        /// <summary>Возвращает true, если экран трогают пальцем: тогда мышь не опрашиваем.</summary>
-        bool ReadTouch()
+        /// <summary>Щипок двумя пальцами. Возвращает true, пока он идёт: тогда остальное молчит.</summary>
+        bool ReadPinch()
         {
             var screen = Touchscreen.current;
             if (screen == null)
@@ -62,31 +69,21 @@ namespace Game.UI
 
             var first = screen.touches[0];
             var second = screen.touches[1];
+            if (!first.press.isPressed || !second.press.isPressed)
+                return false;
 
-            if (first.press.isPressed && second.press.isPressed)
-            {
-                Pinch(first.position.ReadValue(), second.position.ReadValue());
-                return true;
-            }
+            var distance = Vector2.Distance(first.position.ReadValue(), second.position.ReadValue());
+            if (previousPinchDistance > 0f)
+                Zoomed?.Invoke((distance - previousPinchDistance) * pinchSensitivity);
 
-            if (!first.press.isPressed)
-            {
-                if (pressed)
-                    EndPress(first.position.ReadValue());
+            previousPinchDistance = distance;
 
-                pinching = false;
-                previousPinchDistance = 0f;
-                return pressed = false;
-            }
-
-            if (first.press.wasPressedThisFrame)
-                BeginPress();
-
-            Drag(first.delta.ReadValue());
+            // Второй палец отменяет начатое нажатие: щипок не должен закончиться кликом.
+            holding = null;
             return true;
         }
 
-        void ReadMouse()
+        void ReadWheel()
         {
             var mouse = Mouse.current;
             if (mouse == null)
@@ -95,51 +92,58 @@ namespace Game.UI
             var scroll = mouse.scroll.ReadValue().y;
             if (!Mathf.Approximately(scroll, 0f))
                 Zoomed?.Invoke(Mathf.Sign(scroll));
+        }
 
-            if (mouse.leftButton.wasPressedThisFrame)
-                BeginPress();
+        void ReadPointer()
+        {
+            if (holding != null && !holding.added)
+                holding = null;
 
-            if (pressed && mouse.leftButton.isPressed)
-                Drag(mouse.delta.ReadValue());
-
-            if (pressed && mouse.leftButton.wasReleasedThisFrame)
+            if (holding == null)
             {
-                EndPress(mouse.position.ReadValue());
-                pressed = false;
+                holding = FindPress();
+                if (holding == null)
+                    return;
+
+                lastPosition = holding.position.ReadValue();
+                draggedDistance = 0f;
+                return;
             }
-        }
 
-        void BeginPress()
-        {
-            pressed = true;
-            pinching = false;
-            draggedDistance = 0f;
-        }
+            var position = holding.position.ReadValue();
+            if (!holding.press.isPressed)
+            {
+                if (draggedDistance <= clickThresholdPixels)
+                    Clicked?.Invoke(position);
 
-        void Drag(Vector2 delta)
-        {
-            if (!pressed || delta == Vector2.zero)
+                holding = null;
+                return;
+            }
+
+            // Смещение считаем по позициям, а не по `delta` устройства: в вебе она приходит
+            // в собственном масштабе, и клик мышью уезжал за порог протяжки.
+            var moved = position - lastPosition;
+            if (moved == Vector2.zero)
                 return;
 
-            draggedDistance += delta.magnitude;
-            Dragged?.Invoke(delta);
+            lastPosition = position;
+            draggedDistance += moved.magnitude;
+            Dragged?.Invoke(moved);
         }
 
-        void EndPress(Vector2 screenPosition)
+        /// <summary>Указатель, нажатый в этом кадре: палец, мышь или перо — что окажется первым.</summary>
+        static Pointer FindPress()
         {
-            if (!pinching && draggedDistance <= clickThresholdPixels)
-                Clicked?.Invoke(screenPosition);
-        }
+            var screen = Touchscreen.current;
+            if (screen != null && screen.press.wasPressedThisFrame)
+                return screen;
 
-        void Pinch(Vector2 first, Vector2 second)
-        {
-            var distance = Vector2.Distance(first, second);
-            if (previousPinchDistance > 0f)
-                Zoomed?.Invoke((distance - previousPinchDistance) * pinchSensitivity);
+            var mouse = Mouse.current;
+            if (mouse != null && mouse.press.wasPressedThisFrame)
+                return mouse;
 
-            previousPinchDistance = distance;
-            pinching = true;
-            pressed = false;
+            var pointer = Pointer.current;
+            return pointer != null && pointer.press.wasPressedThisFrame ? pointer : null;
         }
     }
 }

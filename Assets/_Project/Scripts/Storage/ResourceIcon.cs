@@ -28,6 +28,23 @@ namespace Game.Storage
         /// <summary>Снимок модели, если он есть; иначе канвас берёт белую текстуру по умолчанию.</summary>
         public override Texture mainTexture => snapshot != null ? snapshot : base.mainTexture;
 
+        /// <summary>
+        /// Новая иконка в канвасе. `CanvasRenderer` перечислен явно: конструктор
+        /// `GameObject(имя, типы)` не разбирает `RequireComponent`, и без него графика молча
+        /// не рисуется.
+        /// </summary>
+        public static ResourceIcon Create(string name, Transform parent, float size)
+        {
+            var created = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(ResourceIcon));
+            var rect = (RectTransform)created.transform;
+            rect.SetParent(parent, false);
+            rect.sizeDelta = new Vector2(size, size);
+
+            var icon = created.GetComponent<ResourceIcon>();
+            icon.raycastTarget = false;
+            return icon;
+        }
+
         public void Show(ResourceType resource, Color iconColor, Texture modelSnapshot = null)
         {
             shape = resource;

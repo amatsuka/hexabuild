@@ -58,6 +58,10 @@ namespace Game.UI
         [SerializeField] Color primaryBottom = new(0.93f, 0.47f, 0.07f, 1f);
         [SerializeField] Color secondaryTop = new(0.36f, 0.72f, 1f, 1f);
         [SerializeField] Color secondaryBottom = new(0.10f, 0.38f, 0.82f, 1f);
+        [Tooltip("Кнопка подтверждения на попапе. Зелёная и плотная: галочка на стекле тонет " +
+                 "в карте, которая сквозь попап видна")]
+        [SerializeField] Color confirmTop = new(0.48f, 0.88f, 0.44f, 1f);
+        [SerializeField] Color confirmBottom = new(0.10f, 0.54f, 0.20f, 1f);
         [SerializeField] Color buttonEdge = new(1f, 1f, 1f, 0.80f);
         [Tooltip("Тень кнопки: то же свечение карточки, только тёмное и снесённое ниже")]
         [SerializeField] Color buttonGlow = new(0.01f, 0.03f, 0.07f, 0.65f);
@@ -126,6 +130,12 @@ namespace Game.UI
 
         /// <summary>Вторая кнопка: тот же объём холодным цветом.</summary>
         public UiPanelStyle ButtonSecondary => Button(secondaryTop, secondaryBottom);
+
+        /// <summary>
+        /// Кнопка подтверждения на попапе: тот же объём зелёным. Согласие в игре одного цвета
+        /// с прибавкой очков — зелёное значит «получилось».
+        /// </summary>
+        public UiPanelStyle ButtonConfirm => Button(confirmTop, confirmBottom);
 
         /// <summary>Плашка рекорда: стекло карточки с золотой кромкой.</summary>
         public UiPanelStyle Accent => new(

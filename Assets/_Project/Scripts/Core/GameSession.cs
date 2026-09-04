@@ -40,6 +40,15 @@ namespace Game.Core
         /// <summary>Самая высокая крышка поля: отсюда начинает спуск луч клика.</summary>
         float fieldCeiling;
 
+        /// <summary>Размер экрана, под который камере посчитаны полосы интерфейса.</summary>
+        Vector2Int viewport;
+
+        /// <summary>
+        /// Над чем всплывёт отказ. Правило сообщает о нём событием, а место взаимодействия
+        /// знает только тот, кто это правило вызвал, — здесь оно и запоминается перед вызовом.
+        /// </summary>
+        PopupView.Anchor refusalAnchor;
+
         /// <summary>
         /// Сид этой партии — уже разрешённый, а не ноль из конфига. По нему живут и карта, и
         /// контракты, и его же забирает кнопка «Повторить карту» на финальном экране.
@@ -82,8 +91,6 @@ namespace Game.Core
             storageView.Bind(storage);
             hudView.Bind(state, contracts, storageView);
             gameOverView.Bind(storageView, production, contracts);
-            cameraRig.SetFieldBounds(FieldBounds(map));
-            cameraRig.FocusOnBottom();
         }
 
         void OnEnable()
@@ -92,13 +99,13 @@ namespace Game.Core
             input.Dragged += OnDragged;
             input.Zoomed += OnZoomed;
             state.TileChanged += OnTileChanged;
-            state.ActionRefused += hudView.ShowMessage;
+            state.ActionRefused += ShowRefusal;
             state.Roads.Changed += OnRoadsChanged;
             production.Produced += OnProduced;
             production.TileDepleted += OnTileChanged;
             deliveries.Started += OnDeliveryStarted;
             deliveries.Arrived += OnDeliveryArrived;
-            merges.Refused += hudView.ShowMessage;
+            merges.Refused += ShowRefusal;
             merges.Merged += OnMerged;
             merges.Converted += OnConverted;
             end.Ended += OnGameEnded;
@@ -111,13 +118,13 @@ namespace Game.Core
             input.Dragged -= OnDragged;
             input.Zoomed -= OnZoomed;
             state.TileChanged -= OnTileChanged;
-            state.ActionRefused -= hudView.ShowMessage;
+            state.ActionRefused -= ShowRefusal;
             state.Roads.Changed -= OnRoadsChanged;
             production.Produced -= OnProduced;
             production.TileDepleted -= OnTileChanged;
             deliveries.Started -= OnDeliveryStarted;
             deliveries.Arrived -= OnDeliveryArrived;
-            merges.Refused -= hudView.ShowMessage;
+            merges.Refused -= ShowRefusal;
             merges.Merged -= OnMerged;
             merges.Converted -= OnConverted;
             end.Ended -= OnGameEnded;
@@ -126,6 +133,13 @@ namespace Game.Core
 
         void Start()
         {
+            // Камера настраивается здесь, а не в `Awake`: доли панелей меряются по их
+            // прямоугольникам, а канвас доводит их до экранных размеров на своём включении —
+            // то есть в неизвестном порядке относительно чужого `Awake`. К `Start` всё готово.
+            ApplyViewportInsets();
+            cameraRig.SetFieldBounds(FieldBounds(state.Map));
+            cameraRig.FocusOnBottom();
+
             state.Begin();
             for (var i = 0; i < config.StartingGravel; i++)
                 state.Storage.TryStore(ResourceType.Gravel);
@@ -137,6 +151,11 @@ namespace Game.Core
 
         void Update()
         {
+            // Окно браузера тянут, телефон поворачивают: полосы интерфейса меняют свою долю
+            // экрана, а с ней и то, насколько далеко камере позволено уходить за край поля.
+            if (viewport.x != Screen.width || viewport.y != Screen.height)
+                ApplyViewportInsets();
+
             if (end.HasEnded)
                 return;
 
@@ -183,8 +202,20 @@ namespace Game.Core
         }
 
         /// <summary>
-        /// Прямоугольник поля с учётом вершин крайних гексов. Снизу он расширен на высоту панели
-        /// склада, иначе камера прижимает Метрополию под панель.
+        /// Сколько кадра занимают HUD сверху и панель склада снизу. Камера по этим полосам
+        /// понимает, где кончается видимая часть поля, и доводит его край до их кромки.
+        /// </summary>
+        void ApplyViewportInsets()
+        {
+            viewport = new Vector2Int(Screen.width, Screen.height);
+            cameraRig.SetViewportInsets(
+                hudView.TopHeightPixels / Screen.height,
+                storageView.PanelHeightPixels / Screen.height);
+        }
+
+        /// <summary>
+        /// Прямоугольник поля с учётом вершин крайних гексов. Чисто геометрический: поправку
+        /// на панели интерфейса держит сама камера, ей же нужен и не сдвинутый край поля.
         /// </summary>
         Rect FieldBounds(HexMap map)
         {
@@ -198,18 +229,13 @@ namespace Game.Core
                 max = Vector2.Max(max, center + new Vector2(HexCoord.Width * 0.5f, HexCoord.Size));
             }
 
-            // Доля панели от высоты экрана, зажатая на случай узкого или непортретного окна:
-            // без ограничения панель выше экрана утащила бы камеру под поле.
-            var camera = Camera.main;
-            var panelShare = Mathf.Clamp(storageView.PanelHeightPixels / Screen.height, 0f, 0.4f);
-            min.y -= panelShare * camera.orthographicSize * 2f;
-
             return new Rect(min, max - min);
         }
 
         /// <summary>
-        /// Клик разбирается по слоям: финальный экран, склад, поле под ним. После конца партии
-        /// поле не принимает ничего, а кнопки экрана принимают — это и есть правило 3.10.
+        /// Клик разбирается по слоям: финальный экран, попап подтверждения, склад, поле под ним.
+        /// После конца партии поле не принимает ничего, а кнопки экрана принимают — это и есть
+        /// правило 3.10.
         /// </summary>
         void OnClicked(Vector2 screenPosition)
         {
@@ -219,11 +245,18 @@ namespace Game.Core
                 return;
             }
 
+            // Пока висит подтверждение открытия, клик принадлежит ему: по галочке — открыть,
+            // мимо — только закрыть, не выполняя того, по чему попали.
+            if (hudView.Popups.TryClick(screenPosition))
+                return;
+
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
                 var content = state.Storage[cell];
                 if (!content.HasValue)
                     return;
+
+                refusalAnchor = PopupView.Anchor.On(storageView.CellRect(cell));
 
                 // Базовый ресурс мержится, крафтовый превращается в очки.
                 if (mergeRules.CanMerge(content.Value))
@@ -237,8 +270,43 @@ namespace Game.Core
             if (storageView.ContainsScreenPoint(screenPosition))
                 return;
 
-            state.HandleTileClick(TileUnderPointer(screenPosition));
+            OnFieldClicked(TileUnderPointer(screenPosition));
         }
+
+        /// <summary>
+        /// Клик по полю. Открытие плитки стоит очков и потому спрашивает подтверждения попапом
+        /// над самой плиткой; дорога и отказы идут сразу — щебень столько не весит, а отказ и
+        /// есть ответ. Цену попап берёт до клика: она растёт по ходу партии (3.1), и показать
+        /// её ровно там, где игрок целится, — единственное место, где она ему нужна.
+        /// </summary>
+        void OnFieldClicked(HexCoord coord)
+        {
+            if (!state.Map.TryGetTile(coord, out var tile))
+                return;
+
+            refusalAnchor = TileAnchor(coord);
+
+            if (tile.State == TileState.Available && tile.IsPassable)
+            {
+                hudView.Popups.Ask(state.NextTileCost, refusalAnchor, () => state.TryRevealTile(coord));
+                return;
+            }
+
+            state.HandleTileClick(coord);
+        }
+
+        /// <summary>Крышка плитки: над ней всплывают её попапы, и пан камеры их за собой везёт.</summary>
+        PopupView.Anchor TileAnchor(HexCoord coord)
+        {
+            if (views.TryGetValue(coord, out var view))
+                return PopupView.Anchor.OnField(view.transform.position);
+
+            var plane = coord.ToPlane();
+            return PopupView.Anchor.OnField(new Vector3(plane.x, 0f, plane.y));
+        }
+
+        /// <summary>Отказ всплывает над тем, по чему кликнули: над плиткой или над клеткой склада.</summary>
+        void ShowRefusal(string text) => hudView.Popups.ShowMessage(text, refusalAnchor);
 
         /// <summary>
         /// Плитка, по которой игрок целился. Луч по земле уходит на соседа тем дальше, чем выше
@@ -357,7 +425,7 @@ namespace Game.Core
         /// </summary>
         void OnConverted(int cell, ResourceType type, int points)
         {
-            hudView.ShowGain(points, type);
+            hudView.Popups.ShowGain(points, type, PopupView.Anchor.On(storageView.CellRect(cell)));
 
             if (contracts.IsActive && contracts.Type == type)
                 hudView.PlayContractDelivery(storageView.CellPoint(cell), type);
@@ -365,8 +433,15 @@ namespace Game.Core
             contracts.Count(type);
         }
 
-        /// <summary>Заработать больше нечем: поле замирает, на экране остаётся счёт.</summary>
-        void OnGameEnded(FinalScore score) => gameOverView.Show(score);
+        /// <summary>
+        /// Заработать больше нечем: поле замирает, на экране остаётся счёт. Попапы гаснут
+        /// разом — висеть им теперь не над чем, поле под финальным экраном мертво.
+        /// </summary>
+        void OnGameEnded(FinalScore score)
+        {
+            hudView.Popups.Clear();
+            gameOverView.Show(score);
+        }
 
         /// <summary>Доехавший ресурс перепрыгивает с Метрополии в свою клетку склада.</summary>
         void OnDeliveryArrived(Delivery delivery)

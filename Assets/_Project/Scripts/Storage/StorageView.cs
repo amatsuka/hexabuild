@@ -180,6 +180,9 @@ namespace Game.Storage
         /// </summary>
         public Vector3 CellPoint(int index) => cells[index].position;
 
+        /// <summary>Прямоугольник клетки: над ним всплывает попап того, что с ней сделали.</summary>
+        public RectTransform CellRect(int index) => cells[index];
+
         /// <summary>Мировая точка клетки: туда прыгает доехавший до Метрополии ресурс.</summary>
         public Vector3 CellWorldPoint(int index, Camera worldCamera)
         {

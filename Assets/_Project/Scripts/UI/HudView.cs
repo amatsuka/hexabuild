@@ -1,18 +1,19 @@
 using System.Collections;
-using System.Collections.Generic;
 using Game.Core;
 using Game.Economy;
 using Game.Storage;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Game.UI
 {
     /// <summary>
-    /// HUD поля карточками: счёт слева сверху, крафтовые ресурсы справа сверху, карточка
-    /// контракта под ними и столбец всплывашек слева. Всё рисуется кодом на скруглённых
-    /// спрайтах и SDF-шрифте — панели в проекте не ассеты, а числа палитры.
+    /// HUD поля карточками: счёт слева сверху, крафтовые ресурсы справа сверху и карточка
+    /// контракта под ними. Всё рисуется кодом на скруглённых спрайтах и SDF-шрифте — панели
+    /// в проекте не ассеты, а числа палитры.
+    ///
+    /// Сообщений в углу экрана HUD не держит: прибавка, отказ и награда всплывают попапами
+    /// над тем объектом, с которым игрок работает, — этим занят <see cref="PopupView"/>.
     /// </summary>
     public sealed class HudView : MonoBehaviour
     {
@@ -42,9 +43,6 @@ namespace Game.UI
         /// карточка контракта висит сама по себе, и прижатая к полосе она читалась её продолжением.
         /// </summary>
         const float CardTopGap = 44f;
-        const float GainWidth = 250f;
-        const float MessageWidth = 470f;
-        const float ToastHeight = 92f;
         const float BarHeight = 26f;
         const float ProgressWidth = 76f;
         const float BarInset = 3f;
@@ -60,12 +58,6 @@ namespace Game.UI
         [Tooltip("Материал свитка контракта. Сам меш строит `ScrollMesh` кодом: модели в паке нет")]
         [SerializeField] Material scrollMaterial;
         [SerializeField] Vector3 scrollAngles = new(-14f, 24f, 0f);
-        [Tooltip("Сколько живёт плашка отказа и плашка прибавки")]
-        [SerializeField] float toastSeconds = 2f;
-        [Tooltip("Сколько плашка гаснет в конце жизни")]
-        [SerializeField] float fadeSeconds = 0.35f;
-        [Tooltip("Больше плашек столбец не держит: самая старая уходит сразу")]
-        [SerializeField] int maxToasts = 3;
 
         [Header("Анимация карточки контракта")]
         [Tooltip("Сколько карточка выезжает при выдаче контракта")]
@@ -83,10 +75,10 @@ namespace Game.UI
         [Tooltip("Во сколько раз иконка цели подскакивает, приняв ресурс")]
         [SerializeField, Range(1f, 1.6f)] float goalPunch = 1.35f;
 
-        readonly List<GameObject> toasts = new();
         readonly TextMeshProUGUI[] stripCounts = new TextMeshProUGUI[StripTypes.Length];
 
         TextMeshProUGUI pointsValue;
+        RectTransform pointsCard;
         RectTransform contractCard;
         ResourceIcon contractIcon;
         TextMeshProUGUI contractGoal;
@@ -94,7 +86,7 @@ namespace Game.UI
         TextMeshProUGUI contractProgress;
         TextMeshProUGUI contractTimer;
         UiPanelGraphic contractBarFill;
-        RectTransform toastColumn;
+        PopupView popups;
 
         CanvasGroup contractFade;
         Coroutine cardAnimation;
@@ -123,7 +115,11 @@ namespace Game.UI
             BuildPointsCard();
             BuildResourceStrip();
             BuildContractCard();
-            toastColumn = BuildToastColumn();
+
+            // Слой попапов заводится последним ребёнком: попап встаёт над объектом и должен
+            // идти поверх карточек HUD, а порядок рисования в канвасе — это порядок иерархии.
+            popups = PopupView.Create((RectTransform)transform, theme, storage);
+            popups.BindCoin(coinMesh, coinMaterial, coinAngles);
 
             wallet.Changed += Refresh;
             this.storage.Changed += Refresh;
@@ -134,33 +130,36 @@ namespace Game.UI
             Refresh();
         }
 
-        /// <summary>Отказ: красная плашка в общем столбце, живёт пару секунд и гаснет.</summary>
-        public void ShowMessage(string text)
+        /// <summary>
+        /// Высота верхней полосы HUD в пикселях экрана: от кромки кадра до низа карточек.
+        /// По ней камера узнаёт, какую часть кадра поле занимает, но показать не может.
+        /// </summary>
+        public float TopHeightPixels
         {
-            var card = PushToast(MessageWidth);
-            UiText.Label("Text", card, theme, 28f, theme.Bad, TextAlignmentOptions.Left)
-                .Stretch(22f, 22f, 12f, 12f)
-                .text = text;
+            get
+            {
+                var canvas = pointsCard != null ? pointsCard.GetComponentInParent<Canvas>() : null;
+                if (canvas == null)
+                    return 0f;
+
+                // Расстояние от верха канваса до низа карточки. Канвас экранный, его пиксели —
+                // это пиксели экрана; отсчёт от него, а не от `Screen.height`, не врёт и до
+                // того, как канвас узнал размер окна. Вырез под чёлку учтён: полосу в него уже
+                // не пустил `SafeAreaFitter`.
+                var corners = new Vector3[4];
+                pointsCard.GetWorldCorners(corners);
+                var cardBottom = corners[0].y;
+
+                ((RectTransform)canvas.transform).GetWorldCorners(corners);
+                return Mathf.Max(corners[1].y - cardBottom, 0f);
+            }
         }
 
-        /// <summary>Прибавка очков: «+30» и иконка того, за что заплатили.</summary>
-        public void ShowGain(int points, ResourceType source)
-        {
-            var card = PushToast(GainWidth);
-
-            var value = UiText.Bold("Value", card, theme, 44f, theme.Good, TextAlignmentOptions.Left);
-            value.rectTransform.anchorMin = value.rectTransform.anchorMax = new Vector2(0f, 0.5f);
-            value.rectTransform.pivot = new Vector2(0f, 0.5f);
-            value.rectTransform.anchoredPosition = new Vector2(22f, 0f);
-            value.rectTransform.sizeDelta = new Vector2(GainWidth - 44f - IconSize, 56f);
-            value.text = "✓ " + HudFormat.Gain(points);
-
-            var icon = CreateIcon("Icon", card, IconSize);
-            icon.rectTransform.anchorMin = icon.rectTransform.anchorMax = new Vector2(1f, 0.5f);
-            icon.rectTransform.pivot = new Vector2(1f, 0.5f);
-            icon.rectTransform.anchoredPosition = new Vector2(-22f, 0f);
-            storageView.ShowIcon(icon, source);
-        }
+        /// <summary>
+        /// Попапы над объектами. Их заводит и держит HUD: слой живёт в его иерархии, а иконки
+        /// печёт тот же пекарь снимков, — но кто и над чем их показывает, знает партия.
+        /// </summary>
+        public PopupView Popups => popups;
 
         /// <summary>
         /// Сданный по контракту ресурс летит из своей клетки склада в карточку: без этого
@@ -281,8 +280,12 @@ namespace Game.UI
             contractBarFill.rectTransform.anchorMax = new Vector2(filled, 1f);
         }
 
-        /// <summary>Контракт закрыт: награда всплывает плашкой с иконкой того же крафта.</summary>
-        void OnContractCompleted(int reward) => ShowGain(reward, contracts.Type);
+        /// <summary>
+        /// Контракт закрыт: награда всплывает попапом над самой карточкой. Она и есть объект,
+        /// с которым игрок работал, — ресурсы он сдавал в неё.
+        /// </summary>
+        void OnContractCompleted(int reward) =>
+            popups.ShowGain(reward, contracts.Type, PopupView.Anchor.On(contractCard));
 
         /// <summary>
         /// Контракт выдан: карточка выезжает масштабом и прозрачностью. Между контрактами
@@ -382,7 +385,7 @@ namespace Game.UI
 
         void BuildPointsCard()
         {
-            var card = UiPanel.Create("Points", transform, theme).rectTransform;
+            var card = pointsCard = UiPanel.Create("Points", transform, theme).rectTransform;
             Place(card, new Vector2(0f, 1f), new Vector2(Margin, -Margin), new Vector2(PointsWidth, TopHeight));
 
             // Монета вместо подписи «ОЧКИ»: в референсе у счёта иконка, а не слово, и мелкая
@@ -499,68 +502,8 @@ namespace Game.UI
             fill.offsetMax = new Vector2(-BarInset, -BarInset);
         }
 
-        RectTransform BuildToastColumn()
-        {
-            var column = UiPanel.NewRect("Toasts", transform);
-            Place(column, new Vector2(0f, 1f),
-                new Vector2(Margin, -(Margin + TopHeight + 16f)), new Vector2(MessageWidth, 0f));
-
-            var layout = column.gameObject.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 12f;
-            layout.childAlignment = TextAnchor.UpperLeft;
-            layout.childControlWidth = layout.childControlHeight = false;
-            layout.childForceExpandWidth = layout.childForceExpandHeight = false;
-            return column;
-        }
-
-        /// <summary>Новая плашка сверху столбца. Старые уходят, когда столбец перерос предел.</summary>
-        RectTransform PushToast(float width)
-        {
-            while (toasts.Count >= maxToasts)
-            {
-                var oldest = toasts[0];
-                toasts.RemoveAt(0);
-                if (oldest != null)
-                    Destroy(oldest);
-            }
-
-            var card = UiPanel.Create("Toast", toastColumn, theme).rectTransform;
-            card.sizeDelta = new Vector2(width, ToastHeight);
-            card.gameObject.AddComponent<CanvasGroup>();
-
-            toasts.Add(card.gameObject);
-            if (isActiveAndEnabled)
-                StartCoroutine(FadeToast(card.gameObject));
-
-            return card;
-        }
-
-        IEnumerator FadeToast(GameObject card)
-        {
-            yield return new WaitForSeconds(toastSeconds);
-
-            var group = card.GetComponent<CanvasGroup>();
-            for (var elapsed = 0f; elapsed < fadeSeconds; elapsed += Time.deltaTime)
-            {
-                group.alpha = 1f - elapsed / fadeSeconds;
-                yield return null;
-            }
-
-            toasts.Remove(card);
-            Destroy(card);
-        }
-
-        ResourceIcon CreateIcon(string name, Transform parent, float size)
-        {
-            var created = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(ResourceIcon));
-            var rect = (RectTransform)created.transform;
-            rect.SetParent(parent, false);
-            rect.sizeDelta = new Vector2(size, size);
-
-            var icon = created.GetComponent<ResourceIcon>();
-            icon.raycastTarget = false;
-            return icon;
-        }
+        static ResourceIcon CreateIcon(string name, Transform parent, float size) =>
+            ResourceIcon.Create(name, parent, size);
 
         /// <summary>Строка карточки: от левого верхнего угла вниз на `top` пикселей.</summary>
         static TextMeshProUGUI Row(TextMeshProUGUI text, float top, float width, float height) =>

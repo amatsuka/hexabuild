@@ -106,7 +106,7 @@ MonoBehaviour:
   heightScale: 1
   baseSkirt: 0.14
   biomes:
-    water: {r: 0.62, g: 0.6, b: 0.55, a: 1}
+    water: {r: 0.5, g: 0.47, b: 0.42, a: 1}
     sand: {r: 0.743, g: 0.681, b: 0.635, a: 1}
     meadow: {r: 0.505, g: 0.699, b: 0.427, a: 1}
     forest: {r: 0.316, g: 0.51, b: 0.355, a: 1}
