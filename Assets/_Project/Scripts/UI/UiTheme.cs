@@ -137,6 +137,13 @@ namespace Game.UI
         /// </summary>
         public UiPanelStyle ButtonConfirm => Button(confirmTop, confirmBottom);
 
+        /// <summary>
+        /// Круглая кнопка (шестерёнка паузы): тот же объём и цвет, что у второй кнопки, но
+        /// радиус — половина стороны, а не общий `buttonRadius`, отчего скруглённый прямоугольник
+        /// становится кругом.
+        /// </summary>
+        public UiPanelStyle RoundButton(float diameter) => Button(secondaryTop, secondaryBottom, diameter * 0.5f);
+
         /// <summary>Плашка рекорда: стекло карточки с золотой кромкой.</summary>
         public UiPanelStyle Accent => new(
             accentTop, accentBottom, accentEdge, Color.clear, 22f, 2.5f, 0f, 0f, highlight, highlightSpread,
@@ -157,9 +164,9 @@ namespace Game.UI
 
         public Color Text => text;
 
-        UiPanelStyle Button(Color top, Color bottom) => new(
-            top, bottom, buttonEdge, buttonGlow, buttonRadius, 3f, 26f, 10f, highlight, highlightSpread,
-            sheen * 1.4f, 1f, backLight, spec, lightDirection);
+        UiPanelStyle Button(Color top, Color bottom, float? radiusOverride = null) => new(
+            top, bottom, buttonEdge, buttonGlow, radiusOverride ?? buttonRadius, 3f, 26f, 10f, highlight,
+            highlightSpread, sheen * 1.4f, 1f, backLight, spec, lightDirection);
 
         public Color Muted => muted;
 

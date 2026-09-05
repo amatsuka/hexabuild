@@ -177,7 +177,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 127816813}
-  - component: {fileID: 127816812}
   - component: {fileID: 127816811}
   m_Layer: 0
   m_Name: Game
@@ -185,7 +184,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &127816811
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -207,26 +206,12 @@ MonoBehaviour:
   waterMaterial: {fileID: 2100000, guid: 6943fdc771d1f46bf8ecd09c50354d7d, type: 2}
   waterMargin: 40
   moversRoot: {fileID: 494033976}
-  input: {fileID: 127816812}
+  input: {fileID: 1601929506}
   cameraRig: {fileID: 381356108}
   storageView: {fileID: 1637872535}
   hudView: {fileID: 868732729}
   gameOverView: {fileID: 883969606}
---- !u!114 &127816812
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 127816810}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2b0a4fc9511774a82aa9c143509df0bd, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Game.Runtime::Game.UI.GameInput
-  worldCamera: {fileID: 381356109}
-  clickThresholdPixels: 12
-  pinchSensitivity: 0.01
+  pauseView: {fileID: 2059318244}
 --- !u!4 &127816813
 Transform:
   m_ObjectHideFlags: 0
@@ -242,6 +227,147 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &291679685
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 291679686}
+  - component: {fileID: 291679687}
+  - component: {fileID: 291679688}
+  - component: {fileID: 291679689}
+  m_Layer: 0
+  m_Name: MainMenu
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &291679686
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 291679685}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1845044565}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!222 &291679687
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 291679685}
+  m_CullTransparentMesh: 1
+--- !u!114 &291679688
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 291679685}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_Sprite: {fileID: 0}
+  m_Type: 0
+  m_PreserveAspect: 0
+  m_FillCenter: 1
+  m_FillMethod: 4
+  m_FillAmount: 1
+  m_FillClockwise: 1
+  m_FillOrigin: 0
+  m_UseSpriteMesh: 0
+  m_PixelsPerUnitMultiplier: 1
+--- !u!114 &291679689
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 291679685}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d9484c0fd180348b792313f851a64331, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Runtime::Game.UI.MainMenuView
+  theme:
+    panelShader: {fileID: 4800000, guid: 76f565094e98949a3af09cc711b77964, type: 3}
+    fillTop: {r: 0.3, g: 0.56, b: 0.74, a: 0.26}
+    fillBottom: {r: 0.05, g: 0.17, b: 0.3, a: 0.34}
+    edge: {r: 0.76, g: 0.92, b: 1, a: 1}
+    glow: {r: 0.01, g: 0.03, b: 0.07, a: 0.55}
+    radius: 26
+    edgeWidth: 3.5
+    glowSize: 34
+    glowOffset: 8
+    highlight: 0.85
+    highlightSpread: 0.65
+    sheen: 20
+    backLight: 0.5
+    spec: 0.3
+    lightDirection: {x: -0.45, y: 0.89}
+    darken: 0.62
+    slotEmptyTop: {r: 0.2, g: 0.4, b: 0.56, a: 0.22}
+    slotEmptyBottom: {r: 0.03, g: 0.12, b: 0.22, a: 0.3}
+    slotFilledTop: {r: 0.44, g: 0.72, b: 0.92, a: 0.34}
+    slotFilledBottom: {r: 0.1, g: 0.32, b: 0.52, a: 0.42}
+    slotEdge: {r: 0.72, g: 0.9, b: 1, a: 0.55}
+    slotRadius: 18
+    primaryTop: {r: 1, g: 0.78, b: 0.3, a: 1}
+    primaryBottom: {r: 0.93, g: 0.47, b: 0.07, a: 1}
+    secondaryTop: {r: 0.36, g: 0.72, b: 1, a: 1}
+    secondaryBottom: {r: 0.1, g: 0.38, b: 0.82, a: 1}
+    confirmTop: {r: 0.48, g: 0.88, b: 0.44, a: 1}
+    confirmBottom: {r: 0.1, g: 0.54, b: 0.2, a: 1}
+    buttonEdge: {r: 1, g: 1, b: 1, a: 0.8}
+    buttonGlow: {r: 0.01, g: 0.03, b: 0.07, a: 0.65}
+    buttonRadius: 34
+    accentTop: {r: 1, g: 0.86, b: 0.42, a: 0.26}
+    accentBottom: {r: 0.62, g: 0.42, b: 0.06, a: 0.34}
+    accentEdge: {r: 1, g: 0.86, b: 0.42, a: 0.85}
+    divider: {r: 0.76, g: 0.92, b: 1, a: 0.22}
+    barTrack: {r: 0.02, g: 0.1, b: 0.2, a: 0.78}
+    barFillTop: {r: 1, g: 0.9, b: 0.48, a: 1}
+    barFillBottom: {r: 0.98, g: 0.68, b: 0.16, a: 1}
+    text: {r: 0.97, g: 0.99, b: 1, a: 1}
+    muted: {r: 0.8, g: 0.91, b: 0.97, a: 1}
+    gold: {r: 1, g: 0.84, b: 0.32, a: 1}
+    good: {r: 0.52, g: 0.96, b: 0.56, a: 1}
+    bad: {r: 1, g: 0.52, b: 0.46, a: 1}
+    textOutline: {r: 0.02, g: 0.06, b: 0.12, a: 0.95}
+    outlineWidth: 0.16
+    faceWeight: 0.16
+    textShadow: {r: 0, g: 0, b: 0, a: 0.65}
+    textShadowOffset: 0.18
+    textShadowSoftness: 0.12
+  backdropColor: {r: 0.03, g: 0.05, b: 0.09, a: 0.92}
+  gameRoot: {fileID: 127816810}
+  input: {fileID: 1601929506}
 --- !u!1 &381356107
 GameObject:
   m_ObjectHideFlags: 0
@@ -726,6 +852,8 @@ MonoBehaviour:
     primaryBottom: {r: 0.93, g: 0.47, b: 0.07, a: 1}
     secondaryTop: {r: 0.36, g: 0.72, b: 1, a: 1}
     secondaryBottom: {r: 0.1, g: 0.38, b: 0.82, a: 1}
+    confirmTop: {r: 0.48, g: 0.88, b: 0.44, a: 1}
+    confirmBottom: {r: 0.1, g: 0.54, b: 0.2, a: 1}
     buttonEdge: {r: 1, g: 1, b: 1, a: 0.8}
     buttonGlow: {r: 0.01, g: 0.03, b: 0.07, a: 0.65}
     buttonRadius: 34
@@ -752,9 +880,13 @@ MonoBehaviour:
   coinAngles: {x: -10, y: 90, z: 0}
   scrollMaterial: {fileID: 2100000, guid: 8d451fbf64a4b4a99b210a801224f850, type: 2}
   scrollAngles: {x: -14, y: 24, z: 0}
-  toastSeconds: 2
-  fadeSeconds: 0.35
-  maxToasts: 3
+  cardShowSeconds: 0.28
+  cardHideSeconds: 0.22
+  cardMinScale: 0.82
+  cardOvershoot: 1.06
+  deliveryFlySeconds: 0.42
+  deliveryArc: 140
+  goalPunch: 1.35
 --- !u!1 &883969602
 GameObject:
   m_ObjectHideFlags: 0
@@ -870,6 +1002,8 @@ MonoBehaviour:
     primaryBottom: {r: 0.93, g: 0.47, b: 0.07, a: 1}
     secondaryTop: {r: 0.36, g: 0.72, b: 1, a: 1}
     secondaryBottom: {r: 0.1, g: 0.38, b: 0.82, a: 1}
+    confirmTop: {r: 0.48, g: 0.88, b: 0.44, a: 1}
+    confirmBottom: {r: 0.1, g: 0.54, b: 0.2, a: 1}
     buttonEdge: {r: 1, g: 1, b: 1, a: 0.8}
     buttonGlow: {r: 0.01, g: 0.03, b: 0.07, a: 0.65}
     buttonRadius: 34
@@ -930,6 +1064,53 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1601929504
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1601929505}
+  - component: {fileID: 1601929506}
+  m_Layer: 0
+  m_Name: Input
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1601929505
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1601929504}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1601929506
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1601929504}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b0a4fc9511774a82aa9c143509df0bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Runtime::Game.UI.GameInput
+  worldCamera: {fileID: 381356109}
+  clickThresholdPixels: 12
+  pinchSensitivity: 0.01
 --- !u!1 &1637872533
 GameObject:
   m_ObjectHideFlags: 0
@@ -1024,6 +1205,8 @@ MonoBehaviour:
     primaryBottom: {r: 0.93, g: 0.47, b: 0.07, a: 1}
     secondaryTop: {r: 0.36, g: 0.72, b: 1, a: 1}
     secondaryBottom: {r: 0.1, g: 0.38, b: 0.82, a: 1}
+    confirmTop: {r: 0.48, g: 0.88, b: 0.44, a: 1}
+    confirmBottom: {r: 0.1, g: 0.54, b: 0.2, a: 1}
     buttonEdge: {r: 1, g: 1, b: 1, a: 0.8}
     buttonGlow: {r: 0.01, g: 0.03, b: 0.07, a: 0.65}
     buttonRadius: 34
@@ -1095,6 +1278,8 @@ RectTransform:
   - {fileID: 868732728}
   - {fileID: 1637872534}
   - {fileID: 883969603}
+  - {fileID: 291679686}
+  - {fileID: 2059318243}
   m_Father: {fileID: 432546500}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
@@ -1114,6 +1299,107 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 08d821ca16bac473b9860d55e92c11f4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Game.Runtime::Game.UI.SafeAreaFitter
+--- !u!1 &2059318242
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2059318243}
+  - component: {fileID: 2059318244}
+  m_Layer: 0
+  m_Name: Pause
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!224 &2059318243
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2059318242}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1845044565}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &2059318244
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2059318242}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 70cf85080e12a4009843b5d1b5bc7ea3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Runtime::Game.UI.PauseView
+  theme:
+    panelShader: {fileID: 4800000, guid: 76f565094e98949a3af09cc711b77964, type: 3}
+    fillTop: {r: 0.3, g: 0.56, b: 0.74, a: 0.26}
+    fillBottom: {r: 0.05, g: 0.17, b: 0.3, a: 0.34}
+    edge: {r: 0.76, g: 0.92, b: 1, a: 1}
+    glow: {r: 0.01, g: 0.03, b: 0.07, a: 0.55}
+    radius: 26
+    edgeWidth: 3.5
+    glowSize: 34
+    glowOffset: 8
+    highlight: 0.85
+    highlightSpread: 0.65
+    sheen: 20
+    backLight: 0.5
+    spec: 0.3
+    lightDirection: {x: -0.45, y: 0.89}
+    darken: 0.62
+    slotEmptyTop: {r: 0.2, g: 0.4, b: 0.56, a: 0.22}
+    slotEmptyBottom: {r: 0.03, g: 0.12, b: 0.22, a: 0.3}
+    slotFilledTop: {r: 0.44, g: 0.72, b: 0.92, a: 0.34}
+    slotFilledBottom: {r: 0.1, g: 0.32, b: 0.52, a: 0.42}
+    slotEdge: {r: 0.72, g: 0.9, b: 1, a: 0.55}
+    slotRadius: 18
+    primaryTop: {r: 1, g: 0.78, b: 0.3, a: 1}
+    primaryBottom: {r: 0.93, g: 0.47, b: 0.07, a: 1}
+    secondaryTop: {r: 0.36, g: 0.72, b: 1, a: 1}
+    secondaryBottom: {r: 0.1, g: 0.38, b: 0.82, a: 1}
+    confirmTop: {r: 0.48, g: 0.88, b: 0.44, a: 1}
+    confirmBottom: {r: 0.1, g: 0.54, b: 0.2, a: 1}
+    buttonEdge: {r: 1, g: 1, b: 1, a: 0.8}
+    buttonGlow: {r: 0.01, g: 0.03, b: 0.07, a: 0.65}
+    buttonRadius: 34
+    accentTop: {r: 1, g: 0.86, b: 0.42, a: 0.26}
+    accentBottom: {r: 0.62, g: 0.42, b: 0.06, a: 0.34}
+    accentEdge: {r: 1, g: 0.86, b: 0.42, a: 0.85}
+    divider: {r: 0.76, g: 0.92, b: 1, a: 0.22}
+    barTrack: {r: 0.02, g: 0.1, b: 0.2, a: 0.78}
+    barFillTop: {r: 1, g: 0.9, b: 0.48, a: 1}
+    barFillBottom: {r: 0.98, g: 0.68, b: 0.16, a: 1}
+    text: {r: 0.97, g: 0.99, b: 1, a: 1}
+    muted: {r: 0.8, g: 0.91, b: 0.97, a: 1}
+    gold: {r: 1, g: 0.84, b: 0.32, a: 1}
+    good: {r: 0.52, g: 0.96, b: 0.56, a: 1}
+    bad: {r: 1, g: 0.52, b: 0.46, a: 1}
+    textOutline: {r: 0.02, g: 0.06, b: 0.12, a: 0.95}
+    outlineWidth: 0.16
+    faceWeight: 0.16
+    textShadow: {r: 0, g: 0, b: 0, a: 0.65}
+    textShadowOffset: 0.18
+    textShadowSoftness: 0.12
+  backdropColor: {r: 0.03, g: 0.05, b: 0.09, a: 0.82}
+  gearMaterial: {fileID: 2100000, guid: fbfefae10559e4d0082319d79adf7465, type: 2}
+  gearAngles: {x: -14, y: 24, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1125,3 +1411,4 @@ SceneRoots:
   - {fileID: 432546500}
   - {fileID: 645252714}
   - {fileID: 106828385}
+  - {fileID: 1601929505}

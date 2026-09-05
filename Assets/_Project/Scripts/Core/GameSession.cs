@@ -29,6 +29,7 @@ namespace Game.Core
         [SerializeField] StorageView storageView;
         [SerializeField] HudView hudView;
         [SerializeField] GameOverView gameOverView;
+        [SerializeField] PauseView pauseView;
 
         readonly Dictionary<HexCoord, TileView> views = new();
         readonly Dictionary<Delivery, ResourceMover> movers = new();
@@ -91,6 +92,7 @@ namespace Game.Core
             storageView.Bind(storage);
             hudView.Bind(state, contracts, storageView);
             gameOverView.Bind(storageView, production, contracts);
+            pauseView.Bind(storageView);
         }
 
         void OnEnable()
@@ -110,6 +112,8 @@ namespace Game.Core
             merges.Converted += OnConverted;
             end.Ended += OnGameEnded;
             gameOverView.RestartRequested += Restart;
+            pauseView.RestartRequested += RestartSameMap;
+            pauseView.ExitRequested += ExitToMenu;
         }
 
         void OnDisable()
@@ -129,6 +133,8 @@ namespace Game.Core
             merges.Converted -= OnConverted;
             end.Ended -= OnGameEnded;
             gameOverView.RestartRequested -= Restart;
+            pauseView.RestartRequested -= RestartSameMap;
+            pauseView.ExitRequested -= ExitToMenu;
         }
 
         void Start()
@@ -147,6 +153,10 @@ namespace Game.Core
             // Первый контракт партии идёт без паузы (3.8). Дальше система выдаёт их сама,
             // отмолчав между ними случайную паузу.
             contracts.Issue();
+
+            // Шестерёнка появляется только когда партия реально началась — не на экране меню,
+            // где `pauseView.Bind` уже отработал, но ей ещё нечего показывать.
+            pauseView.gameObject.SetActive(true);
         }
 
         void Update()
@@ -156,7 +166,7 @@ namespace Game.Core
             if (viewport.x != Screen.width || viewport.y != Screen.height)
                 ApplyViewportInsets();
 
-            if (end.HasEnded)
+            if (end.HasEnded || pauseView.IsOpen)
                 return;
 
             production.Tick(Time.deltaTime);
@@ -245,6 +255,11 @@ namespace Game.Core
                 return;
             }
 
+            // Шестерёнка и, пока открыта, карточка паузы разбирают клик сами — полю и попапам
+            // он не достаётся, партия стоит.
+            if (pauseView.HandleClick(screenPosition))
+                return;
+
             // Пока висит подтверждение открытия, клик принадлежит ему: по галочке — открыть,
             // мимо — только закрыть, не выполняя того, по чему попали.
             if (hudView.Popups.TryClick(screenPosition))
@@ -320,13 +335,13 @@ namespace Game.Core
         /// <summary>Камера замирает вместе с полем: после конца партии её тоже не двигают.</summary>
         void OnDragged(Vector2 delta)
         {
-            if (!end.HasEnded)
+            if (!end.HasEnded && !pauseView.IsOpen)
                 cameraRig.Pan(delta);
         }
 
         void OnZoomed(float amount)
         {
-            if (!end.HasEnded)
+            if (!end.HasEnded && !pauseView.IsOpen)
                 cameraRig.Zoom(amount);
         }
 
@@ -342,8 +357,21 @@ namespace Game.Core
             else
                 SessionSeed.Renew();
 
+            // Сид уже выбран — сцена обязана поднять партию напрямую, а не главное меню,
+            // которое иначе показывает по умолчанию после перезагрузки.
+            SessionSeed.SkipMenu = true;
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
+
+        /// <summary>«Рестарт карты» из паузы: та же карта, тот же путь, что «Повторить карту».</summary>
+        void RestartSameMap() => Restart(true);
+
+        /// <summary>
+        /// «Выход в главное меню» из паузы: сцена просто перезагружается, без заказа сида.
+        /// `Game` в сохранённой сцене выключен по умолчанию, `MainMenu` включён — reload
+        /// естественно возвращает на экран меню.
+        /// </summary>
+        void ExitToMenu() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
 
         void OnTileChanged(TileData tile)
         {
@@ -429,6 +457,7 @@ namespace Game.Core
         void OnGameEnded(FinalScore score)
         {
             hudView.Popups.Clear();
+            pauseView.gameObject.SetActive(false);
             gameOverView.Show(score);
         }
 
