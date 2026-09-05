@@ -163,6 +163,8 @@ MonoBehaviour:
   - {fileID: 4580205229766308904, guid: 44b78dfb6fc8f4e4a888fc1c299207a4, type: 3}
   treeSize: 0.44
   rockSize: 0.24
+  metropolisModel: {fileID: 2107252493709494298, guid: 5588228f122544a8ca5d31457cff29f3, type: 3}
+  metropolisFootprint: 0.65
   decorMin: 3
   decorMax: 6
   decorScale: 0.32

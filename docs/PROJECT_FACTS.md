@@ -172,8 +172,10 @@ GPU-инстансинг, снимать его без замера нельзя
 - `Assets/_Project/Models/` — KayKit Medieval Hexagon Pack 1.0, автор Kay Lousberg
   (kaylousberg.com), лицензия **CC0**, текст в `Models/License.txt`. Атрибуция не обязательна.
   Атлас `PaletteBuildings.png`, деревья `tree_single_A.fbx`, `tree_single_B.fbx`, камни
-  `rock_single_A…E.fbx`. Модели развёрнуты на атлас: цвет грани задаёт её UV, а не код,
-  поэтому у них свой материал `Prefabs/Palette.mat` на том же шейдере `Game/TileState`.
+  `rock_single_A…E.fbx`, замок Метрополии `building_castle_blue.fbx` (M21). Модели развёрнуты
+  на атлас: цвет грани задаёт её UV, а не код, поэтому у них свой материал `Prefabs/Palette.mat`
+  на том же шейдере `Game/TileState`. Что замок из этого пака, а не из чужого, видно по имени
+  материала внутри FBX — `hexagons_medieval`, — и по тому, что его UV лежат в том же атласе.
 - `Assets/_Project/Models/coin.fbx` и его текстура `coinC_2.png` — монета для карточки очков
   и награды контракта. **Лицензия не подтверждена:** файла лицензии рядом нет, происхождение
   модели неизвестно. По правилу выше она подлежит удалению, пока лицензия не приложена.
@@ -182,10 +184,11 @@ GPU-инстансинг, снимать его без замера нельзя
   `Gold_Bars_Stack_Large.fbx`, одиночные предметы `Wood_Log_A.fbx`, `Stone_Brick.fbx`,
   `Gold_Bar.fbx`, крафтовые `Wood_Planks_Stack_Medium.fbx`, `Stone_Chunks_Large.fbx`,
   `Gold_Bars.fbx` и их общий атлас `PaletteResources.png`, материал
-  `Prefabs/PaletteResources.mat`. **Лицензия не подтверждена:** лежащий рядом `License.txt`
-  выписан на Medieval Hexagon Pack, а эти модели по именованию и плотности сетки (1.4–5.2 тысячи
-  треугольников против 18–220 у гексового пака) из другого набора. Нужен файл лицензии их пака,
-  иначе по правилу выше они подлежат удалению.
+  `Prefabs/PaletteResources.mat`. Это **KayKit Resource Bits 1.0**, тот же автор, лицензия
+  **CC0**, текст в `Models/LicenseResources.txt` — человек приложил файл 05.09.2026 и тем закрыл
+  хвост: до него рядом лежал только `License.txt` на Medieval Hexagon Pack, а эти модели по
+  именованию и плотности сетки (1.4–5.2 тысячи треугольников против 18–220 у гексового пака)
+  из другого набора.
 
 ## §8 Сборка и репозиторий
 

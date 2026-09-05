@@ -160,6 +160,10 @@ namespace Game.Grid
         [SerializeField, Range(0.1f, 1f)] float treeSize = 0.44f;
         [Tooltip("Наибольший габарит камня в юнитах")]
         [SerializeField, Range(0.05f, 0.6f)] float rockSize = 0.24f;
+        [Tooltip("Здание Метрополии. Пусто — гекс остаётся голым песчаниковым, как до M21")]
+        [SerializeField] Mesh metropolisModel;
+        [Tooltip("След здания по земле в юнитах. Выше 0.669 угол основания уходит за плоский верх")]
+        [SerializeField, Range(0.2f, 1f)] float metropolisFootprint = 0.65f;
 
         [Header("Декор биома")]
         [SerializeField, Range(0, 8)] int decorMin = 3;
@@ -176,6 +180,7 @@ namespace Game.Grid
 
         MeshRenderer river;
         MeshRenderer riverBank;
+        MeshRenderer metropolis;
         MeshRenderer meshRenderer;
         MeshRenderer spark;
         MaterialPropertyBlock propertyBlock;
@@ -205,6 +210,7 @@ namespace Game.Grid
                 : HexMeshBuilder.Shared;
 
             CreateRiver(tile);
+            CreateMetropolis(tile);
             CreateDecor(tile);
             CreateDeposits(tile);
             Apply(tile);
@@ -223,6 +229,9 @@ namespace Game.Grid
             var modelColor = Shaded(Color.white, tile.Shade);
             for (var i = 0; i < decor.Count; i++)
                 SetTile(decor[i].Renderer, Scaled(decor[i].Textured ? modelColor : decorColor, decor[i].Tint), state);
+
+            if (metropolis != null)
+                SetTile(metropolis, modelColor, state);
 
             if (riverBank != null)
                 SetTile(riverBank, Shaded(riverBankColor, tile.Shade), state);
@@ -424,6 +433,42 @@ namespace Game.Grid
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Здание Метрополии стоит на своей плитке одной моделью. Масштаб считается **по следу
+        /// на земле**, а не по наибольшему габариту, как у декора и стеков: замок вдвое выше
+        /// своего основания, и приведение по высоте оставило бы от него башенку в треть плитки.
+        /// Ограничение здесь — крышка гекса, а не рост.
+        ///
+        /// Потолок следа — 0.669, и он посчитан, а не подобран. Плоский верх после фаски это
+        /// шестиугольник с инрадиусом 0.422 по X и вершиной 0.487 по Z; основание замка — самая
+        /// широкая его часть (полуширины 0.950 и 1.097 при габарите 2.26), свесить за кромку
+        /// одни крыши не выйдет. Выше потолка угол основания встаёт над фаской и висит в воздухе.
+        /// </summary>
+        void CreateMetropolis(TileData tile)
+        {
+            if (!tile.IsMetropolis || metropolisModel == null || paletteMaterial == null)
+                return;
+
+            metropolis = CreatePart(
+                transform,
+                "Metropolis",
+                metropolisModel,
+                Vector3.zero,
+                Vector3.one * FootprintScale(metropolisModel, metropolisFootprint),
+                paletteMaterial);
+        }
+
+        /// <summary>
+        /// Приведение следа модели на земле к заданной ширине. Отличается от `ModelScale` тем,
+        /// что смотрит только на X и Z: рост зданию оставлен свой.
+        /// </summary>
+        static float FootprintScale(Mesh model, float target)
+        {
+            var size = model.bounds.size;
+            var footprint = Mathf.Max(size.x, size.z);
+            return footprint > 0.0001f ? target / footprint : target;
         }
 
         /// <summary>
