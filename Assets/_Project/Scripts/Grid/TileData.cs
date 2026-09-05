@@ -18,7 +18,9 @@ namespace Game.Grid
             BiomeType biome = BiomeType.Meadow,
             float shade = 0f,
             int riverMask = 0,
-            float elevation = 0f)
+            float elevation = 0f,
+            int riverFlow = 0,
+            int riverDownMask = 0)
         {
             Coord = coord;
             IsMetropolis = isMetropolis;
@@ -27,6 +29,8 @@ namespace Game.Grid
             Shade = shade;
             RiverMask = riverMask;
             Elevation = elevation;
+            RiverFlow = riverFlow;
+            RiverDownMask = riverDownMask;
         }
 
         public HexCoord Coord { get; }
@@ -44,6 +48,19 @@ namespace Game.Grid
         /// направления, у соседа взведён бит обратного. Бит наружу поля — устье.
         /// </summary>
         public int RiverMask { get; }
+
+        /// <summary>
+        /// Шагов от истока по руслу; на слиянии — `max(входящих потоков) + 1`. Ширина реки растёт
+        /// вместе с этим числом: у истока лента уже, к устью — шире, см. `RiverWidth`.
+        /// </summary>
+        public int RiverFlow { get; }
+
+        /// <summary>
+        /// Биты `RiverMask`, ведущие **вниз** по течению — в сторону устья, а не истока. Бит устья
+        /// (уходящий за кромку поля) тоже нижний. Разница `RiverMask &amp; ~RiverDownMask` — грани,
+        /// откуда вода приходит.
+        /// </summary>
+        public int RiverDownMask { get; }
 
         /// <summary>Горы дорогу не принимают и за очки не открываются: это стена, а не секрет.</summary>
         public bool IsPassable => IsPassableBiome(Biome);

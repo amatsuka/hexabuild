@@ -86,6 +86,23 @@ namespace Game.Grid
         const int MaxBranchSteps = 12;
         const int BranchSalt = 47;
 
+        /// <summary>
+        /// Частота шума для склона реки, отдельная от `BiomeNoiseScale`. Замер на 200 сидах: на
+        /// частоте биома разница высот соседей выходит одного порядка с `DownPull` (0.09), и
+        /// постоянная тяга вниз по карте перебивает рельеф — ходок держит прямую, пока не упрётся
+        /// в кромку. На собственной, более частой картине шума соседи отличаются заметнее, и
+        /// маршрут виляет вместо марша. До правки — 30.1% пробегов длиной 3 и больше на 200 сидах
+        /// (run=1..8: 40.8/29.2/14.8/8.9/4.7/1.0/0.2/0.5%); после — см. `StraightPenalty`.
+        /// </summary>
+        const float RiverNoiseScale = 0.5f;
+
+        /// <summary>
+        /// Надбавка третьему шагу подряд в одном направлении — не первому и не второму: реке
+        /// можно пройти прямо пару плиток, а на третьей её подталкивает свернуть. Ходок для этого
+        /// помнит streak — сколько шагов подряд длится текущее направление.
+        /// </summary>
+        const float StraightPenalty = 0.05f;
+
         public static HexMap Generate(MapGenerationSettings settings)
         {
             var random = settings.Seed == 0 ? new System.Random() : new System.Random(settings.Seed);
@@ -126,7 +143,7 @@ namespace Game.Grid
             // становится скалой.
             OpenPassages(biomes);
 
-            var rivers = CarveRivers(biomes, settings, noiseOrigin);
+            var (rivers, downMasks, flow) = CarveRivers(biomes, noiseOrigin);
 
             // Река идёт по поверхности плитки, как дорога: месторождению на ней уже не место.
             var depositsByCoord = new Dictionary<HexCoord, List<Deposit>>();
@@ -149,7 +166,9 @@ namespace Game.Grid
                     pair.Value,
                     coord == HexCoord.Zero ? 0f : RollShade(coord, noiseOrigin),
                     rivers.TryGetValue(coord, out var mask) ? mask : 0,
-                    elevations[coord]));
+                    elevations[coord],
+                    flow.GetValueOrDefault(coord),
+                    downMasks.GetValueOrDefault(coord)));
             }
 
             return new HexMap(settings.Rows, tiles);
@@ -305,13 +324,12 @@ namespace Game.Grid
         /// из центра. Исток — гора повыше на карте, шаг — переход на соседа ниже по склону и ниже
         /// по карте, конец — кромка поля.
         /// </summary>
-        static Dictionary<HexCoord, int> CarveRivers(
-            IReadOnlyDictionary<HexCoord, BiomeType> biomes,
-            MapGenerationSettings settings,
-            Vector2 noiseOrigin)
+        static (Dictionary<HexCoord, int> Mask, Dictionary<HexCoord, int> DownMask, Dictionary<HexCoord, int> Flow)
+            CarveRivers(IReadOnlyDictionary<HexCoord, BiomeType> biomes, Vector2 noiseOrigin)
         {
             var rivers = new Dictionary<HexCoord, int>();
-            var terrain = new RiverTerrain(biomes, settings, noiseOrigin);
+            var downMasks = new Dictionary<HexCoord, int>();
+            var terrain = new RiverTerrain(biomes, noiseOrigin);
             var candidates = new List<HexCoord>();
 
             // Гора на кромке истоком не годится: русло с неё сразу упрётся в край поля.
@@ -320,7 +338,7 @@ namespace Game.Grid
                     candidates.Add(pair.Key);
 
             if (candidates.Count == 0)
-                return rivers;
+                return (rivers, downMasks, new Dictionary<HexCoord, int>());
 
             // Исток тем лучше, чем выше он на карте и чем дальше от боковых кромок: реке остаётся
             // длинный путь вниз, а не пара плиток до ближайшего края. Хеш разводит равные горы.
@@ -346,6 +364,7 @@ namespace Game.Grid
             // самая высокая на карте. Если длинного не вышло ни из одного истока, берём лучшее
             // из коротких — карта без реки хуже карты с ручьём.
             Dictionary<HexCoord, int> longest = null;
+            Dictionary<HexCoord, int> longestDown = null;
             var accepted = 0;
 
             foreach (var source in sources)
@@ -354,20 +373,31 @@ namespace Game.Grid
                     break;
 
                 var attempt = new Dictionary<HexCoord, int>(rivers);
-                Carve(source, terrain, attempt);
+                var attemptDown = new Dictionary<HexCoord, int>(downMasks);
+                Carve(source, terrain, attempt, attemptDown);
 
                 if (attempt.Count - rivers.Count >= MinRiverTiles)
                 {
                     rivers = attempt;
+                    downMasks = attemptDown;
                     accepted++;
                     continue;
                 }
 
                 if (longest == null || attempt.Count > longest.Count)
+                {
                     longest = attempt;
+                    longestDown = attemptDown;
+                }
             }
 
-            return rivers.Count > 0 ? rivers : longest ?? rivers;
+            if (rivers.Count == 0 && longest != null)
+            {
+                rivers = longest;
+                downMasks = longestDown;
+            }
+
+            return (rivers, downMasks, MeasureFlow(rivers, downMasks));
 
             // Ряд весит меньше отдалённости от кромки: с верхнего ряда у самого бока русло
             // уходит за карту первым же шагом.
@@ -375,38 +405,103 @@ namespace Game.Grid
         }
 
         /// <summary>
+        /// Шагов от истока по руслу: 0 у истока (входящих бит нет вовсе), на слиянии —
+        /// `max(входящих) + 1`. Считается уже после того, как всё русло проложено: во время
+        /// блуждания слияние может задним числом поднять поток ветки выше, чем она сама о себе
+        /// знала в момент прокладки, поэтому потоком нельзя размечать по ходу `Carve`.
+        /// </summary>
+        static Dictionary<HexCoord, int> MeasureFlow(
+            Dictionary<HexCoord, int> rivers,
+            Dictionary<HexCoord, int> downMasks)
+        {
+            var flow = new Dictionary<HexCoord, int>();
+
+            foreach (var coord in rivers.Keys)
+                // Исток — плитка, у которой все биты маски исходящие: входящей воды нет.
+                if ((rivers[coord] & ~downMasks.GetValueOrDefault(coord)) == 0)
+                    flow[coord] = 0;
+
+            // Проходов не больше, чем плиток в русле: столько гарантированно хватает дереву без
+            // циклов, а ходок, слившийся сам с собой (`Downhill` берёт слияние, только когда
+            // свободных соседей не осталось, и раньше это было безобидно — маска ведь не знала
+            // направления), потолком не даёт зациклиться совсем: недосчитанный поток на этом
+            // редком краю лучше зависшего редактора.
+            for (var pass = 0; pass < rivers.Count; pass++)
+            {
+                var changed = false;
+
+                foreach (var tile in rivers.Keys)
+                {
+                    if (!flow.TryGetValue(tile, out var tileFlow))
+                        continue;
+
+                    var down = downMasks.GetValueOrDefault(tile);
+                    for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+                    {
+                        if ((down & (1 << direction)) == 0)
+                            continue;
+
+                        var next = tile.Neighbor(direction);
+                        if (!rivers.ContainsKey(next))
+                            continue; // устье: за кромкой поля соседа и потока у него нет.
+
+                        var candidate = tileFlow + 1;
+                        if (flow.TryGetValue(next, out var known) && known >= candidate)
+                            continue;
+
+                        flow[next] = candidate;
+                        changed = true;
+                    }
+                }
+
+                if (!changed)
+                    break;
+            }
+
+            return flow;
+        }
+
+        /// <summary>
         /// Одно русло со всеми рукавами. Ходок спускается по склону, пока не выйдет к кромке поля;
         /// развилка отправляет второго ходока в следующего по низине соседа. Русло, вошедшее в уже
         /// проложенное, на этом заканчивается — это слияние, а не тупик.
         /// </summary>
-        static void Carve(HexCoord source, RiverTerrain terrain, Dictionary<HexCoord, int> rivers)
+        static void Carve(
+            HexCoord source,
+            RiverTerrain terrain,
+            Dictionary<HexCoord, int> rivers,
+            Dictionary<HexCoord, int> downMasks)
         {
-            var walkers = new Queue<(HexCoord Tile, HexCoord From, int Steps)>();
+            var walkers = new Queue<(HexCoord Tile, HexCoord From, int Streak, int Steps)>();
             var picks = new List<HexCoord>(2);
             var branches = MaxBranchesPerRiver;
 
-            walkers.Enqueue((source, source, MaxRiverSteps));
+            walkers.Enqueue((source, source, 0, MaxRiverSteps));
 
             while (walkers.Count > 0)
             {
-                var (tile, from, steps) = walkers.Dequeue();
+                var (tile, from, streak, steps) = walkers.Dequeue();
 
                 for (var step = 0; step < steps; step++)
                 {
                     // Кромка — только устье. Дальше течь некуда, а идти вдоль края река не должна.
                     if (terrain.IsBorder(tile))
                     {
-                        OpenMouth(tile, from, terrain, rivers);
+                        OpenMouth(tile, from, terrain, rivers, downMasks);
                         break;
                     }
 
-                    Downhill(tile, from, terrain, rivers, picks);
+                    // Направление последнего шага восстанавливается из tile − from: отдельного
+                    // поля под него заводить не пришлось. Streak — сколько шагов подряд оно уже
+                    // держится, и только по нему штраф узнаёт, что кандидат станет именно третьим.
+                    var lastDirection = DirectionOf(tile - from);
+                    Downhill(tile, from, lastDirection, streak, terrain, rivers, picks);
                     if (picks.Count == 0)
                         break;
 
                     var next = picks[0];
                     var merges = rivers.ContainsKey(next);
-                    Link(tile, next, rivers);
+                    Link(tile, next, rivers, downMasks);
 
                     // Устье не только на кромке: дойдя до воды, река впадает в неё и кончается.
                     // Иначе русло тянулось бы дальше по дну — под водой его всё равно не видно,
@@ -418,17 +513,28 @@ namespace Game.Grid
                         && tile.Hash01(BranchSalt) < BranchChance)
                     {
                         branches--;
-                        Link(tile, picks[1], rivers);
-                        walkers.Enqueue((picks[1], tile, MaxBranchSteps));
+                        Link(tile, picks[1], rivers, downMasks);
+                        walkers.Enqueue((picks[1], tile, 0, MaxBranchSteps));
                     }
 
                     if (merges)
                         break;
 
+                    streak = DirectionOf(next - tile) == lastDirection ? streak + 1 : 1;
                     from = tile;
                     tile = next;
                 }
             }
+        }
+
+        /// <summary>Направление смещения между соседями, или -1 у нулевого смещения (первый шаг).</summary>
+        static int DirectionOf(HexCoord delta)
+        {
+            for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
+                if (HexCoord.Directions[direction].Equals(delta))
+                    return direction;
+
+            return -1;
         }
 
         /// <summary>
@@ -439,6 +545,8 @@ namespace Game.Grid
         static void Downhill(
             HexCoord tile,
             HexCoord from,
+            int lastDirection,
+            int streak,
             RiverTerrain terrain,
             IReadOnlyDictionary<HexCoord, int> rivers,
             List<HexCoord> picks)
@@ -457,6 +565,11 @@ namespace Game.Grid
                     continue;
 
                 var score = terrain.Slope(tile, neighbor);
+
+                // Третий шаг подряд в одном направлении получает надбавку: первый и второй ей не
+                // мешают, реке можно пройти прямо пару плиток, а на третьей её подталкивает свернуть.
+                if (direction == lastDirection && streak >= 2)
+                    score += StraightPenalty;
 
                 if (rivers.ContainsKey(neighbor))
                 {
@@ -491,8 +604,15 @@ namespace Game.Grid
                 picks.Add(confluence);
         }
 
-        /// <summary>Сшивает две плитки руслом: бит в сторону соседа и ответный бит у него.</summary>
-        static void Link(HexCoord tile, HexCoord next, Dictionary<HexCoord, int> rivers)
+        /// <summary>
+        /// Сшивает две плитки руслом: бит в сторону соседа — у отправителя он же нижний
+        /// (`downMasks`), ответный бит у соседа — верхний, вода идёт оттуда.
+        /// </summary>
+        static void Link(
+            HexCoord tile,
+            HexCoord next,
+            Dictionary<HexCoord, int> rivers,
+            Dictionary<HexCoord, int> downMasks)
         {
             for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
             {
@@ -501,19 +621,22 @@ namespace Game.Grid
 
                 rivers[tile] = rivers.GetValueOrDefault(tile) | (1 << direction);
                 rivers[next] = rivers.GetValueOrDefault(next) | (1 << Opposite(direction));
+                downMasks[tile] = downMasks.GetValueOrDefault(tile) | (1 << direction);
                 return;
             }
         }
 
         /// <summary>
         /// Устье: лента уходит за границу поля по той грани, что ближе к направлению течения.
-        /// Ответного бита у неё нет — соседа за краем не существует.
+        /// Ответного бита у неё нет — соседа за краем не существует, а нижним он тоже считается:
+        /// вода уходит с поля, а не приходит на него.
         /// </summary>
         static void OpenMouth(
             HexCoord tile,
             HexCoord from,
             RiverTerrain terrain,
-            Dictionary<HexCoord, int> rivers)
+            Dictionary<HexCoord, int> rivers,
+            Dictionary<HexCoord, int> downMasks)
         {
             var flow = tile.ToPlane() - from.ToPlane();
             if (flow.sqrMagnitude < 1e-6f)
@@ -535,8 +658,28 @@ namespace Game.Grid
                 bestDot = dot;
             }
 
-            if (mouth >= 0)
-                rivers[tile] = rivers.GetValueOrDefault(tile) | (1 << mouth);
+            if (mouth < 0)
+                return;
+
+            rivers[tile] = rivers.GetValueOrDefault(tile) | (1 << mouth);
+            downMasks[tile] = downMasks.GetValueOrDefault(tile) | (1 << mouth);
+
+            // Устье шире одной грани: соседняя грань, тоже уходящая за кромку, тоже открывается —
+            // единственная дельта устья, остальные грани по-прежнему считает Rivers_NeverRunAlongTheEdgeOfTheField.
+            var left = (mouth + 5) % 6;
+            var right = (mouth + 1) % 6;
+
+            if (!terrain.Contains(tile.Neighbor(left)))
+            {
+                rivers[tile] |= 1 << left;
+                downMasks[tile] |= 1 << left;
+            }
+
+            if (!terrain.Contains(tile.Neighbor(right)))
+            {
+                rivers[tile] |= 1 << right;
+                downMasks[tile] |= 1 << right;
+            }
         }
 
         static int Opposite(int direction) => (direction + 3) % 6;
@@ -552,14 +695,11 @@ namespace Game.Grid
             readonly float noiseScale;
             readonly Vector2 noiseOrigin;
 
-            public RiverTerrain(
-                IReadOnlyDictionary<HexCoord, BiomeType> biomes,
-                MapGenerationSettings settings,
-                Vector2 noiseOrigin)
+            public RiverTerrain(IReadOnlyDictionary<HexCoord, BiomeType> biomes, Vector2 noiseOrigin)
             {
                 this.biomes = biomes;
                 this.noiseOrigin = noiseOrigin;
-                noiseScale = settings.BiomeNoiseScale;
+                noiseScale = RiverNoiseScale;
                 inland = MeasureInland(biomes);
             }
 

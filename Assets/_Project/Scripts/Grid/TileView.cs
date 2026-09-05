@@ -109,11 +109,12 @@ namespace Game.Grid
 
         [Header("Река")]
         [SerializeField] Color riverColor = new(0.28f, 0.52f, 0.74f);
-        [Tooltip("Шире полотна дороги: иначе на переправе русло не читается вовсе")]
-        [SerializeField] float riverWidth = 0.22f;
+        [Tooltip("Множитель поверх ширины по течению (RiverWidth): 1 — как в формуле, тюнинг картинки без правки баланса")]
+        [SerializeField] float riverWidthMultiplier = 1f;
         [Tooltip("Светлая кромка берега под лентой русла: без неё канава читается дырой")]
         [SerializeField] Color riverBankColor = new(0.70f, 0.66f, 0.53f);
-        [SerializeField] float riverBankWidth = 0.30f;
+        [Tooltip("Насколько берег шире воды сверх RiverWidth.BankMargin — не разводить далеко: снос ворот в RiverCourse клампится под этот же запас")]
+        [SerializeField] float riverBankMargin = RiverWidth.BankMargin;
 
         [Header("Цвета месторождений")]
         [SerializeField] ResourcePalette resources = new();
@@ -180,6 +181,12 @@ namespace Game.Grid
 
         MeshRenderer river;
         MeshRenderer riverBank;
+        // Раньше меш ленты был общим на пару «маска + ширина» и жил в статическом кэше
+        // билдера. С M22 ворота и опорная точка сносятся по хэшу координаты плитки, у двух
+        // плиток с одной маской они уже разные — общих мешей больше нет, и владеет ими эта
+        // плитка. Сама она их и гасит в OnDestroy, иначе рестарт партии течёт меш за мешем.
+        Mesh riverMesh;
+        Mesh riverBankMesh;
         MeshRenderer metropolis;
         MeshRenderer meshRenderer;
         MeshRenderer spark;
@@ -402,38 +409,76 @@ namespace Game.Grid
 
             // Два слоя, как у дороги, только наоборот: широкая светлая кромка берега снизу,
             // узкая тёмная вода поверх. Кромка и делает канаву руслом, а не дырой в плитке.
+            riverBankMesh = RiverMeshBuilder.Build(tile, riverWidthMultiplier, riverBankMargin);
             riverBank = CreatePart(
-                transform,
-                "RiverBank",
-                RiverMeshBuilder.Get(tile.RiverMask, riverBankWidth),
-                new Vector3(0f, RiverBankHeight, 0f),
-                Vector3.one);
+                transform, "RiverBank", riverBankMesh, new Vector3(0f, RiverBankHeight, 0f), Vector3.one);
 
-            river = CreatePart(
-                transform,
-                "River",
-                RiverMeshBuilder.Get(tile.RiverMask, riverWidth),
-                new Vector3(0f, RiverHeight, 0f),
-                Vector3.one);
+            riverMesh = RiverMeshBuilder.Build(tile, riverWidthMultiplier);
+            river = CreatePart(transform, "River", riverMesh, new Vector3(0f, RiverHeight, 0f), Vector3.one);
         }
 
-        /// <summary>Точка лежит в русле: декор туда ставить нельзя, дерево росло бы в воде.</summary>
-        static bool InsideRiver(TileData tile, Vector2 point, float width)
+        void OnDestroy()
         {
+            if (riverMesh != null)
+                Destroy(riverMesh);
+            if (riverBankMesh != null)
+                Destroy(riverBankMesh);
+        }
+
+        /// <summary>
+        /// Точка лежит в русле: декор туда ставить нельзя, дерево росло бы в воде. Ходит по той
+        /// же дуге `RiverCourse.Point`, что и меш, — иначе после меандра они бы разошлись и
+        /// дерево выросло посреди воды.
+        /// </summary>
+        static bool InsideRiver(TileData tile, Vector2 point, float widthMultiplier, float clearance)
+        {
+            var mask = tile.RiverMask;
+
             for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
             {
-                if ((tile.RiverMask & (1 << direction)) == 0)
+                if ((mask & (1 << direction)) == 0)
                     continue;
 
-                // Рукав — отрезок от центра плитки до середины грани.
-                var edge = HexCoord.Directions[direction].ToPlane() * 0.5f;
-                var t = Mathf.Clamp01(Vector2.Dot(point, edge) / edge.sqrMagnitude);
-                if (Vector2.Distance(point, edge * t) < width)
+                // Рукав в одиночку — тупик: прямая от ворот грани до центра плитки.
+                if (HasOtherLink(mask, direction))
+                    continue;
+
+                var gate = RiverCourse.Gate(tile.Coord, direction);
+                var half = RiverWidth.Water(RiverWidth.GateFlow(tile, direction)) * widthMultiplier * 0.5f;
+                var t = Mathf.Clamp01(Vector2.Dot(point, gate) / gate.sqrMagnitude);
+                if (Vector2.Distance(point, gate * t) < half + clearance)
                     return true;
+            }
+
+            for (var i = 0; i < HexCoord.Directions.Count; i++)
+            {
+                if ((mask & (1 << i)) == 0)
+                    continue;
+
+                var halfFrom = RiverWidth.Water(RiverWidth.GateFlow(tile, i)) * widthMultiplier * 0.5f;
+
+                for (var j = i + 1; j < HexCoord.Directions.Count; j++)
+                {
+                    if ((mask & (1 << j)) == 0)
+                        continue;
+
+                    var halfTo = RiverWidth.Water(RiverWidth.GateFlow(tile, j)) * widthMultiplier * 0.5f;
+
+                    for (var s = 0; s <= RiverCourse.CurveSegments; s++)
+                    {
+                        var t = s / (float)RiverCourse.CurveSegments;
+                        var sample = RiverCourse.Point(tile.Coord, i, j, t);
+                        if (Vector2.Distance(point, sample) < Mathf.Lerp(halfFrom, halfTo, t) + clearance)
+                            return true;
+                    }
+                }
             }
 
             return false;
         }
+
+        /// <summary>Русло на плитке не ограничено одним направлением — есть хотя бы ещё одно.</summary>
+        static bool HasOtherLink(int mask, int direction) => (mask & ~(1 << direction)) != 0;
 
         /// <summary>
         /// Здание Метрополии стоит на своей плитке одной моделью. Масштаб считается **по следу
@@ -503,7 +548,7 @@ namespace Game.Grid
                 var shape = BiomeDecor(tile.Biome, coord.Hash01(ItemSalt(i, 4)));
 
                 var spot = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
-                if (InsideRiver(tile, spot, riverWidth * 0.5f + decorScale * 0.5f))
+                if (InsideRiver(tile, spot, riverWidthMultiplier, decorScale * 0.5f))
                     continue;
 
                 // Месторождение на плитке — главный объект, и оно занимает ту же середину, куда

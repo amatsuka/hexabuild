@@ -61,6 +61,25 @@ namespace Game.Grid
             }
         }
 
+        /// <summary>
+        /// Детерминированный хеш **пары** соседних плиток в [0, 1), не зависящий от того, с чьей
+        /// стороны его считают: пара сперва упорядочивается канонически (min/max по (Q, R)).
+        /// Так снос ворот русла, общих у двух плиток, выходит одним и тем же числом с обеих сторон.
+        /// </summary>
+        public static float Hash01(HexCoord a, HexCoord b, int salt)
+        {
+            if (a.Q > b.Q || (a.Q == b.Q && a.R > b.R))
+                (a, b) = (b, a);
+
+            unchecked
+            {
+                var hash = a.Q * 73856093 ^ a.R * 19349663 ^ b.Q * 83492791 ^ b.R * 45403843 ^ salt * 668265263;
+                hash = (hash ^ (hash >> 13)) * 1274126177;
+                hash ^= hash >> 16;
+                return (hash & 0x7fffffff) / 2147483648f;
+            }
+        }
+
         public static int Distance(HexCoord a, HexCoord b)
         {
             var dq = a.Q - b.Q;
