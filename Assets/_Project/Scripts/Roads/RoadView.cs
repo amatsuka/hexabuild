@@ -1,3 +1,4 @@
+using System;
 using Game.Grid;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -5,107 +6,112 @@ using UnityEngine.Rendering;
 namespace Game.Roads
 {
     /// <summary>
-    /// Дорога поверх гекса в два слоя: тёмная обочина пошире, светлое полотно поверх неё — тем же
-    /// приёмом, что обводка гекса. Ширина и оттенок берутся из хеша координаты, иначе сеть
-    /// выглядит штампованной.
+    /// Вью всей дорожной сети: один меш насыпи на партию, а не по вью на плитку.
+    ///
+    /// Меш по плитке дорога перерасти не могла — участок обрывался на границе гекса, и шов между
+    /// соседями оставался открытым. Пересборка на постройку дешёвая: дорог за партию десятки,
+    /// а вершин у насыпи считаные сотни.
+    ///
+    /// Меш строится в мировых координатах, поэтому объект обязан стоять в начале координат без
+    /// поворота и масштаба.
+    ///
+    /// Мешей на самом деле три: насыпь, кладка поверх неё вместе с каменными арками мостов
+    /// и деревянные настилы. Делит их не геометрия, а цвет — он в этом проекте живёт
+    /// на рендерере, и одним мешем ни камень от полотна, ни дерево от камня не отличить.
     /// </summary>
     public sealed class RoadView : MonoBehaviour
     {
-        /// <summary>Полотно лежит поверх обочины: земля — XZ, «поверх» это выше по Y.</summary>
-        const float SurfaceHeight = 0.006f;
-
-        /// <summary>Настил моста ниже обочины и шире её: он торчит из-под дороги оторочкой.</summary>
-        const float BridgeHeight = -0.004f;
-
-        /// <summary>
-        /// Ступеней ширины. Непрерывная ширина размножила бы кэш мешей до одного на плитку;
-        /// три ступени глаз читает как разнобой, а мешей остаётся десяток.
-        /// </summary>
-        const int WidthSteps = 3;
-
-        const int WidthSalt = 0;
-        const int ShadeSalt = 1;
-
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
-        static readonly int StateFogId = Shader.PropertyToID("_StateFog");
 
         [SerializeField] Material roadMaterial;
-        [SerializeField] Color surfaceColor = new(0.84f, 0.81f, 0.73f);
-        [SerializeField] Color shoulderColor = new(0.19f, 0.17f, 0.15f);
-        [Tooltip("Насколько неподключённая дорога уходит в дымку: она построена, но не работает")]
-        [SerializeField, Range(0f, 1f)] float disconnectedFog = 0.55f;
-        [SerializeField] float surfaceWidth = 0.17f;
-        [Tooltip("Насколько обочина шире полотна: по половине с каждой стороны")]
-        [SerializeField] float shoulderExtra = 0.08f;
-        [SerializeField] Color bridgeColor = new(0.58f, 0.42f, 0.26f);
-        [Tooltip("Насколько настил моста шире обочины")]
-        [SerializeField] float bridgeExtra = 0.12f;
-        [Tooltip("Разброс ширины от координаты плитки, доля от базовой")]
-        [SerializeField, Range(0f, 0.4f)] float widthJitter = 0.16f;
-        [Tooltip("Разброс яркости от координаты плитки")]
-        [SerializeField, Range(0f, 0.4f)] float shadeJitter = 0.12f;
+        [SerializeField] Color roadColor = new(0.80f, 0.74f, 0.62f);
+        [Tooltip("Цвет обочных камней, колейных плашек и каменных арок")]
+        [SerializeField] Color masonryColor = new(0.56f, 0.53f, 0.48f);
+        [Tooltip("Цвет деревянного настила мостов: досок, балок, свай и перил")]
+        [SerializeField] Color timberColor = new(0.58f, 0.40f, 0.26f);
+        [Tooltip("Ширина полотна. С откосами она не должна вылезти за крышку плитки: потолок ~0.26")]
+        [SerializeField, Range(0.08f, 0.26f)] float width = 0.24f;
 
-        MeshFilter shoulder;
-        MeshFilter surface;
-        MeshFilter bridge;
-        MaterialPropertyBlock propertyBlock;
+        Mesh bedMesh;
+        Mesh masonryMesh;
+        Mesh timberMesh;
+        MeshFilter bed;
+        MeshFilter masonry;
+        MeshFilter timber;
 
-        /// <summary>
-        /// Отрисовать дорогу: <paramref name="linkMask"/> — биты направлений маршрута,
-        /// <paramref name="bridgeMask"/> — те из них, где дорога идёт мостом (через реку или по воде).
-        /// </summary>
-        public void Show(HexCoord coord, bool connected, int linkMask, int bridgeMask)
+        /// <summary>Пересобрать сеть целиком: связность меняется всей цепочкой, а не по плитке.</summary>
+        public void Show(RoadNetwork network, Func<HexCoord, RoadGround> groundAt)
         {
-            bridge ??= CreateLayer("Bridge", BridgeHeight);
-            shoulder ??= CreateLayer("Shoulder", 0f);
-            surface ??= CreateLayer("Surface", SurfaceHeight);
+            if (bed == null)
+                Create();
 
-            var width = surfaceWidth * WidthFactor(coord);
-            var shade = Mathf.Lerp(1f - shadeJitter, 1f + shadeJitter, coord.Hash01(ShadeSalt));
-
-            // Неподключённая дорога раньше отличалась альфой. Материал стал непрозрачным, и альфа
-            // перестала что-либо значить — отличие вернулось дымкой того же шейдера, что у плиток.
-            var fog = connected ? 0f : disconnectedFog;
-
-            Draw(bridge, RoadMeshBuilder.Bridge(bridgeMask, width + shoulderExtra + bridgeExtra),
-                Tinted(bridgeColor, shade), fog);
-            Draw(shoulder, RoadMeshBuilder.Get(linkMask, width + shoulderExtra), Tinted(shoulderColor, shade), fog);
-            Draw(surface, RoadMeshBuilder.Get(linkMask, width), Tinted(surfaceColor, shade), fog);
+            RoadMeshBuilder.Build(bedMesh, masonryMesh, timberMesh, network, groundAt, width);
+            bed.sharedMesh = bedMesh;
+            masonry.sharedMesh = masonryMesh;
+            timber.sharedMesh = timberMesh;
         }
 
-        /// <summary>Ширина квантуется: кэш мешей живёт по паре «маска + ширина».</summary>
-        float WidthFactor(HexCoord coord)
+        void Create()
         {
-            var step = (int)(coord.Hash01(WidthSalt) * WidthSteps);
-            return Mathf.Lerp(1f - widthJitter, 1f + widthJitter, step / (float)(WidthSteps - 1));
+            transform.localPosition = Vector3.zero;
+            transform.localRotation = Quaternion.identity;
+            transform.localScale = Vector3.one;
+
+            bedMesh = Layer("Roadbed");
+            masonryMesh = Layer("Masonry");
+            timberMesh = Layer("Timber");
+
+            bed = Attach(gameObject, bedMesh, roadColor);
+            masonry = Attach(Child("Masonry"), masonryMesh, masonryColor);
+            timber = Attach(Child("Timber"), timberMesh, timberColor);
         }
 
-        Color Tinted(Color color, float shade) =>
-            new(color.r * shade, color.g * shade, color.b * shade, color.a);
-
-        void Draw(MeshFilter layer, Mesh mesh, Color color, float fog)
+        static Mesh Layer(string layerName)
         {
-            layer.sharedMesh = mesh;
+            var mesh = new Mesh { name = layerName };
 
-            propertyBlock ??= new MaterialPropertyBlock();
-            var layerRenderer = layer.GetComponent<MeshRenderer>();
+            // Меш перестраивается каждую постройку: без этого Unity держит копию в памяти CPU
+            // и загружает её в GPU целиком на каждой правке.
+            mesh.MarkDynamic();
+            return mesh;
+        }
+
+        GameObject Child(string childName)
+        {
+            var child = new GameObject(childName);
+            child.transform.SetParent(transform, false);
+            return child;
+        }
+
+        MeshFilter Attach(GameObject host, Mesh mesh, Color color)
+        {
+            var filter = host.AddComponent<MeshFilter>();
+            filter.sharedMesh = mesh;
+
+            var layerRenderer = host.AddComponent<MeshRenderer>();
+            layerRenderer.sharedMaterial = roadMaterial;
+
+            // Насыпь и кладка — тела, а не наклейки: они стоят в свету наравне с призмами плиток.
+            layerRenderer.shadowCastingMode = ShadowCastingMode.On;
+            layerRenderer.receiveShadows = true;
+
+            var propertyBlock = new MaterialPropertyBlock();
             layerRenderer.GetPropertyBlock(propertyBlock);
             propertyBlock.SetColor(BaseColorId, color);
-            propertyBlock.SetFloat(StateFogId, fog);
             layerRenderer.SetPropertyBlock(propertyBlock);
+            return filter;
         }
 
-        MeshFilter CreateLayer(string layerName, float height)
+        void OnDestroy()
         {
-            var layer = new GameObject(layerName, typeof(MeshFilter), typeof(MeshRenderer));
-            layer.transform.SetParent(transform, false);
-            layer.transform.localPosition = new Vector3(0f, height, 0f);
+            if (bedMesh != null)
+                Destroy(bedMesh);
 
-            var layerRenderer = layer.GetComponent<MeshRenderer>();
-            layerRenderer.sharedMaterial = roadMaterial;
-            layerRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            layerRenderer.receiveShadows = false;
-            return layer.GetComponent<MeshFilter>();
+            if (masonryMesh != null)
+                Destroy(masonryMesh);
+
+            if (timberMesh != null)
+                Destroy(timberMesh);
         }
     }
 }

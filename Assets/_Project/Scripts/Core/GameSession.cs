@@ -13,8 +13,6 @@ namespace Game.Core
     /// <summary>Точка входа: создаёт партию и системы, порождает визуалы и связывает подписки.</summary>
     public sealed class GameSession : MonoBehaviour
     {
-        const float RoadHeight = 0.02f;
-
         [SerializeField] GameConfig config;
         [SerializeField] MergeRules mergeRules;
         [SerializeField] TileView tilePrefab;
@@ -33,7 +31,6 @@ namespace Game.Core
         [SerializeField] GameOverView gameOverView;
 
         readonly Dictionary<HexCoord, TileView> views = new();
-        readonly Dictionary<HexCoord, RoadView> roadViews = new();
         readonly Dictionary<Delivery, ResourceMover> movers = new();
         readonly List<HexCoord> path = new();
 
@@ -54,6 +51,9 @@ namespace Game.Core
         /// контракты, и его же забирает кнопка «Повторить карту» на финальном экране.
         /// </summary>
         int seed;
+
+        /// <summary>Одно вью на всю дорожную сеть: меш у неё общий.</summary>
+        RoadView roadView;
 
         GameState state;
         ProductionSystem production;
@@ -351,47 +351,36 @@ namespace Game.Core
                 view.Apply(tile);
         }
 
-        /// <summary>Дороги перерисовываются целиком: их немного, а связность меняется всей цепочкой.</summary>
+        /// <summary>
+        /// Дороги перестраиваются целиком одним мешем: их немного, а насыпь идёт через границы
+        /// гексов, и по отдельной плитке её собрать нельзя.
+        /// </summary>
         void OnRoadsChanged()
         {
-            foreach (var coord in state.Roads.Roads)
+            if (roadView == null)
             {
-                if (!roadViews.TryGetValue(coord, out var roadView))
-                {
-                    roadView = Instantiate(roadPrefab, views[coord].transform);
-                    roadView.transform.localPosition = new Vector3(0f, RoadHeight, 0f);
-                    roadViews.Add(coord, roadView);
-                }
-
-                var links = LinkMask(coord);
-                roadView.Show(coord, state.Roads.IsConnected(coord), links, BridgeMask(coord, links));
+                // Меш насыпи живёт в мировых координатах, поэтому вью встаёт в начало координат.
+                roadView = Instantiate(roadPrefab, tilesRoot);
+                roadView.name = "Roads";
             }
+
+            roadView.Show(state.Roads, GroundAt);
         }
 
         /// <summary>
-        /// Биты направлений, по которым проходит маршрут: к своему родителю и к тем соседям, для
-        /// которых родитель — эта плитка. Соседняя дорога сама по себе перемычку не рисует.
+        /// Что дорога застаёт на плитке. Высота — та, на которую плитку поставил `TileView`,
+        /// а не расчётная: весь рельеф ещё умножается на масштаб высоты, и насыпь обязана лечь
+        /// на то, что видно. Река на плитке означает мост: каменную арку скальной плитке,
+        /// деревянный настил всем остальным.
         /// </summary>
-        int LinkMask(HexCoord coord)
+        RoadGround GroundAt(HexCoord coord)
         {
-            var mask = 0;
-            for (var direction = 0; direction < HexCoord.Directions.Count; direction++)
-                if (state.Roads.IsRouteLink(coord, coord.Neighbor(direction)))
-                    mask |= 1 << direction;
+            var top = views.TryGetValue(coord, out var view) ? view.SurfaceHeight : 0f;
 
-            return mask;
-        }
+            if (!state.Map.TryGetTile(coord, out var tile) || !tile.HasRiver)
+                return new RoadGround(top);
 
-        /// <summary>
-        /// Где маршрут идёт мостом: на плитке с рекой настил лежит под всей лентой дороги — она
-        /// проходит через центр плитки, где течёт русло, и другой дороги на этой плитке не бывает.
-        /// </summary>
-        int BridgeMask(HexCoord coord, int linkMask)
-        {
-            if (!state.Map.TryGetTile(coord, out var tile))
-                return 0;
-
-            return tile.HasRiver ? linkMask : 0;
+            return new RoadGround(top, tile.Biome == BiomeType.Rocks ? BridgeKind.Stone : BridgeKind.Timber);
         }
 
         void OnProduced(TileData tile, ResourceType type)

@@ -379,10 +379,10 @@ namespace Game.Grid
             new(color.r * factor, color.g * factor, color.b * factor, color.a);
 
         /// <summary>
-        /// Русло идёт по поверхности плитки, как дорога: лента выходит из центра к серединам
-        /// граней, отмеченных в маске. Геометрия у неё та же, что у дороги, — берём готовую
-        /// `RoadMeshBuilder`, второй копии кривых не нужно. Развилка получается сама: три бита
-        /// в маске дают три рукава.
+        /// Русло идёт по поверхности плитки: лента выходит из центра к серединам граней,
+        /// отмеченных в маске. Развилка получается сама: три бита в маске дают три рукава.
+        /// Дорога такой лентой была до M20 и делила с руслом один билдер; теперь она объёмная
+        /// насыпь, а плоская лента осталась руслу одному — `RiverMeshBuilder`.
         /// </summary>
         void CreateRiver(TileData tile)
         {
@@ -396,14 +396,14 @@ namespace Game.Grid
             riverBank = CreatePart(
                 transform,
                 "RiverBank",
-                RoadMeshBuilder.Get(tile.RiverMask, riverBankWidth),
+                RiverMeshBuilder.Get(tile.RiverMask, riverBankWidth),
                 new Vector3(0f, RiverBankHeight, 0f),
                 Vector3.one);
 
             river = CreatePart(
                 transform,
                 "River",
-                RoadMeshBuilder.Get(tile.RiverMask, riverWidth),
+                RiverMeshBuilder.Get(tile.RiverMask, riverWidth),
                 new Vector3(0f, RiverHeight, 0f),
                 Vector3.one);
         }
