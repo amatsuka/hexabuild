@@ -87,9 +87,19 @@ namespace Game.UI
             levelsRoot.SetActive(false);
         }
 
-        void OnEnable() => input.Clicked += HandleClick;
+        void OnEnable()
+        {
+            input.Clicked += HandleClick;
+            input.Pressed += HandlePress;
+            input.PressEnded += ReleasePress;
+        }
 
-        void OnDisable() => input.Clicked -= HandleClick;
+        void OnDisable()
+        {
+            input.Clicked -= HandleClick;
+            input.Pressed -= HandlePress;
+            input.PressEnded -= ReleasePress;
+        }
 
         /// <summary>
         /// Единственный подписчик на клик, пока партии нет: разбирает его сам, попаданием
@@ -97,13 +107,31 @@ namespace Game.UI
         /// </summary>
         void HandleClick(Vector2 screenPosition)
         {
-            var buttons = keypadRoot.activeSelf ? keypadButtons
-                : levelsRoot.activeSelf ? levelButtons
-                : mainButtons;
-            foreach (var button in buttons)
+            foreach (var button in Shown())
                 if (button.TryClick(screenPosition))
                     return;
         }
+
+        /// <summary>Палец лёг на экран: кнопка под ним проседает.</summary>
+        void HandlePress(Vector2 screenPosition)
+        {
+            foreach (var button in Shown())
+                if (button.TryPress(screenPosition))
+                    return;
+        }
+
+        /// <summary>Палец снят: всё прижатое возвращается.</summary>
+        void ReleasePress()
+        {
+            foreach (var button in Shown())
+                button.Release();
+        }
+
+        /// <summary>Кнопки того экрана меню, который сейчас на виду: клавиатура, уровни или корень.</summary>
+        UiButton[] Shown() =>
+            keypadRoot.activeSelf ? keypadButtons
+            : levelsRoot.activeSelf ? levelButtons
+            : mainButtons;
 
         /// <summary>
         /// Фоновая картинка под меню. Кадр обрезается по короткой стороне (`EnvelopeParent`),

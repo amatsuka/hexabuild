@@ -251,6 +251,26 @@ namespace Game.UI
             return true;
         }
 
+        /// <summary>
+        /// Нажатие на висящее подтверждение: галочка под пальцем проседает. Ответ тот же, что
+        /// у <see cref="TryClick"/> — true значит, что нажатие принадлежит попапу.
+        /// </summary>
+        public bool TryPress(Vector2 screenPosition)
+        {
+            if (asking == null)
+                return false;
+
+            confirm.TryPress(screenPosition);
+            return true;
+        }
+
+        /// <summary>Палец снят: галочка возвращается. Подтверждения может уже и не быть.</summary>
+        public void ReleasePress()
+        {
+            if (asking != null)
+                confirm.Release();
+        }
+
         /// <summary>Подтверждение снято: попап уходит, ничего не выполнив.</summary>
         public void CancelAsk()
         {

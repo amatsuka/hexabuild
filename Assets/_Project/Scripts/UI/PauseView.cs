@@ -34,6 +34,7 @@ namespace Game.UI
         [SerializeField] Vector3 gearAngles = new(-14f, 24f, 0f);
 
         StorageView storage;
+        UiPanelGraphic gearPanel;
         RectTransform gearRect;
         GameObject cardRoot;
         UiButton resumeButton;
@@ -80,10 +81,40 @@ namespace Game.UI
             return true;
         }
 
+        /// <summary>
+        /// Нажатие разбирается тем же порядком, что и клик, и с тем же ответом: true значит,
+        /// что нажатие принадлежит паузе и полю под карточкой не достаётся.
+        /// </summary>
+        public bool HandlePress(Vector2 screenPosition)
+        {
+            if (RectTransformUtility.RectangleContainsScreenPoint(gearRect, screenPosition))
+            {
+                PressPulse.HoldCard(gearPanel);
+                return true;
+            }
+
+            if (!IsOpen)
+                return false;
+
+            if (!resumeButton.TryPress(screenPosition) && !restartButton.TryPress(screenPosition))
+                exitButton.TryPress(screenPosition);
+
+            return true;
+        }
+
+        /// <summary>Палец снят. Ненажатое молчит, поэтому отпускаем всё разом, не разбирая.</summary>
+        public void ReleasePress()
+        {
+            PressPulse.Release(gearPanel);
+            resumeButton.Release();
+            restartButton.Release();
+            exitButton.Release();
+        }
+
         void BuildGearButton()
         {
-            var panel = UiPanel.Create("Gear", transform, theme, theme.RoundButton(GearDiameter));
-            gearRect = panel.rectTransform;
+            gearPanel = UiPanel.Create("Gear", transform, theme, theme.RoundButton(GearDiameter));
+            gearRect = gearPanel.rectTransform;
             Place(gearRect, new Vector2(1f, 0f), new Vector2(-GearMargin, GearMargin),
                 new Vector2(GearDiameter, GearDiameter));
 

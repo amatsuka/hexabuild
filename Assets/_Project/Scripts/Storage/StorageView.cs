@@ -31,6 +31,10 @@ namespace Game.Storage
         [SerializeField] float spacing = 8f;
         [SerializeField] float padding = 12f;
 
+        [Header("Отклик")]
+        [Tooltip("Размах тряски клетки на отказе, пиксели канваса")]
+        [SerializeField] float refusalShake = 14f;
+
         [Header("Анимация слияния")]
         [SerializeField] float flySeconds = 0.28f;
         [SerializeField] float popSeconds = 0.18f;
@@ -67,6 +71,15 @@ namespace Game.Storage
             Refresh();
         }
 
+        /// <summary>Палец лёг на клетку: она проседает, как кнопка.</summary>
+        public void PressCell(int index) => PressPulse.HoldCard(cellPanels[index]);
+
+        /// <summary>Палец снят с клетки.</summary>
+        public void ReleasePress(int index) => PressPulse.Release(cellPanels[index]);
+
+        /// <summary>Отказ по клетке: она коротко дрожит поперёк.</summary>
+        public void ShakeCell(int index) => PressPulse.ShakeSideways(cellPanels[index], refusalShake);
+
         /// <summary>Ресурс приземлился: клетка проявляется и выскакивает масштабом.</summary>
         public void ReleaseCell(int index)
         {
@@ -78,6 +91,8 @@ namespace Game.Storage
             if (!isActiveAndEnabled || !grid[index].HasValue)
                 return;
 
+            // Пружина нажатия пишет тот же масштаб: не оборви её — и она перебьёт выскакивание.
+            PressPulse.Cancel(cellPanels[index]);
             cells[index].localScale = Vector3.zero;
             StartCoroutine(PopCells(new[] { index }));
         }
@@ -101,13 +116,18 @@ namespace Game.Storage
             var origins = new List<Vector3>(consumedCells.Count);
             foreach (var index in consumedCells)
             {
+                // Списанная клетка сейчас опустеет, и держать на ней пружину нажатия не за что.
+                PressPulse.Cancel(cellPanels[index]);
                 var origin = cells[index].position;
                 origins.Add(origin);
                 flying.Add(CreateFlyingCopy(origin, movedType));
             }
 
             foreach (var index in resultCells)
+            {
+                PressPulse.Cancel(cellPanels[index]);
                 cells[index].localScale = Vector3.zero;
+            }
 
             for (var elapsed = 0f; elapsed < flySeconds; elapsed += Time.deltaTime)
             {

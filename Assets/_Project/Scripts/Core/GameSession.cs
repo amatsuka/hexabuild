@@ -58,6 +58,19 @@ namespace Game.Core
         PopupView.Anchor refusalAnchor;
 
         /// <summary>
+        /// Что дрожит на отказе: клетка склада или плитка поля. Ровно одно из двух — отказ
+        /// приходит на то же взаимодействие, что задало <see cref="refusalAnchor"/>.
+        /// </summary>
+        TileView refusalTile;
+
+        int refusalCell = -1;
+
+        /// <summary>Что прижато пальцем прямо сейчас. Указатель один, поэтому и цель одна.</summary>
+        TileView pressedTile;
+
+        int pressedCell = -1;
+
+        /// <summary>
         /// Сид этой партии — уже разрешённый, а не ноль из конфига. По нему живут и карта, и
         /// контракты, и его же забирает кнопка «Повторить карту» на финальном экране.
         /// </summary>
@@ -178,6 +191,8 @@ namespace Game.Core
         void OnEnable()
         {
             input.Clicked += OnClicked;
+            input.Pressed += OnPressed;
+            input.PressEnded += OnPressEnded;
             input.Dragged += OnDragged;
             input.Zoomed += OnZoomed;
             state.TileChanged += OnTileChanged;
@@ -205,6 +220,8 @@ namespace Game.Core
         void OnDisable()
         {
             input.Clicked -= OnClicked;
+            input.Pressed -= OnPressed;
+            input.PressEnded -= OnPressEnded;
             input.Dragged -= OnDragged;
             input.Zoomed -= OnZoomed;
             state.TileChanged -= OnTileChanged;
@@ -361,6 +378,70 @@ namespace Game.Core
         }
 
         /// <summary>
+        /// Палец лёг на экран. Разбирается тем же порядком, что и клик — пауза, попап, склад,
+        /// поле, — иначе прижалось бы одно, а сработало другое. Прижатая цель одна: указатель
+        /// в игре один, и <see cref="OnPressEnded"/> придёт ровно один раз на это нажатие.
+        /// </summary>
+        void OnPressed(Vector2 screenPosition)
+        {
+            if (end.HasEnded)
+            {
+                gameOverView.HandlePress(screenPosition);
+                return;
+            }
+
+            if (pauseView.HandlePress(screenPosition))
+                return;
+
+            if (hudView.Popups.TryPress(screenPosition))
+                return;
+
+            if (storageView.TryGetCellIndex(screenPosition, out var cell))
+            {
+                // Пустая клетка не отзывается: по ней и клик ничего не делает.
+                if (!state.Storage[cell].HasValue)
+                    return;
+
+                pressedCell = cell;
+                storageView.PressCell(cell);
+                return;
+            }
+
+            if (storageView.ContainsScreenPoint(screenPosition))
+                return;
+
+            if (views.TryGetValue(TileUnderPointer(screenPosition), out var view))
+            {
+                pressedTile = view;
+                view.Press();
+            }
+        }
+
+        /// <summary>
+        /// Палец снят, сорвался в протяжку или в щипок: прижатое возвращается. Приходит раньше
+        /// клика, поэтому анимации слияния и открытия застают пружину уже отпущенной.
+        /// Отпускаем всё разом, не разбирая: ненажатое молчит.
+        /// </summary>
+        void OnPressEnded()
+        {
+            gameOverView.ReleasePress();
+            pauseView.ReleasePress();
+            hudView.Popups.ReleasePress();
+
+            if (pressedCell >= 0)
+            {
+                storageView.ReleasePress(pressedCell);
+                pressedCell = -1;
+            }
+
+            if (pressedTile == null)
+                return;
+
+            pressedTile.Release();
+            pressedTile = null;
+        }
+
+        /// <summary>
         /// Клик разбирается по слоям: финальный экран, попап подтверждения, склад, поле под ним.
         /// После конца партии поле не принимает ничего, а кнопки экрана принимают — это и есть
         /// правило 3.10.
@@ -390,6 +471,8 @@ namespace Game.Core
                     return;
 
                 refusalAnchor = PopupView.Anchor.On(storageView.CellRect(cell));
+                refusalCell = cell;
+                refusalTile = null;
 
                 // Базовый ресурс мержится, крафтовый превращается в очки.
                 if (mergeRules.CanMerge(content.Value))
@@ -418,6 +501,8 @@ namespace Game.Core
                 return;
 
             refusalAnchor = TileAnchor(coord);
+            refusalCell = -1;
+            refusalTile = views.TryGetValue(coord, out var clicked) ? clicked : null;
 
             if (tile.State == TileState.Available && tile.IsPassable)
             {
@@ -438,8 +523,20 @@ namespace Game.Core
             return PopupView.Anchor.OnField(new Vector3(plane.x, 0f, plane.y));
         }
 
-        /// <summary>Отказ всплывает над тем, по чему кликнули: над плиткой или над клеткой склада.</summary>
-        void ShowRefusal(string text) => hudView.Popups.ShowMessage(text, refusalAnchor);
+        /// <summary>
+        /// Отказ всплывает над тем, по чему кликнули: над плиткой или над клеткой склада. Оно же
+        /// и дрожит — один текст читается как «ничего не произошло», а промах по недоступной
+        /// плитке в этой игре самый частый из всех.
+        /// </summary>
+        void ShowRefusal(string text)
+        {
+            hudView.Popups.ShowMessage(text, refusalAnchor);
+
+            if (refusalCell >= 0)
+                storageView.ShakeCell(refusalCell);
+            else if (refusalTile != null)
+                refusalTile.Refuse();
+        }
 
         /// <summary>
         /// Плитка, по которой игрок целился. Луч по земле уходит на соседа тем дальше, чем выше

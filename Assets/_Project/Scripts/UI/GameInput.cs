@@ -25,8 +25,27 @@ namespace Game.UI
         float draggedDistance;
         float previousPinchDistance;
 
+        // Нажатие объявлено и ещё не снято. Снять его можно тремя разными путями — палец
+        // отпустили, нажатие сорвалось в протяжку, указатель исчез, — и флаг держит их все
+        // в одном русле: `PressEnded` уходит ровно один раз на одно `Pressed`.
+        bool pressing;
+
         /// <summary>Короткое касание или клик без перетаскивания: экранная позиция.</summary>
         public event Action<Vector2> Clicked;
+
+        /// <summary>
+        /// Палец лёг на экран: экранная позиция. Отклик на нажатие идёт отсюда, а не с
+        /// <see cref="Clicked"/>: тот приходит на отпускании, то есть после того, как игрок
+        /// уже успел решить, что игра его не услышала.
+        /// </summary>
+        public event Action<Vector2> Pressed;
+
+        /// <summary>
+        /// Нажатие снято: палец отпущен, сорвался в протяжку или щипок, либо указатель исчез.
+        /// Приходит ровно один раз на каждое <see cref="Pressed"/> и всегда до
+        /// <see cref="Clicked"/> — прижатое отпускается раньше, чем срабатывает действие.
+        /// </summary>
+        public event Action PressEnded;
 
         /// <summary>Перетаскивание: смещение в пикселях за кадр.</summary>
         public event Action<Vector2> Dragged;
@@ -80,6 +99,7 @@ namespace Game.UI
 
             // Второй палец отменяет начатое нажатие: щипок не должен закончиться кликом.
             holding = null;
+            EndPress();
             return true;
         }
 
@@ -97,7 +117,10 @@ namespace Game.UI
         void ReadPointer()
         {
             if (holding != null && !holding.added)
+            {
                 holding = null;
+                EndPress();
+            }
 
             if (holding == null)
             {
@@ -107,12 +130,15 @@ namespace Game.UI
 
                 lastPosition = holding.position.ReadValue();
                 draggedDistance = 0f;
+                pressing = true;
+                Pressed?.Invoke(lastPosition);
                 return;
             }
 
             var position = holding.position.ReadValue();
             if (!holding.press.isPressed)
             {
+                EndPress();
                 if (draggedDistance <= clickThresholdPixels)
                     Clicked?.Invoke(position);
 
@@ -128,7 +154,22 @@ namespace Game.UI
 
             lastPosition = position;
             draggedDistance += moved.magnitude;
+
+            // Протяжка перевесила клик: это уже пан камеры, и прижатое под пальцем отпускается,
+            // не дожидаясь, пока палец оторвут.
+            if (draggedDistance > clickThresholdPixels)
+                EndPress();
+
             Dragged?.Invoke(moved);
+        }
+
+        void EndPress()
+        {
+            if (!pressing)
+                return;
+
+            pressing = false;
+            PressEnded?.Invoke();
         }
 
         /// <summary>Указатель, нажатый в этом кадре: палец, мышь или перо — что окажется первым.</summary>

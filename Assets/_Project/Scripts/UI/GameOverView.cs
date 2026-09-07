@@ -135,6 +135,24 @@ namespace Game.UI
                     return;
         }
 
+        /// <summary>Палец лёг на экран: кнопка под ним проседает.</summary>
+        public void HandlePress(Vector2 screenPosition)
+        {
+            if (!built)
+                return;
+
+            foreach (var button in buttons)
+                if (button.TryPress(screenPosition))
+                    return;
+        }
+
+        /// <summary>Палец снят: всё прижатое возвращается.</summary>
+        public void ReleasePress()
+        {
+            foreach (var button in buttons)
+                button.Release();
+        }
+
         void BuildConfetti()
         {
             var created = new GameObject("Confetti", typeof(RectTransform), typeof(CanvasRenderer), typeof(Confetti));

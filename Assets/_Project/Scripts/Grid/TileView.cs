@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Game.Economy;
 using Game.Roads;
+using Game.UI;
 using UnityEngine;
 
 namespace Game.Grid
@@ -75,6 +76,9 @@ namespace Game.Grid
 
         const int DecorCountSalt = 11;
 
+        /// <summary>Доля подскока, которую месторождения пережидают, прежде чем выйти.</summary>
+        const float RevealDepositDelay = 0.35f;
+
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly int StateFogId = Shader.PropertyToID("_StateFog");
         static readonly int StateFadeId = Shader.PropertyToID("_StateFade");
@@ -147,6 +151,15 @@ namespace Game.Grid
         [SerializeField] float sparkScale = 0.08f;
         [SerializeField] float sparkRise = 0.24f;
 
+        [Header("Отклик")]
+        [Tooltip("На сколько плитка проседает под пальцем, юниты")]
+        [SerializeField, Range(0f, 0.2f)] float pressSink = 0.05f;
+        [Tooltip("Размах тряски на отказе, юниты")]
+        [SerializeField, Range(0f, 0.2f)] float refusalShake = 0.06f;
+        [Tooltip("На сколько открытая плитка подскакивает, юниты")]
+        [SerializeField, Range(0f, 0.4f)] float revealHop = 0.09f;
+        [SerializeField] float revealSeconds = 0.32f;
+
         // Модели KayKit развёрнуты на палитровый атлас: цвет грани задаёт её UV, а не код.
         // Поэтому у модельной части свой материал и белый `_BaseColor` — умножать цвет биома
         // на зелёный из текстуры нельзя, дерево почернеет.
@@ -191,14 +204,22 @@ namespace Game.Grid
         MeshRenderer meshRenderer;
         MeshRenderer spark;
         MaterialPropertyBlock propertyBlock;
+        float surfaceHeight;
+
+        // Состояние, которое плитка уже показывает. Нужно затем, что подскок играется не на
+        // «плитка открыта», а на «плитка открылась»: `Apply` зовут и на каждой добыче тоже.
+        TileState? shownState;
 
         public HexCoord Coord { get; private set; }
 
         /// <summary>
         /// Мировая высота крышки плитки. По этой плоскости бьёт луч клика: по земле `y = 0` он
         /// промахивается мимо приподнятой плитки на «высота / tg(pitch)».
+        /// Число запомнено при <see cref="Bind"/>, а не считано с трансформа: плитка приседает
+        /// под пальцем и подскакивает на открытии, и живая высота уводила бы прицел следом
+        /// за анимацией — шаг спуска у <see cref="TilePicker"/> и так всего 0.02.
         /// </summary>
-        public float SurfaceHeight => transform.position.y;
+        public float SurfaceHeight => surfaceHeight;
 
         public void Bind(TileData tile)
         {
@@ -209,6 +230,7 @@ namespace Game.Grid
             var height = HeightOf(tile) * heightScale;
             var plane = tile.Coord.ToPlane();
             transform.localPosition = new Vector3(plane.x, height, plane.y);
+            surfaceHeight = transform.position.y;
             // Юбка меряется от общего дна поля, а не от нуля: с водой самая низкая крышка ушла
             // под урез, и «height + baseSkirt» дал бы у неё юбку отрицательной длины.
             var skirt = height - SeaFloor * heightScale + baseSkirt;
@@ -230,6 +252,10 @@ namespace Game.Grid
             // иначе он раз за разом тратит клики на плитку, которая всё равно не откроется.
             var state = tile.IsPassable ? StateOf(tile.State) : Vector2.zero;
 
+            var opened = shownState.HasValue && shownState.Value != TileState.Revealed
+                && tile.State == TileState.Revealed;
+            shownState = tile.State;
+
             SetTile(Renderer, GroundColor(tile), state);
 
             var decorColor = Shaded(biomes.Decor(tile.Biome), tile.Shade);
@@ -247,6 +273,11 @@ namespace Game.Grid
                 SetTile(river, Shaded(riverColor, tile.Shade), state);
 
             ApplyDeposits(tile, state);
+
+            // Подскок идёт последним: месторождения к этому моменту уже включены и знают
+            // свой покой, а из нуля их поднимает сама анимация.
+            if (opened)
+                PlayReveal();
         }
 
         /// <summary>
@@ -264,6 +295,56 @@ namespace Game.Grid
                     StartCoroutine(Extract(deposits[i], resources.Get(type)));
                     return;
                 }
+        }
+
+        /// <summary>Палец лёг на плитку: она проседает и держится, пока его не снимут.</summary>
+        public void Press() => PressPulse.HoldSolid(this, pressSink);
+
+        /// <summary>Палец снят: плитка возвращается пружиной.</summary>
+        public void Release() => PressPulse.Release(this);
+
+        /// <summary>Отказ: плитка коротко дрожит поперёк. Текст попапа сам по себе не отклик.</summary>
+        public void Refuse() => PressPulse.ShakeSideways(this, refusalShake);
+
+        /// <summary>
+        /// Плитка только что открылась: она подскакивает и садится обратно, месторождения
+        /// выскакивают масштабом следом. Без этого самое дорогое действие партии выражается
+        /// одной сменой цвета в один кадр.
+        /// </summary>
+        void PlayReveal()
+        {
+            if (!isActiveAndEnabled)
+                return;
+
+            // Пружина нажатия пишет ту же позицию: не оборви её — и она дорисует свой возврат
+            // поверх подскока.
+            PressPulse.Cancel(this);
+            StartCoroutine(Reveal());
+        }
+
+        /// <summary>
+        /// Подскок плитки и выход месторождений. Стеки идут с задержкой, а не вместе с ней:
+        /// сначала читается «плитка моя», и только потом — «и вот что на ней есть».
+        /// </summary>
+        IEnumerator Reveal()
+        {
+            var home = transform.localPosition;
+
+            for (var elapsed = 0f; elapsed < revealSeconds; elapsed += Time.deltaTime)
+            {
+                var progress = elapsed / revealSeconds;
+                transform.localPosition = home + new Vector3(0f, revealHop * Anim.Hop(progress), 0f);
+
+                var pop = Anim.OutBack(Mathf.InverseLerp(RevealDepositDelay, 1f, progress));
+                for (var i = 0; i < deposits.Count; i++)
+                    deposits[i].Root.localScale = Vector3.one * (deposits[i].Rest * pop);
+
+                yield return null;
+            }
+
+            transform.localPosition = home;
+            for (var i = 0; i < deposits.Count; i++)
+                deposits[i].Root.localScale = Vector3.one * deposits[i].Rest;
         }
 
         MeshRenderer Renderer => meshRenderer != null ? meshRenderer : meshRenderer = GetComponent<MeshRenderer>();
