@@ -118,16 +118,20 @@ namespace Game.Tests.EditMode
                 foreach (var units in UnitsByType(seed).Values)
                     achievableCrafts += Crafts(units);
 
-                var maxMultiplier = 1f + config.MultiplierStep * run.Score.FieldTiles + config.StreakMax;
+                // Потолок множителя — все три слагаемых: колония, серия и накал (M29).
+                var maxMultiplier = 1f + config.MultiplierStep * run.Score.FieldTiles
+                                    + config.StreakMax + config.HeatMax;
                 var craftPoints = (int)Math.Ceiling(rules.CraftedPoints * maxMultiplier);
 
-                var exchanged = run.Score.Earned - run.ContractPoints;
+                // Премия за чистый склад крафтом не оплачена: она платится за состояние склада,
+                // и в счёт достижимого крафта её не кладут.
+                var exchanged = run.Score.Earned - run.ContractPoints - run.SweepPoints;
                 Assert.LessOrEqual(
                     exchanged, achievableCrafts * craftPoints,
                     $"seed {seed}: обмен принёс больше, чем есть крафта на поле");
 
                 var allowance = config.StartingGravel * craftPoints
-                    + run.ContractPoints
+                    + run.ContractPoints + run.SweepPoints
                     + config.FullFieldBonus + config.FullDepositBonus;
                 var ceiling = (int)Math.Ceiling(run.Ceiling * maxMultiplier);
                 Assert.LessOrEqual(run.Score.Total, ceiling + allowance, $"seed {seed}: счёт выше потолка");

@@ -20,7 +20,7 @@ MonoBehaviour:
   contractGoal: 3
   contractSeconds: 60
   extractionInterval: 1.5
-  botCeiling: 3998
+  botCeiling: 5470
   oneStarShare: 0.5
   twoStarShare: 0.75
   threeStarShare: 1

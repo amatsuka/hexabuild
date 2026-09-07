@@ -27,6 +27,8 @@ namespace Game.Core
         [SerializeField] GameInput input;
         [SerializeField] CameraRig cameraRig;
         [SerializeField] StorageView storageView;
+        [Tooltip("Пульс виньетки на высоком накале. Пусто — эффекта нет, партия идёт как раньше")]
+        [SerializeField] HeatVignette heatVignette;
         [SerializeField] HudView hudView;
         [SerializeField] GameOverView gameOverView;
         [SerializeField] PauseView pauseView;
@@ -117,7 +119,8 @@ namespace Game.Core
 
             production = new ProductionSystem(map, state.Roads, config.ExtractionIntervalFor(level));
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
-            merges = new MergeSystem(storage, wallet, mergeRules, multiplier);
+            merges = new MergeSystem(
+                storage, wallet, mergeRules, multiplier, config.SweepCells, config.SweepBonus);
             contracts = new ContractSystem(
                 wallet,
                 mergeRules.CraftedTypes(),
@@ -136,7 +139,11 @@ namespace Game.Core
 
             SpawnTiles(map);
             SpawnWater(map);
-            storageView.Bind(storage);
+            storageView.Bind(storage, multiplier);
+
+            if (heatVignette != null)
+                heatVignette.Bind(multiplier);
+
             hudView.Bind(state, contracts, storageView, ceiling, StarShares());
             gameOverView.Bind(storageView, production, contracts);
             pauseView.Bind(storageView);
@@ -215,6 +222,7 @@ namespace Game.Core
             merges.Refused += ShowRefusal;
             merges.Merged += OnMerged;
             merges.Converted += OnConverted;
+            merges.Swept += OnSwept;
             end.Ended += OnGameEnded;
             gameOverView.RestartRequested += Restart;
             gameOverView.NextLevelRequested += NextLevel;
@@ -243,6 +251,7 @@ namespace Game.Core
             merges.Refused -= ShowRefusal;
             merges.Merged -= OnMerged;
             merges.Converted -= OnConverted;
+            merges.Swept -= OnSwept;
             end.Ended -= OnGameEnded;
             gameOverView.RestartRequested -= Restart;
             gameOverView.NextLevelRequested -= NextLevel;
@@ -290,6 +299,7 @@ namespace Game.Core
             production.Tick(Time.deltaTime);
             deliveries.Tick(Time.deltaTime);
             contracts.Tick(Time.deltaTime);
+            state.Multiplier.Tick(Time.deltaTime);
             TickPlayOut(Time.deltaTime);
             end.Tick();
         }
@@ -690,12 +700,24 @@ namespace Game.Core
         /// </summary>
         void OnConverted(int cell, ResourceType type, int points)
         {
+            storageView.PunchCell(cell);
             hudView.Popups.ShowGain(points, type, PopupView.Anchor.On(storageView.CellRect(cell)));
 
             if (contracts.IsActive && contracts.Type == type)
                 hudView.PlayContractDelivery(storageView.CellPoint(cell), type);
 
             contracts.Count(type);
+        }
+
+        /// <summary>
+        /// Склад разгребли до чистого на полном накале: премия плашкой над той клеткой, которой
+        /// его дочистили, и вспышка самого склада. Отдельной анимации у премии нет — празднует
+        /// склад, потому что празднуется именно его состояние.
+        /// </summary>
+        void OnSwept(int cell, int points)
+        {
+            storageView.PlaySweep();
+            hudView.Popups.ShowSweep(points, PopupView.Anchor.On(storageView.CellRect(cell)));
         }
 
         /// <summary>

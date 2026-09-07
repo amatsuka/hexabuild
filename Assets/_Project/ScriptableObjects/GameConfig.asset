@@ -25,6 +25,8 @@ MonoBehaviour:
   extractionInterval: 1.5
   deliverySecondsPerTile: 0.5
   storageSize: 24
+  sweepCells: 2
+  sweepBonus: 60
   tileOpenCost: 20
   openCostGrowth: 1.04
   roadCost: 1
@@ -32,6 +34,10 @@ MonoBehaviour:
   multiplierStep: 0.05
   streakStep: 0.25
   streakMax: 2
+  heatStep: 0.05
+  heatMax: 1
+  heatHoldSeconds: 2.5
+  heatDrainSeconds: 2
   startingPoints: 40
   startingGravel: 3
   contractGoal: 3

@@ -23,7 +23,7 @@ namespace Game.Tests.EditMode
         public void SetUp()
         {
             wallet = new Wallet(0);
-            multiplier = new ScoreMultiplier(0.05f, 0.25f, 0.5f);
+            multiplier = new ScoreMultiplier(0.05f, 0.25f, 0.5f, 0f, 0f, 0f, 1f);
             contracts = new ContractSystem(
                 wallet, OneType, Goal, Seconds, Reward, MinPause, MaxPause, seed: 1, multiplier: multiplier);
             log = new List<string>();

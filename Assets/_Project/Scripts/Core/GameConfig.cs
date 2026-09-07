@@ -32,6 +32,10 @@ namespace Game.Core
 
         [Header("Склад")]
         [SerializeField] int storageSize = 24;
+        [Tooltip("До скольких занятых клеток надо разгрести склад, чтобы он считался чистым")]
+        [SerializeField] int sweepCells = 2;
+        [Tooltip("Базовая премия за чистый склад на полном накале. Идёт через множитель")]
+        [SerializeField] int sweepBonus = 60;
 
         [Header("Стоимости")]
         [SerializeField] int tileOpenCost = 20;
@@ -48,6 +52,14 @@ namespace Game.Core
         [SerializeField] float streakStep = 0.25f;
         [Tooltip("Потолок надбавки серии")]
         [SerializeField] float streakMax = 2f;
+        [Tooltip("Ступень накала: столько даёт одно действие на складе — мерж или обмен")]
+        [SerializeField] float heatStep = 0.05f;
+        [Tooltip("Потолок надбавки накала")]
+        [SerializeField] float heatMax = 1f;
+        [Tooltip("Сколько накал держится после последнего действия, прежде чем потечь")]
+        [SerializeField] float heatHoldSeconds = 2.5f;
+        [Tooltip("За сколько секунд утечка съедает полный накал")]
+        [SerializeField] float heatDrainSeconds = 2f;
 
         [Header("Старт партии")]
         [SerializeField] int startingPoints = 40;
@@ -87,6 +99,12 @@ namespace Game.Core
 
         public int StorageSize => storageSize;
 
+        /// <summary>До скольких клеток надо разгрести склад, чтобы он считался чистым.</summary>
+        public int SweepCells => sweepCells;
+
+        /// <summary>Базовая премия за чистый склад: множитель ложится на неё сверху.</summary>
+        public int SweepBonus => sweepBonus;
+
         public int StartingPoints => startingPoints;
 
         public int StartingGravel => startingGravel;
@@ -113,13 +131,22 @@ namespace Game.Core
 
         public float StreakMax => streakMax;
 
+        public float HeatStep => heatStep;
+
+        public float HeatMax => heatMax;
+
+        public float HeatHoldSeconds => heatHoldSeconds;
+
+        public float HeatDrainSeconds => heatDrainSeconds;
+
         public PriceSettings Prices => new(tileOpenCost, openCostGrowth, roadCost, bridgeCost);
 
         /// <summary>Сколько щебня приносит пройденная веха.</summary>
         public int MilestoneGravel => milestoneGravel;
 
         /// <summary>Множитель очков на партию: свой у каждой, как кошелёк.</summary>
-        public ScoreMultiplier NewMultiplier() => new(multiplierStep, streakStep, streakMax);
+        public ScoreMultiplier NewMultiplier() =>
+            new(multiplierStep, streakStep, streakMax, heatStep, heatMax, heatHoldSeconds, heatDrainSeconds);
 
         /// <summary>
         /// Вехи на партию: доли отсюда, потолок — от уровня кампании или от бота, прогнанного

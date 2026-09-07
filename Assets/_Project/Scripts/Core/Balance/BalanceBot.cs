@@ -27,6 +27,14 @@ namespace Game.Core.Balance
         public const float DefaultMaxSeconds = 3600f;
 
         /// <summary>
+        /// Потолок действий бота в секунду. Без него бот кликал как машина — на уровнях 8–10
+        /// выходило 8.6–10.5 действия в секунду, — и любой временнóй рычаг он выбирал на
+        /// максимум, которого живой руке не достать. Пять — середина человеческого диапазона
+        /// 4–6, замеренного по темпу M28; число решением человека 07.09.2026.
+        /// </summary>
+        public const float MaxActionsPerSecond = 5f;
+
+        /// <summary>
         /// Тройка мержится раньше пятёрки только когда склад заполнен больше, чем на эту долю,
         /// либо тип нужен контракту или дороге; иначе бот ждёт пятёрку — она на единицу дороже.
         /// </summary>
@@ -58,11 +66,24 @@ namespace Game.Core.Balance
         /// <summary>С последнего решения что-то поменялось: есть смысл решать заново.</summary>
         bool dirty;
 
+        /// <summary>
+        /// Сколько действий бот может сделать прямо сейчас. Копится по <see cref="MaxActionsPerSecond"/>
+        /// в секунду и не превышает секундного запаса: человек тоже играет очередями, а не ровным
+        /// метрономом, но за секунду успевает не больше своей скорости.
+        /// </summary>
+        float actions;
+
+        /// <summary>Решению не хватило действий: доиграет на следующем шаге, а не когда что-то изменится.</summary>
+        bool starved;
+
         bool played;
         int contractsFailed;
 
         /// <summary>Очки, пришедшие наградами контрактов: их доля в заработке — число стадии.</summary>
         int contractPoints;
+
+        /// <summary>Очки, пришедшие премиями за чистый склад: ими калибруется база премии.</summary>
+        int sweepPoints;
 
         public BalanceBot(GameConfig config, MergeRules rules, int seed, LevelConfig level = null)
         {
@@ -107,8 +128,11 @@ namespace Game.Core.Balance
                 production.Tick(StepSeconds);
                 deliveries.Tick(StepSeconds);
                 contracts.Tick(StepSeconds);
+                state.Multiplier.Tick(StepSeconds);
                 end.Tick();
                 seconds += StepSeconds;
+
+                actions = Math.Min(actions + MaxActionsPerSecond * StepSeconds, MaxActionsPerSecond);
 
                 if (end.HasEnded)
                     continue;
@@ -118,8 +142,10 @@ namespace Game.Core.Balance
                 // щебень обмениваемым и конца не объявляет, а `Decide` его бережёт под дорогу,
                 // которой уже некуда идти. На счёт это не влияло — в хвосте не зарабатывается
                 // ничего, — но `Seconds` уезжали в разы, и длину партии по ним читать было нельзя.
-                if (end.FieldPassed)
-                    merges.TryPlayOut();
+                // Доигрывание тоже стоит руки: иначе хвост партии шёл бы вчетверо быстрее,
+                // чем игрок способен доклацать те же клетки.
+                if (end.FieldPassed && actions >= 1f && merges.TryPlayOut())
+                    actions -= 1f;
 
                 Decide();
             }
@@ -134,6 +160,7 @@ namespace Game.Core.Balance
                 contracts.CompletedCount,
                 contractsFailed,
                 contractPoints,
+                sweepPoints,
                 seconds,
                 end.HasEnded,
                 watch.ElapsedMilliseconds);
@@ -149,7 +176,7 @@ namespace Game.Core.Balance
 
             production = new ProductionSystem(map, state.Roads, config.ExtractionIntervalFor(level));
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
-            merges = new MergeSystem(storage, wallet, rules, multiplier);
+            merges = new MergeSystem(storage, wallet, rules, multiplier, config.SweepCells, config.SweepBonus);
             contracts = new ContractSystem(
                 wallet,
                 craftedTypes,
@@ -172,6 +199,7 @@ namespace Game.Core.Balance
             production.Produced += OnProduced;
             deliveries.Arrived += OnDeliveryArrived;
             merges.Converted += OnConverted;
+            merges.Swept += (_, points) => sweepPoints += points;
             contracts.Issued += () => dirty = true;
             contracts.Failed += () => contractsFailed++;
             contracts.Completed += reward => contractPoints += reward;
@@ -212,10 +240,29 @@ namespace Game.Core.Balance
                 return;
 
             dirty = false;
+            starved = false;
             Exchange();
             MergeStep();
             BuildRoads();
             OpenTiles();
+
+            // Решение оборвалось на пустом кошельке действий, а не на исчерпанном списке дел:
+            // без этого бот ждал бы следующего изменения состояния и терял бы ход.
+            if (starved)
+                dirty = true;
+        }
+
+        /// <summary>Занять одно действие из секундного запаса. `false` — рука занята, ждём шага.</summary>
+        bool TrySpend()
+        {
+            if (actions < 1f)
+            {
+                starved = true;
+                return false;
+            }
+
+            actions -= 1f;
+            return true;
         }
 
         // --- 1. Обмен ---
@@ -270,7 +317,12 @@ namespace Game.Core.Balance
             var storage = state.Storage;
             for (var cell = 0; cell < storage.Capacity; cell++)
                 if (storage[cell] == type)
+                {
+                    if (!TrySpend())
+                        return;
+
                     merges.TryConvert(cell);
+                }
         }
 
         /// <summary>Щебень ещё придёт: работает подключённая плитка, ресурс в пути или камень на складе.</summary>
@@ -322,7 +374,7 @@ namespace Game.Core.Balance
                     if (!large && !needed)
                         break;
 
-                    if (!merges.TryMerge(type))
+                    if (!TrySpend() || !merges.TryMerge(type))
                         break;
                 }
         }
@@ -341,6 +393,7 @@ namespace Game.Core.Balance
             {
                 if (!state.Map.TryGetTile(coord, out var tile)
                     || state.Storage.CountOf(ResourceType.Gravel) < state.RoadPrice(tile) + GravelReserve(towardStone)
+                    || !TrySpend()
                     || !state.TryBuildRoad(coord))
                     break;
             }
@@ -471,7 +524,7 @@ namespace Game.Core.Balance
         void OpenTiles()
         {
             while (state.Wallet.Points >= state.NextTileCost && TryPickTileToOpen(out var coord))
-                if (!state.TryRevealTile(coord))
+                if (!TrySpend() || !state.TryRevealTile(coord))
                     break;
         }
 

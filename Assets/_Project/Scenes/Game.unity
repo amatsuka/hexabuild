@@ -129,6 +129,7 @@ GameObject:
   m_Component:
   - component: {fileID: 106828385}
   - component: {fileID: 106828384}
+  - component: {fileID: 106828386}
   m_Layer: 0
   m_Name: Post
   m_TagString: Untagged
@@ -168,6 +169,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &106828386
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 106828383}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01fddaa1cfd7849248690621bbea5852, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Runtime::Game.UI.HeatVignette
+  threshold: 0.6
+  maxIntensity: 0.28
+  pulseDepth: 0.35
+  pulseSpeed: 2.2
+  tint: {r: 0.32, g: 0.1, b: 0.02, a: 1}
+  priority: 10
 --- !u!1 &127816810
 GameObject:
   m_ObjectHideFlags: 0
@@ -209,6 +228,7 @@ MonoBehaviour:
   input: {fileID: 1601929506}
   cameraRig: {fileID: 381356108}
   storageView: {fileID: 1637872535}
+  heatVignette: {fileID: 106828386}
   hudView: {fileID: 868732729}
   gameOverView: {fileID: 883969606}
   pauseView: {fileID: 2059318244}
@@ -1245,6 +1265,16 @@ MonoBehaviour:
   cellSize: 88
   spacing: 8
   padding: 12
+  refusalShake: 14
+  heatTint: {r: 1, g: 0.74, b: 0.42, a: 1}
+  sweepFlashTint: {r: 1, g: 0.88, b: 0.45, a: 1}
+  sweepSeconds: 0.5
+  sweepScale: 1.04
+  factorSizeCold: 34
+  factorSizeHot: 50
+  factorGap: 10
+  fuseHeight: 6
+  fuseGap: 5
   flySeconds: 0.28
   popSeconds: 0.18
   popScale: 1.3

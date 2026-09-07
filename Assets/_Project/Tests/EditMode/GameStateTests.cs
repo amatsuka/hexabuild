@@ -17,7 +17,7 @@ namespace Game.Tests.EditMode
         static readonly PriceSettings Prices = new(OpenCost, OpenGrowth, RoadCost, BridgeCost);
 
         /// <summary>Нейтральный множитель: правила открытия проверяются без него.</summary>
-        static ScoreMultiplier Flat() => new(0f, 0f, 0f);
+        static ScoreMultiplier Flat() => new(0f, 0f, 0f, 0f, 0f, 0f, 1f);
 
         /// <summary>
         /// Поле без ландшафта: правила проверяются на ровном месте. Раньше здесь стояла карта
@@ -332,7 +332,7 @@ namespace Game.Tests.EditMode
         [Test]
         public void TryRevealTile_FeedsTheColonyMultiplier()
         {
-            var multiplier = new ScoreMultiplier(0.05f, 0f, 0f);
+            var multiplier = new ScoreMultiplier(0.05f, 0f, 0f, 0f, 0f, 0f, 1f);
             var state = new GameState(FlatMap(), new Wallet(100000), new StorageGrid(25), Prices, multiplier);
             state.Begin();
 

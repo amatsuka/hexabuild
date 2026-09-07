@@ -26,7 +26,7 @@ namespace Game.UI
         const float AnchorGap = 18f;
 
         const float MessageWidth = 430f;
-        const float GainWidth = 360f;
+        const float GainWidth = 470f;
         /// <summary>
         /// Потолок ценника: монета, зазор и цена в четыре знака. Фактическая ширина считается
         /// по самому числу — цена растёт по ходу партии, и ценник ужимается под неё.
@@ -36,8 +36,9 @@ namespace Game.UI
 
         /// <summary>
         /// Плашка прибавки в три строки: прибавка, множитель, его разбор. Ширина — по самой
-        /// длинной третьей строке «колония ×4.00 · серия +2.00»: 252 px при 18 px шрифта,
-        /// промерено `preferredWidth` в редакторе; высоты строк — их `preferredHeight` с запасом.
+        /// длинной третьей строке; с накалом (M29) она стала «колония ×4.00 · серия +2.00 ·
+        /// накал +1.00», и 360 px её уже не вмещали. Высоты строк — их `preferredHeight`
+        /// с запасом. Числа промерены `preferredWidth`/`preferredHeight` в редакторе.
         /// </summary>
         const float GainHeight = 160f;
         const float GainValueHeight = 50f;
@@ -50,6 +51,9 @@ namespace Game.UI
         const float MilestoneHeight = 116f;
         const float MilestoneTitleHeight = 44f;
         const float MilestoneRewardHeight = 38f;
+
+        /// <summary>Плашка премии за чистый склад: те же две строки, но без иконки — иконки у неё нет.</summary>
+        const float SweepWidth = 260f;
 
         /// <summary>Сколько живёт попап, который никто не закрывает: прибавка, награда, отказ.</summary>
         const float ShowSeconds = 2f;
@@ -161,12 +165,41 @@ namespace Game.UI
             Place(detail.rectTransform, new Vector2(0f, 1f),
                 new Vector2(Padding, -Padding - GainValueHeight - GainFactorHeight),
                 new Vector2(textWidth, GainDetailHeight));
-            detail.text = $"колония {HudFormat.Multiplier(multiplier.Colony)} · серия {HudFormat.Bonus(multiplier.Streak)}";
+            detail.text = $"колония {HudFormat.Multiplier(multiplier.Colony)}" +
+                          $" · серия {HudFormat.Bonus(multiplier.Streak)}" +
+                          $" · накал {HudFormat.Bonus(multiplier.Heat)}";
 
             var icon = ResourceIcon.Create("Icon", popup.Rect, IconSize);
             Place((RectTransform)icon.transform, new Vector2(1f, 0.5f), new Vector2(-Padding, 0f),
                 new Vector2(IconSize, IconSize));
             icons.ShowIcon(icon, source);
+
+            Show(popup, true);
+        }
+
+        /// <summary>
+        /// Премия за чистый склад: две строки без иконки — «Чистый склад» и прибавка. Своей
+        /// анимации у неё нет, празднует сам склад вспышкой: третий вид всплывающего сообщения
+        /// игроку не нужен, а плашка прибавки уже читается как «тебе что-то начислили».
+        /// </summary>
+        public void ShowSweep(int points, in Anchor anchor)
+        {
+            if (!anchor.Exists)
+                return;
+
+            var popup = Push(anchor, SweepWidth);
+            popup.Rect.sizeDelta = new Vector2(SweepWidth, MilestoneHeight);
+            var textWidth = SweepWidth - Padding * 2f;
+
+            var title = UiText.Bold("Title", popup.Rect, theme, 34f, theme.Gold, TextAlignmentOptions.Center);
+            Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(Padding, -Padding),
+                new Vector2(textWidth, MilestoneTitleHeight));
+            title.text = "Чистый склад";
+
+            var reward = UiText.Bold("Reward", popup.Rect, theme, 30f, theme.Good, TextAlignmentOptions.Center);
+            Place(reward.rectTransform, new Vector2(0f, 1f), new Vector2(Padding, -Padding - MilestoneTitleHeight),
+                new Vector2(textWidth, MilestoneRewardHeight));
+            reward.text = HudFormat.Gain(points);
 
             Show(popup, true);
         }

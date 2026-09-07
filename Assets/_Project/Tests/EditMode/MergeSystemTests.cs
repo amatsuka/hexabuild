@@ -22,7 +22,7 @@ namespace Game.Tests.EditMode
             rules = ScriptableObject.CreateInstance<MergeRules>();
             storage = new StorageGrid(25);
             wallet = new Wallet(0);
-            multiplier = new ScoreMultiplier(0.05f, 0.25f, 2f);
+            multiplier = new ScoreMultiplier(0.05f, 0.25f, 2f, 0.05f, 1f, 2.5f, 2f);
             merges = new MergeSystem(storage, wallet, rules, multiplier);
             refusals = new List<string>();
             merges.Refused += refusals.Add;
@@ -141,7 +141,9 @@ namespace Game.Tests.EditMode
             merges.TryConvert(0);
             merges.TryConvert(1);
 
-            Assert.AreEqual(30, wallet.Points);
+            // 15 + 16: накал прибавляет ступень за каждое действие склада, и второй обмен идёт
+            // уже по ×1.10. Ровные 30 были до M29, когда множитель на складе не рос.
+            Assert.AreEqual(31, wallet.Points);
             Assert.AreEqual(0, storage.Count);
         }
 
@@ -274,7 +276,8 @@ namespace Game.Tests.EditMode
                 steps++;
 
             Assert.AreEqual(0, storage.Count, "доигрывание кончается пустым складом");
-            Assert.AreEqual(45, wallet.Points, "две доски и щебень — три обмена по 15");
+            Assert.AreEqual(49, wallet.Points,
+                "две доски и щебень: 15 + 16 + 18 — накал растёт и на слияниях автохода");
             Assert.AreEqual(5, steps, "два слияния и три продажи");
             CollectionAssert.IsEmpty(refusals, "автоход не бьётся в отказы");
         }
@@ -290,5 +293,101 @@ namespace Game.Tests.EditMode
 
         [Test]
         public void PlayOut_StopsOnAnEmptyStorage() => Assert.IsFalse(merges.TryPlayOut());
+
+        [Test]
+        public void EveryWarehouseAction_RaisesTheHeat()
+        {
+            Fill(ResourceType.Wood, 5);
+
+            merges.TryMerge(ResourceType.Wood);
+            Assert.AreEqual(0.05f, multiplier.Heat, 1e-5f, "мерж — действие склада");
+
+            merges.TryConvert(0);
+            Assert.AreEqual(0.10f, multiplier.Heat, 1e-5f, "обмен — тоже");
+        }
+
+        [Test]
+        public void ConvertedPoints_AreCountedBeforeItsOwnHeatStep()
+        {
+            Fill(ResourceType.Board, 1);
+
+            merges.TryConvert(0);
+
+            Assert.AreEqual(rules.CraftedPoints, wallet.Points,
+                "ступень, которую даёт действие, достаётся следующему — как у серии контрактов");
+        }
+
+        [Test]
+        public void OverflowingTheStorage_BurnsTheWholeHeat()
+        {
+            Fill(ResourceType.Wood, 5);
+            merges.TryMerge(ResourceType.Wood);
+            Assert.Greater(multiplier.Heat, 0f);
+
+            Fill(ResourceType.Ore, storage.Capacity);
+
+            Assert.AreEqual(0f, multiplier.Heat, 1e-5f, "переполнение — цена ставки «придержу до пятёрки»");
+        }
+
+        [Test]
+        public void CleanStorageAtFullHeat_PaysTheSweepBonusOnce()
+        {
+            var swept = new List<int>();
+            var sweeps = new MergeSystem(storage, wallet, rules, multiplier, 2, 60);
+            sweeps.Swept += (_, points) => swept.Add(points);
+
+            for (var i = 0; i < 20; i++)
+                multiplier.Bump();
+            Assert.IsTrue(multiplier.HeatAtMax);
+
+            Fill(ResourceType.Board, 2);
+            var before = wallet.Points;
+            sweeps.TryConvert(0);
+
+            Assert.AreEqual(1, swept.Count, "склад разгребли до чистого на полном накале");
+            Assert.AreEqual(multiplier.Apply(60), swept[0], "премия идёт через множитель, как награда контракта");
+            Assert.AreEqual(before + multiplier.Apply(rules.CraftedPoints) + swept[0], wallet.Points,
+                "в кошелёк легли и очки за обмен, и премия");
+
+            sweeps.TryConvert(1);
+            Assert.AreEqual(1, swept.Count, "второй клик по тому же чистому складу премии не даёт");
+        }
+
+        [Test]
+        public void SweepBonus_NeedsFullHeat()
+        {
+            var swept = new List<int>();
+            var sweeps = new MergeSystem(storage, wallet, rules, multiplier, 2, 60);
+            sweeps.Swept += (_, points) => swept.Add(points);
+
+            Fill(ResourceType.Board, 1);
+            sweeps.TryConvert(0);
+
+            Assert.AreEqual(0, storage.Count);
+            Assert.IsEmpty(swept, "чистый склад на холодную не празднуют");
+        }
+
+        [Test]
+        public void SweepLatch_ReopensAfterTheStorageFillsAgain()
+        {
+            var swept = new List<int>();
+            var sweeps = new MergeSystem(storage, wallet, rules, multiplier, 2, 60);
+            sweeps.Swept += (_, points) => swept.Add(points);
+
+            for (var i = 0; i < 20; i++)
+                multiplier.Bump();
+
+            Fill(ResourceType.Board, 1);
+            sweeps.TryConvert(0);
+            Assert.AreEqual(1, swept.Count);
+
+            Fill(ResourceType.Board, 5);
+            sweeps.TryConvert(0);
+            sweeps.TryConvert(1);
+            Assert.AreEqual(1, swept.Count, "склад ещё не чист: три клетки против порога в две");
+
+            sweeps.TryConvert(2);
+            Assert.AreEqual(2, swept.Count, "набрался и снова разгребли — премия снова платит");
+        }
     }
 }

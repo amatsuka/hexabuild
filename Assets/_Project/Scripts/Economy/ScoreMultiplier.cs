@@ -3,12 +3,14 @@ using System;
 namespace Game.Economy
 {
     /// <summary>
-    /// Множитель очков партии: колония плюс серия. Колония растёт с каждой открытой игроком
-    /// плиткой — `1 + шаг × открытых`, — серия прибавляет ступень за каждый закрытый подряд
-    /// контракт до потолка, а провал снимает одну ступень, не всю серию. Итог — одно число:
-    /// оно применяется ко всему, что приносит очки (обмен крафта и награда контракта), и оно же
-    /// стоит на плашке прибавки. Стартовые очки, бонусы за пройденное поле и штраф за потерю
-    /// под множитель не попадают.
+    /// Множитель очков партии: колония, серия контрактов и накал склада. Колония растёт с каждой
+    /// открытой игроком плиткой — `1 + шаг × открытых`, — серия прибавляет ступень за каждый
+    /// закрытый подряд контракт до потолка, а провал снимает одну ступень, не всю серию. Накал —
+    /// третье слагаемое и единственное временнóе: он растёт за каждое действие на складе и утекает
+    /// сам, стоит игроку замолчать. Итог — одно число: оно применяется ко всему, что приносит очки
+    /// (обмен крафта, награда контракта и премия за чистый склад), и оно же стоит на плашке
+    /// прибавки. Стартовые очки, бонусы за пройденное поле и штраф за потерю под множитель
+    /// не попадают.
     /// </summary>
     public sealed class ScoreMultiplier
     {
@@ -18,14 +20,26 @@ namespace Game.Economy
         /// </summary>
         const double Epsilon = 1e-6;
 
-        public ScoreMultiplier(float colonyStep, float streakStep, float streakMax)
+        /// <summary>Ниже этого числа изменение никому не видно: два знака после запятой на плашке.</summary>
+        const float Quantum = 1e-6f;
+
+        /// <summary>Сколько секунд склад молчит: считается с последнего действия, а не с начала утечки.</summary>
+        float silence;
+
+        public ScoreMultiplier(
+            float colonyStep, float streakStep, float streakMax,
+            float heatStep, float heatMax, float heatHoldSeconds, float heatDrainSeconds)
         {
             ColonyStep = colonyStep;
             StreakStep = streakStep;
             StreakMax = Math.Max(streakMax, 0f);
+            HeatStep = heatStep;
+            HeatMax = Math.Max(heatMax, 0f);
+            HeatHoldSeconds = Math.Max(heatHoldSeconds, 0f);
+            HeatDrainSeconds = Math.Max(heatDrainSeconds, Quantum);
         }
 
-        /// <summary>Колония или серия изменились: карточкам пора пересчитать числа.</summary>
+        /// <summary>Колония, серия или накал изменились: карточкам пора пересчитать числа.</summary>
         public event Action Changed;
 
         /// <summary>Сколько прибавляет к множителю каждая открытая плитка.</summary>
@@ -37,16 +51,48 @@ namespace Game.Economy
         /// <summary>Потолок надбавки серии.</summary>
         public float StreakMax { get; }
 
+        /// <summary>Ступень накала: столько даёт одно действие на складе.</summary>
+        public float HeatStep { get; }
+
+        /// <summary>Потолок надбавки накала.</summary>
+        public float HeatMax { get; }
+
+        /// <summary>Сколько накал держится после последнего действия, прежде чем потечь.</summary>
+        public float HeatHoldSeconds { get; }
+
+        /// <summary>За сколько секунд утечка съедает полный накал.</summary>
+        public float HeatDrainSeconds { get; }
+
         /// <summary>Сколько плиток открыл игрок: столько ступеней и у колонии.</summary>
         public int OpenedTiles { get; private set; }
 
         /// <summary>Надбавка серии: от нуля до <see cref="StreakMax"/>.</summary>
         public float Streak { get; private set; }
 
+        /// <summary>Надбавка накала: от нуля до <see cref="HeatMax"/>.</summary>
+        public float Heat { get; private set; }
+
         public float Colony => 1f + ColonyStep * OpenedTiles;
 
-        /// <summary>Итоговый множитель: колония плюс серия.</summary>
-        public float Total => Colony + Streak;
+        /// <summary>Итоговый множитель: колония плюс серия плюс накал.</summary>
+        public float Total => Colony + Streak + Heat;
+
+        /// <summary>Накал долей от потолка: по ней греется рамка склада.</summary>
+        public float HeatShare => HeatMax > 0f ? Heat / HeatMax : 0f;
+
+        /// <summary>Накал на потолке: только тогда чистый склад платит премию.</summary>
+        public bool HeatAtMax => HeatMax > 0f && Heat >= HeatMax - Quantum;
+
+        /// <summary>
+        /// Сколько осталось от паузы до начала утечки, долей: единица — только что действовал,
+        /// ноль — накал уже течёт. Это и есть полоса под складом.
+        /// </summary>
+        public float HoldShare => HeatHoldSeconds > 0f
+            ? Math.Max(0f, 1f - silence / HeatHoldSeconds)
+            : 0f;
+
+        /// <summary>Накал есть и он уже утекает: полосе пора погаснуть, а числу — падать.</summary>
+        public bool HeatLeaking => Heat > Quantum && silence >= HeatHoldSeconds;
 
         /// <summary>Очки с множителем: базовые × итоговый, вниз до целого.</summary>
         public int Apply(int basePoints) => (int)Math.Floor(basePoints * (double)Total + Epsilon);
@@ -67,12 +113,58 @@ namespace Game.Economy
         /// <summary>Контракт провален: серия теряет одну ступень, а не всё.</summary>
         public void BreakStreak() => SetStreak(Math.Max(Streak - StreakStep, 0f));
 
+        /// <summary>
+        /// Действие на складе — мерж или обмен. Накал растёт на ступень, и пауза отсчитывается
+        /// заново. Ступень достаётся следующему действию: очки за это уже посчитаны, как и
+        /// у серии контрактов.
+        /// </summary>
+        public void Bump()
+        {
+            silence = 0f;
+            SetHeat(Math.Min(Heat + HeatStep, HeatMax));
+        }
+
+        /// <summary>
+        /// Склад переполнился: накал сгорает весь. Это и есть цена ставки «придержу до пятёрки» —
+        /// потеря ресурса теперь стоит не только его самого.
+        /// </summary>
+        public void Burn()
+        {
+            silence = HeatHoldSeconds;
+            SetHeat(0f);
+        }
+
+        /// <summary>
+        /// Ход времени: пока пауза не вышла, накал держится, дальше течёт. Тикает тот же, кто
+        /// тикает добычу и контракты, — партия или бот.
+        /// </summary>
+        public void Tick(float deltaTime)
+        {
+            if (deltaTime <= 0f)
+                return;
+
+            silence += deltaTime;
+            if (Heat <= 0f || silence < HeatHoldSeconds)
+                return;
+
+            SetHeat(Math.Max(0f, Heat - HeatMax * deltaTime / HeatDrainSeconds));
+        }
+
         void SetStreak(float value)
         {
-            if (Math.Abs(value - Streak) < 1e-6f)
+            if (Math.Abs(value - Streak) < Quantum)
                 return;
 
             Streak = value;
+            Changed?.Invoke();
+        }
+
+        void SetHeat(float value)
+        {
+            if (Math.Abs(value - Heat) < Quantum)
+                return;
+
+            Heat = value;
             Changed?.Invoke();
         }
     }

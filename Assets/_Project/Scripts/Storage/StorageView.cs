@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Game.Economy;
 using Game.UI;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,6 +11,11 @@ namespace Game.Storage
     /// <summary>
     /// Полоса склада внизу: сетка клеток и красная вспышка при потере ресурса. Панель и клетки
     /// собраны той же карточкой, что и HUD, — тень, светлая кромка, тёмная заливка.
+    ///
+    /// Он же показывает накал (M29): рамка греется цветом по ступени, над складом стоит текущий
+    /// множитель партии, под складом — полоса паузы, после которой накал потечёт. Множитель был
+    /// в игре и раньше, но виден был только в гаснущей плашке прибавки, и склад читался
+    /// бухгалтерией, а не ставкой.
     /// </summary>
     public sealed class StorageView : MonoBehaviour
     {
@@ -35,9 +41,27 @@ namespace Game.Storage
         [Tooltip("Размах тряски клетки на отказе, пиксели канваса")]
         [SerializeField] float refusalShake = 14f;
 
+        [Header("Накал")]
+        [Tooltip("Во что красится панель на полном накале. Белый — цвет без изменений")]
+        [SerializeField] Color heatTint = new(1f, 0.74f, 0.42f, 1f);
+        [Tooltip("Во что вспыхивает склад на премии за чистоту")]
+        [SerializeField] Color sweepFlashTint = new(1f, 0.88f, 0.45f, 1f);
+        [SerializeField] float sweepSeconds = 0.5f;
+        [Tooltip("Насколько склад раздувается на премии")]
+        [SerializeField] float sweepScale = 1.04f;
+        [Tooltip("Кегль числа множителя на нулевом и на полном накале")]
+        [SerializeField] float factorSizeCold = 34f;
+        [SerializeField] float factorSizeHot = 50f;
+        [Tooltip("Просвет между числом множителя и верхом склада")]
+        [SerializeField] float factorGap = 10f;
+        [Tooltip("Высота полосы утечки под складом и её просвет от панели")]
+        [SerializeField] float fuseHeight = 6f;
+        [SerializeField] float fuseGap = 5f;
+
         [Header("Анимация слияния")]
         [SerializeField] float flySeconds = 0.28f;
         [SerializeField] float popSeconds = 0.18f;
+        [Tooltip("Амплитуда удара по клетке, из которой крафт ушёл в очки")]
         [SerializeField] float popScale = 1.3f;
         [SerializeField] float flyEndScale = 0.45f;
 
@@ -48,12 +72,20 @@ namespace Game.Storage
         UiPanelGraphic[] cellPanels;
         ResourceIcon[] icons;
         StorageGrid grid;
+        ScoreMultiplier multiplier;
         ResourceIconBaker snapshots;
         float flashTimer;
+        float sweepTimer;
 
-        public void Bind(StorageGrid storage)
+        TextMeshProUGUI factor;
+        RectTransform fuse;
+        RectTransform fuseFill;
+        UiPanelGraphic fuseFillPanel;
+
+        public void Bind(StorageGrid storage, ScoreMultiplier score)
         {
             grid = storage;
+            multiplier = score;
             snapshots = new ResourceIconBaker(models, snapshotResolution, snapshotAngles, snapshotMargin);
             BuildPanel();
 
@@ -147,15 +179,17 @@ namespace Game.Storage
             yield return PopCells(resultCells);
         }
 
-        /// <summary>Клетка выскакивает из нуля в чуть больший масштаб и оседает в единицу.</summary>
+        /// <summary>
+        /// Клетка выскакивает из нуля пружиной: <see cref="Anim.OutBack"/> уходит за единицу и
+        /// оседает обратно. Линейный домик «вверх и вниз» читался механическим — это был подъём
+        /// с изломом на пике, а не рывок. Размах перелёта теперь задаёт сама кривая, а
+        /// <see cref="popScale"/> остался амплитудой удара по опустевшей клетке.
+        /// </summary>
         IEnumerator PopCells(IReadOnlyList<int> popped)
         {
             for (var elapsed = 0f; elapsed < popSeconds; elapsed += Time.deltaTime)
             {
-                var progress = elapsed / popSeconds;
-                var scale = progress < 0.5f
-                    ? Mathf.Lerp(0f, popScale, progress * 2f)
-                    : Mathf.Lerp(popScale, 1f, (progress - 0.5f) * 2f);
+                var scale = Anim.OutBack(elapsed / popSeconds);
 
                 foreach (var index in popped)
                     cells[index].localScale = Vector3.one * scale;
@@ -165,6 +199,32 @@ namespace Game.Storage
 
             foreach (var index in popped)
                 cells[index].localScale = Vector3.one;
+        }
+
+        /// <summary>
+        /// Обмен крафта на очки: опустевшая клетка коротко толкается подскоком. Выскакивать ей
+        /// неоткуда — она пустеет, а не наполняется, — поэтому это удар от единицы, а не рост
+        /// из нуля.
+        /// </summary>
+        public void PunchCell(int index)
+        {
+            if (!isActiveAndEnabled)
+                return;
+
+            PressPulse.Cancel(cellPanels[index]);
+            StartCoroutine(Punch(index));
+        }
+
+        IEnumerator Punch(int index)
+        {
+            for (var elapsed = 0f; elapsed < popSeconds; elapsed += Time.deltaTime)
+            {
+                cells[index].localScale =
+                    Vector3.one * (1f + (popScale - 1f) * Anim.Hop(elapsed / popSeconds));
+                yield return null;
+            }
+
+            cells[index].localScale = Vector3.one;
         }
 
         /// <summary>
@@ -241,15 +301,74 @@ namespace Game.Storage
             grid.ResourceLost -= OnResourceLost;
         }
 
+        /// <summary>Премия за чистый склад: он вспыхивает золотом и коротко раздувается.</summary>
+        public void PlaySweep() => sweepTimer = sweepSeconds;
+
         void Update()
         {
+            // Склад стоит в сцене с её загрузки, а собирается только в `Bind`: до первой партии
+            // красить и обновлять нечего. Раньше это сходило с рук — вспышка потери начиналась
+            // с нуля и до панели не доходила, — а нагрев по накалу идёт каждый кадр.
+            if (panel == null)
+                return;
+
+            TickPanelTint();
+            TickHeat();
+        }
+
+        /// <summary>
+        /// Цвет панели — один канал на три источника: нагрев по накалу, золотая вспышка премии
+        /// и красная вспышка потери. Порядок обратный их громкости: потеря перебивает премию,
+        /// премия — нагрев. Красится вершинным цветом, то есть вся карточка разом: шейдер
+        /// домножает на него и градиент, и кромку, и свечение. Белый — панель в своём цвете.
+        /// </summary>
+        void TickPanelTint()
+        {
+            var heat = multiplier?.HeatShare ?? 0f;
+            var tint = Color.Lerp(Color.white, heatTint, heat);
+
+            if (sweepTimer > 0f)
+            {
+                sweepTimer = Mathf.Max(0f, sweepTimer - Time.deltaTime);
+                var progress = 1f - sweepTimer / sweepSeconds;
+                tint = Color.Lerp(tint, sweepFlashTint, Anim.Hop(progress));
+                transform.localScale = Vector3.one * Mathf.Lerp(1f, sweepScale, Anim.Hop(progress));
+            }
+
             if (flashTimer > 0f)
             {
                 flashTimer = Mathf.Max(0f, flashTimer - Time.deltaTime);
-                // Красится вершинным цветом, то есть вся карточка разом: шейдер домножает на него
-                // и градиент, и кромку, и свечение. Белый — панель в своём цвете.
-                panel.color = Color.Lerp(Color.white, lossFlashTint, flashTimer / flashSeconds);
+                tint = Color.Lerp(tint, lossFlashTint, flashTimer / flashSeconds);
             }
+
+            panel.color = tint;
+        }
+
+        /// <summary>
+        /// Число множителя и полоса утечки. Оба идут по времени, а не по событию: пауза до
+        /// утечки тикает сама, и подписка на `Changed` о ней ничего не знает.
+        /// </summary>
+        void TickHeat()
+        {
+            if (multiplier == null)
+                return;
+
+            var heat = multiplier.HeatShare;
+            factor.text = HudFormat.Multiplier(multiplier.Total);
+            factor.fontSize = Mathf.Lerp(factorSizeCold, factorSizeHot, heat);
+            factor.color = Color.Lerp(theme.Muted, theme.Gold, heat);
+
+            // Полоса живёт, только пока есть чему утекать: пустая она была бы третьей линией
+            // внизу экрана, которая ничего не значит.
+            var burning = multiplier.Heat > 0f;
+            if (fuse.gameObject.activeSelf != burning)
+                fuse.gameObject.SetActive(burning);
+
+            if (!burning)
+                return;
+
+            fuseFill.anchorMax = new Vector2(multiplier.HoldShare, 1f);
+            fuseFillPanel.color = Color.Lerp(Color.white, heatTint, heat);
         }
 
         void BuildPanel()
@@ -276,6 +395,8 @@ namespace Game.Storage
             layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
             layout.constraintCount = columns;
 
+            BuildHeat(rect);
+
             cells = new RectTransform[grid.Capacity];
             cellPanels = new UiPanelGraphic[grid.Capacity];
             icons = new ResourceIcon[grid.Capacity];
@@ -299,6 +420,34 @@ namespace Game.Storage
                 icons[i] = icon.GetComponent<ResourceIcon>();
                 icons[i].raycastTarget = false;
             }
+        }
+
+        /// <summary>
+        /// Число множителя над складом и полоса утечки под ним. Оба — дети склада, а не HUD:
+        /// они говорят именно про склад, и уезжать они обязаны вместе с ним.
+        /// </summary>
+        void BuildHeat(RectTransform rect)
+        {
+            factor = UiText.Bold("Factor", transform, theme, factorSizeCold, theme.Muted, TextAlignmentOptions.Center);
+            var label = factor.rectTransform;
+            label.anchorMin = label.anchorMax = new Vector2(0.5f, 1f);
+            label.pivot = new Vector2(0.5f, 0f);
+            label.sizeDelta = new Vector2(rect.sizeDelta.x, factorSizeHot * 1.4f);
+            label.anchoredPosition = new Vector2(0f, factorGap);
+
+            fuse = UiPanel.Create("Fuse", transform, theme, theme.BarTrack).rectTransform;
+            fuse.anchorMin = fuse.anchorMax = new Vector2(0.5f, 0f);
+            fuse.pivot = new Vector2(0.5f, 1f);
+            fuse.sizeDelta = new Vector2(rect.sizeDelta.x - padding * 2f, fuseHeight);
+            fuse.anchoredPosition = new Vector2(0f, -fuseGap);
+
+            fuseFillPanel = UiPanel.Create("Fill", fuse, theme, theme.BarFill);
+            fuseFill = fuseFillPanel.rectTransform;
+            fuseFill.anchorMin = Vector2.zero;
+            fuseFill.anchorMax = new Vector2(1f, 1f);
+            fuseFill.offsetMin = fuseFill.offsetMax = Vector2.zero;
+
+            fuse.gameObject.SetActive(false);
         }
 
         void Refresh()

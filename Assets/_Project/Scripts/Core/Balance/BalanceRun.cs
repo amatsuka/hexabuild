@@ -15,6 +15,7 @@ namespace Game.Core.Balance
             int contractsCompleted,
             int contractsFailed,
             int contractPoints,
+            int sweepPoints,
             float seconds,
             bool ended,
             long milliseconds)
@@ -25,6 +26,7 @@ namespace Game.Core.Balance
             ContractsCompleted = contractsCompleted;
             ContractsFailed = contractsFailed;
             ContractPoints = contractPoints;
+            SweepPoints = sweepPoints;
             Seconds = seconds;
             Ended = ended;
             Milliseconds = milliseconds;
@@ -46,6 +48,12 @@ namespace Game.Core.Balance
 
         /// <summary>Доля заработка от контрактов: «главное давление — таймер» проверяется этим числом.</summary>
         public float ContractShare => Score.Earned > 0 ? ContractPoints / (float)Score.Earned : 0f;
+
+        /// <summary>Сколько очков заработка пришло премиями за чистый склад (M29).</summary>
+        public int SweepPoints { get; }
+
+        /// <summary>Доля заработка от премий за чистый склад: ею и калибруется её база.</summary>
+        public float SweepShare => Score.Earned > 0 ? SweepPoints / (float)Score.Earned : 0f;
 
         /// <summary>Сколько игровых секунд шла партия.</summary>
         public float Seconds { get; }
@@ -73,7 +81,7 @@ namespace Game.Core.Balance
 
         public const string CsvHeader =
             "seed;total;earned;ceiling;opened;fieldTiles;exhausted;fieldDeposits;lost;" +
-            "contractsDone;contractsFailed;contractPoints;seconds;perfect;deadlock;ended;ms";
+            "contractsDone;contractsFailed;contractPoints;sweepPoints;seconds;perfect;deadlock;ended;ms";
 
         /// <summary>Строка CSV с разделителем `;`: числа в инвариантной культуре.</summary>
         public string ToCsv() => string.Join(";",
@@ -89,6 +97,7 @@ namespace Game.Core.Balance
             ContractsCompleted.ToString(CultureInfo.InvariantCulture),
             ContractsFailed.ToString(CultureInfo.InvariantCulture),
             ContractPoints.ToString(CultureInfo.InvariantCulture),
+            SweepPoints.ToString(CultureInfo.InvariantCulture),
             Seconds.ToString("0.00", CultureInfo.InvariantCulture),
             Score.IsPerfect ? "1" : "0",
             Deadlock ? "1" : "0",

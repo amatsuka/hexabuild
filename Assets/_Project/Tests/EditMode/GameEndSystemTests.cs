@@ -54,7 +54,7 @@ namespace Game.Tests.EditMode
             for (var i = 0; i < gravel; i++)
                 storage.TryStore(ResourceType.Gravel);
 
-            var state = new GameState(map, new Wallet(points), storage, Prices, new ScoreMultiplier(0f, 0f, 0f));
+            var state = new GameState(map, new Wallet(points), storage, Prices, new ScoreMultiplier(0f, 0f, 0f, 0f, 0f, 0f, 1f));
             state.Begin();
             return state;
         }

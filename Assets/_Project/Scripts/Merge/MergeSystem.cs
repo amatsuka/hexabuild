@@ -12,13 +12,29 @@ namespace Game.Merge
         readonly Wallet wallet;
         readonly MergeRules rules;
         readonly ScoreMultiplier multiplier;
+        readonly int sweepCells;
+        readonly int sweepBonus;
 
-        public MergeSystem(StorageGrid storage, Wallet wallet, MergeRules rules, ScoreMultiplier multiplier)
+        /// <summary>
+        /// Премия за чистый склад уже взята и ждёт, пока склад снова наполнится. Без защёлки
+        /// она платила бы за каждый клик по пустому складу, а не за то, что его разгребли.
+        /// </summary>
+        bool sweptAlready;
+
+        public MergeSystem(
+            StorageGrid storage, Wallet wallet, MergeRules rules, ScoreMultiplier multiplier,
+            int sweepCells = 0, int sweepBonus = 0)
         {
             this.storage = storage;
             this.wallet = wallet;
             this.rules = rules;
             this.multiplier = multiplier;
+            this.sweepCells = sweepCells;
+            this.sweepBonus = sweepBonus;
+
+            // Переполнение сжигает накал здесь, а не в `GameSession`: тогда бот и партия
+            // считали бы цену ставки по-разному, а бот на то и есть, чтобы считать ту же игру.
+            storage.ResourceLost += OnResourceLost;
         }
 
         /// <summary>Слияние не состоялось: текст для HUD.</summary>
@@ -31,6 +47,12 @@ namespace Game.Merge
         /// не правилам, а виду: из неё ресурс улетает в карточку контракта.
         /// </summary>
         public event Action<int, ResourceType, int> Converted;
+
+        /// <summary>
+        /// Склад разгребли до чистого на полном накале: из какой клетки был последний ход
+        /// и сколько за это дали. Клетка нужна виду — над ней встаёт плашка премии.
+        /// </summary>
+        public event Action<int, int> Swept;
 
         public bool TryMerge(ResourceType type)
         {
@@ -54,7 +76,9 @@ namespace Game.Merge
                 if (storage.TryStore(outcome.Result, out var cell))
                     resultCells.Add(cell);
 
+            multiplier.Bump();
             Merged?.Invoke(new MergeReport(outcome, consumedCells, resultCells));
+            TrySweep(resultCells.Count > 0 ? resultCells[0] : consumedCells[0]);
             return true;
         }
 
@@ -103,8 +127,34 @@ namespace Game.Merge
             var points = multiplier.Apply(rules.CraftedPoints);
             storage.TryRemoveAt(cellIndex);
             wallet.AddPoints(points);
+            multiplier.Bump();
             Converted?.Invoke(cellIndex, content.Value, points);
+            TrySweep(cellIndex);
             return true;
         }
+
+        /// <summary>
+        /// Склад опустел до <see cref="sweepCells"/> клеток, и накал стоит на потолке — премия.
+        /// Она идёт через множитель, как награда контракта: платят именно за то, что разгребли
+        /// на пике, а не когда придётся. Защёлка снимается, когда склад снова наберётся.
+        /// </summary>
+        void TrySweep(int cellIndex)
+        {
+            if (storage.Count > sweepCells)
+            {
+                sweptAlready = false;
+                return;
+            }
+
+            if (sweptAlready || sweepBonus <= 0 || !multiplier.HeatAtMax)
+                return;
+
+            sweptAlready = true;
+            var points = multiplier.Apply(sweepBonus);
+            wallet.AddPoints(points);
+            Swept?.Invoke(cellIndex, points);
+        }
+
+        void OnResourceLost(ResourceType _) => multiplier.Burn();
     }
 }
