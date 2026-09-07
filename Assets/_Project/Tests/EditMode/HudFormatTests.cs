@@ -25,5 +25,17 @@ namespace Game.Tests.EditMode
 
         [Test]
         public void Seconds_AreSpelledWithTheLetter() => Assert.That(HudFormat.Seconds(45), Is.EqualTo("45 с"));
+
+        [TestCase(1f, "×1.00")]
+        [TestCase(1.35f, "×1.35")]
+        [TestCase(6f, "×6.00")]
+        public void Multiplier_HasTwoDecimalsAndADot(float value, string expected) =>
+            Assert.That(HudFormat.Multiplier(value), Is.EqualTo(expected));
+
+        [TestCase(0f, "+0.00")]
+        [TestCase(0.25f, "+0.25")]
+        [TestCase(-0.25f, "−0.25")]
+        public void Bonus_CarriesItsSign(float value, string expected) =>
+            Assert.That(HudFormat.Bonus(value), Is.EqualTo(expected));
     }
 }

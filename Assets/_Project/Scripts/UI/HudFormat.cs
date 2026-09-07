@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Game.UI
 {
     /// <summary>Числа HUD в том виде, в каком их читают: тысячи разделены, секунды с буквой.</summary>
@@ -29,5 +31,12 @@ namespace Game.UI
 
         /// <summary>Остаток времени контракта, целыми секундами вверх.</summary>
         public static string Seconds(int value) => value + " с";
+
+        /// <summary>Множитель с двумя знаками: «×1.35». Точка, а не запятая: так он записан в плане и на плашке.</summary>
+        public static string Multiplier(float value) => "×" + value.ToString("0.00", CultureInfo.InvariantCulture);
+
+        /// <summary>Надбавка к множителю со знаком: «+0.25».</summary>
+        public static string Bonus(float value) =>
+            (value < 0f ? "−" : "+") + System.Math.Abs(value).ToString("0.00", CultureInfo.InvariantCulture);
     }
 }

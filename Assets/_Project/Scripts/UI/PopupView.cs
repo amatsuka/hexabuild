@@ -26,9 +26,19 @@ namespace Game.UI
         const float AnchorGap = 18f;
 
         const float MessageWidth = 430f;
-        const float GainWidth = 236f;
+        const float GainWidth = 360f;
         const float AskWidth = 232f;
         const float MinHeight = 84f;
+
+        /// <summary>
+        /// Плашка прибавки в три строки: прибавка, множитель, его разбор. Ширина — по самой
+        /// длинной третьей строке «колония ×4.00 · серия +2.00»: 252 px при 18 px шрифта,
+        /// промерено `preferredWidth` в редакторе; высоты строк — их `preferredHeight` с запасом.
+        /// </summary>
+        const float GainHeight = 160f;
+        const float GainValueHeight = 50f;
+        const float GainFactorHeight = 42f;
+        const float GainDetailHeight = 28f;
         const float IconSize = 46f;
         const float ConfirmSize = 60f;
 
@@ -51,6 +61,7 @@ namespace Game.UI
 
         UiTheme theme;
         StorageView icons;
+        ScoreMultiplier multiplier;
         Camera fieldCamera;
 
         Mesh coinMesh;
@@ -70,7 +81,8 @@ namespace Game.UI
         /// Слой попапов поверх HUD. Заводится кодом последним ребёнком, чтобы попап шёл поверх
         /// карточек: весь интерфейс проекта собирается так же, префабов под панели нет.
         /// </summary>
-        public static PopupView Create(RectTransform parent, UiTheme theme, StorageView icons)
+        public static PopupView Create(
+            RectTransform parent, UiTheme theme, StorageView icons, ScoreMultiplier multiplier)
         {
             var layer = UiPanel.NewRect("Popups", parent);
             layer.Stretch();
@@ -78,6 +90,7 @@ namespace Game.UI
             var view = layer.gameObject.AddComponent<PopupView>();
             view.theme = theme;
             view.icons = icons;
+            view.multiplier = multiplier;
             return view;
         }
 
@@ -109,18 +122,35 @@ namespace Game.UI
             Show(popup, true);
         }
 
-        /// <summary>Прибавка очков: «✓ +30» и иконка того, за что заплатили.</summary>
+        /// <summary>
+        /// Прибавка очков в три строки, как плашка референса: «✓ +30», итоговый множитель
+        /// «×1.35» и его разбор «колония ×1.10 · серия +0.25»; справа — иконка того, за что
+        /// заплатили. Множитель читается в момент показа: прибавка уже посчитана по нему.
+        /// </summary>
         public void ShowGain(int points, ResourceType source, in Anchor anchor)
         {
             if (!anchor.Exists)
                 return;
 
             var popup = Push(anchor, GainWidth);
+            popup.Rect.sizeDelta = new Vector2(GainWidth, GainHeight);
+            var textWidth = GainWidth - Padding * 2f - IconSize - 8f;
 
             var value = UiText.Bold("Value", popup.Rect, theme, 40f, theme.Good, TextAlignmentOptions.Left);
-            Place(value.rectTransform, new Vector2(0f, 0.5f), new Vector2(Padding, 0f),
-                new Vector2(GainWidth - Padding * 2f - IconSize - 8f, 52f));
+            Place(value.rectTransform, new Vector2(0f, 1f), new Vector2(Padding, -Padding),
+                new Vector2(textWidth, GainValueHeight));
             value.text = "✓ " + HudFormat.Gain(points);
+
+            var factor = UiText.Bold("Factor", popup.Rect, theme, 34f, theme.Gold, TextAlignmentOptions.Left);
+            Place(factor.rectTransform, new Vector2(0f, 1f), new Vector2(Padding, -Padding - GainValueHeight),
+                new Vector2(textWidth, GainFactorHeight));
+            factor.text = HudFormat.Multiplier(multiplier.Total);
+
+            var detail = UiText.Label("Detail", popup.Rect, theme, 18f, theme.Muted, TextAlignmentOptions.Left);
+            Place(detail.rectTransform, new Vector2(0f, 1f),
+                new Vector2(Padding, -Padding - GainValueHeight - GainFactorHeight),
+                new Vector2(textWidth, GainDetailHeight));
+            detail.text = $"колония {HudFormat.Multiplier(multiplier.Colony)} · серия {HudFormat.Bonus(multiplier.Streak)}";
 
             var icon = ResourceIcon.Create("Icon", popup.Rect, IconSize);
             Place((RectTransform)icon.transform, new Vector2(1f, 0.5f), new Vector2(-Padding, 0f),

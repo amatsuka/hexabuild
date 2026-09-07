@@ -16,7 +16,7 @@ namespace Game.Tests.EditMode
         const int FieldBonus = 500;
         const int DepositBonus = 500;
 
-        static readonly PriceSettings Prices = new(20, 2, 5, 1, 2);
+        static readonly PriceSettings Prices = new(20, 1.04f, 1, 2);
 
         MergeRules rules;
         DeliverySystem deliveries;
@@ -54,7 +54,7 @@ namespace Game.Tests.EditMode
             for (var i = 0; i < gravel; i++)
                 storage.TryStore(ResourceType.Gravel);
 
-            var state = new GameState(map, new Wallet(points), storage, Prices);
+            var state = new GameState(map, new Wallet(points), storage, Prices, new ScoreMultiplier(0f, 0f, 0f));
             state.Begin();
             return state;
         }

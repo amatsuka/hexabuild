@@ -11,12 +11,14 @@ namespace Game.Merge
         readonly StorageGrid storage;
         readonly Wallet wallet;
         readonly MergeRules rules;
+        readonly ScoreMultiplier multiplier;
 
-        public MergeSystem(StorageGrid storage, Wallet wallet, MergeRules rules)
+        public MergeSystem(StorageGrid storage, Wallet wallet, MergeRules rules, ScoreMultiplier multiplier)
         {
             this.storage = storage;
             this.wallet = wallet;
             this.rules = rules;
+            this.multiplier = multiplier;
         }
 
         /// <summary>Слияние не состоялось: текст для HUD.</summary>
@@ -56,7 +58,10 @@ namespace Game.Merge
             return true;
         }
 
-        /// <summary>Клик по крафтовому ресурсу: клетка освобождается, игрок получает очки.</summary>
+        /// <summary>
+        /// Клик по крафтовому ресурсу: клетка освобождается, игрок получает очки — базовую цену
+        /// крафта с множителем партии на момент клика.
+        /// </summary>
         public bool TryConvert(int cellIndex)
         {
             var content = storage[cellIndex];
@@ -69,9 +74,10 @@ namespace Game.Merge
                 return false;
             }
 
+            var points = multiplier.Apply(rules.CraftedPoints);
             storage.TryRemoveAt(cellIndex);
-            wallet.AddPoints(rules.CraftedPoints);
-            Converted?.Invoke(cellIndex, content.Value, rules.CraftedPoints);
+            wallet.AddPoints(points);
+            Converted?.Invoke(cellIndex, content.Value, points);
             return true;
         }
     }

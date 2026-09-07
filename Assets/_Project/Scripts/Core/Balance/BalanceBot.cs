@@ -57,6 +57,9 @@ namespace Game.Core.Balance
         bool played;
         int contractsFailed;
 
+        /// <summary>Очки, пришедшие наградами контрактов: их доля в заработке — число стадии.</summary>
+        int contractPoints;
+
         public BalanceBot(GameConfig config, MergeRules rules, int seed)
         {
             if (seed == 0)
@@ -115,6 +118,7 @@ namespace Game.Core.Balance
                 ceiling,
                 contracts.CompletedCount,
                 contractsFailed,
+                contractPoints,
                 seconds,
                 end.HasEnded,
                 watch.ElapsedMilliseconds);
@@ -125,11 +129,12 @@ namespace Game.Core.Balance
         {
             var wallet = new Wallet(config.StartingPoints);
             var storage = new StorageGrid(config.StorageSize);
-            state = new GameState(map, wallet, storage, config.Prices);
+            var multiplier = config.NewMultiplier();
+            state = new GameState(map, wallet, storage, config.Prices, multiplier);
 
             production = new ProductionSystem(map, state.Roads, config.ExtractionInterval);
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
-            merges = new MergeSystem(storage, wallet, rules);
+            merges = new MergeSystem(storage, wallet, rules, multiplier);
             contracts = new ContractSystem(
                 wallet,
                 craftedTypes,
@@ -138,7 +143,8 @@ namespace Game.Core.Balance
                 config.ContractReward,
                 config.ContractPauseMin,
                 config.ContractPauseMax,
-                seed);
+                seed,
+                multiplier);
             end = new GameEndSystem(
                 state, rules, deliveries, config.LossPenalty, config.FullFieldBonus, config.FullDepositBonus);
 
@@ -153,6 +159,7 @@ namespace Game.Core.Balance
             merges.Converted += OnConverted;
             contracts.Issued += () => dirty = true;
             contracts.Failed += () => contractsFailed++;
+            contracts.Completed += reward => contractPoints += reward;
 
             state.Begin();
             for (var i = 0; i < config.StartingGravel; i++)

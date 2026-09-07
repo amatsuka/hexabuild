@@ -10,12 +10,14 @@ namespace Game.Tests.EditMode
     public sealed class GameStateTests
     {
         const int OpenCost = 20;
-        const int OpenStep = 2;
-        const int OpenGroup = 5;
+        const float OpenGrowth = 1.5f;
         const int RoadCost = 1;
         const int BridgeCost = 2;
 
-        static readonly PriceSettings Prices = new(OpenCost, OpenStep, OpenGroup, RoadCost, BridgeCost);
+        static readonly PriceSettings Prices = new(OpenCost, OpenGrowth, RoadCost, BridgeCost);
+
+        /// <summary>Нейтральный множитель: правила открытия проверяются без него.</summary>
+        static ScoreMultiplier Flat() => new(0f, 0f, 0f);
 
         /// <summary>
         /// Поле без ландшафта: правила проверяются на ровном месте. Раньше здесь стояла карта
@@ -46,7 +48,7 @@ namespace Game.Tests.EditMode
             for (var i = 0; i < gravel; i++)
                 storage.TryStore(ResourceType.Gravel);
 
-            return new GameState(map ?? FlatMap(), new Wallet(points), storage, Prices);
+            return new GameState(map ?? FlatMap(), new Wallet(points), storage, Prices, Flat());
         }
 
         [Test]
@@ -269,23 +271,45 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void NextTileCost_RisesByAStepEveryGroupOfOpenedTiles()
+        public void NextTileCost_GrowsGeometricallyWithEveryOpenedTile_RoundedDown()
         {
             var state = NewGame(points: 100000);
             state.Begin();
 
             Assert.AreEqual(OpenCost, state.NextTileCost, "первая плитка стоит стартовую цену");
 
-            for (var i = 0; i < OpenGroup; i++)
+            OpenAnyTile(state);
+            Assert.AreEqual(1, state.OpenedTiles);
+            Assert.AreEqual(30, state.NextTileCost, "20 × 1.5");
+
+            OpenAnyTile(state);
+            Assert.AreEqual(45, state.NextTileCost, "20 × 1.5²");
+
+            OpenAnyTile(state);
+            Assert.AreEqual(67, state.NextTileCost, "20 × 1.5³ = 67.5 → вниз до целого");
+        }
+
+        [Test]
+        public void NextTileCost_SurvivesFloatingPoint_OnTheCourseNumbers()
+        {
+            var state = new GameState(FlatMap(rows: 8), new Wallet(100000), new StorageGrid(25),
+                new PriceSettings(20, 1.04f, RoadCost, BridgeCost), Flat());
+            state.Begin();
+
+            for (var opened = 0; opened < 20; opened++)
+            {
+                var expected = (int)System.Math.Floor(20 * System.Math.Pow(1.04, opened) + 1e-6);
+                Assert.AreEqual(expected, state.NextTileCost, $"после {opened} открытых");
                 OpenAnyTile(state);
+            }
+        }
 
-            Assert.AreEqual(OpenGroup, state.OpenedTiles);
-            Assert.AreEqual(OpenCost + OpenStep, state.NextTileCost);
-
-            for (var i = 0; i < OpenGroup; i++)
-                OpenAnyTile(state);
-
-            Assert.AreEqual(OpenCost + OpenStep * 2, state.NextTileCost);
+        [Test]
+        public void PriceSettings_TreatGrowthBelowOne_AsConstantPrice()
+        {
+            Assert.AreEqual(1f, new PriceSettings(20, 0f, 1, 2).OpenGrowth);
+            Assert.AreEqual(1f, new PriceSettings(20, 0.9f, 1, 2).OpenGrowth);
+            Assert.AreEqual(1.04f, new PriceSettings(20, 1.04f, 1, 2).OpenGrowth);
         }
 
         [Test]
@@ -295,14 +319,28 @@ namespace Game.Tests.EditMode
             state.Begin();
 
             var spent = 0;
-            for (var i = 0; i < OpenGroup * 2; i++)
+            for (var i = 0; i < 4; i++)
             {
                 spent += state.NextTileCost;
                 OpenAnyTile(state);
             }
 
-            Assert.AreEqual(OpenGroup * OpenCost + OpenGroup * (OpenCost + OpenStep), spent);
+            Assert.AreEqual(20 + 30 + 45 + 67, spent);
             Assert.AreEqual(100000 - spent, state.Wallet.Points);
+        }
+
+        [Test]
+        public void TryRevealTile_FeedsTheColonyMultiplier()
+        {
+            var multiplier = new ScoreMultiplier(0.05f, 0f, 0f);
+            var state = new GameState(FlatMap(), new Wallet(100000), new StorageGrid(25), Prices, multiplier);
+            state.Begin();
+
+            OpenAnyTile(state);
+            OpenAnyTile(state);
+
+            Assert.AreEqual(2, multiplier.OpenedTiles);
+            Assert.AreEqual(1.1f, multiplier.Colony, 1e-5f);
         }
 
         [Test]
@@ -319,16 +357,15 @@ namespace Game.Tests.EditMode
         [Test]
         public void Refusal_NamesTheGrownPrice()
         {
-            var state = NewGame(points: OpenGroup * OpenCost);
+            var state = NewGame(points: OpenCost);
             state.Begin();
-            for (var i = 0; i < OpenGroup; i++)
-                OpenAnyTile(state);
+            OpenAnyTile(state);
 
             var refusals = new List<string>();
             state.ActionRefused += refusals.Add;
             Assert.IsFalse(OpenAnyTile(state));
 
-            CollectionAssert.Contains(refusals, $"Не хватает очков: нужно {OpenCost + OpenStep}");
+            CollectionAssert.Contains(refusals, "Не хватает очков: нужно 30");
         }
 
         // --- M9: горы и реки ---

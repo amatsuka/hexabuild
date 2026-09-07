@@ -1,3 +1,4 @@
+using Game.Economy;
 using Game.Grid;
 using UnityEngine;
 
@@ -22,6 +23,8 @@ namespace Game.Core
         [SerializeField] float biomeNoiseScale = 0.18f;
         [SerializeField] int minDepositReserve = 8;
         [SerializeField] int maxDepositReserve = 20;
+        [Tooltip("На сколько растёт запас за каждый ряд от Метрополии: доля от базового диапазона")]
+        [SerializeField] float reserveRowGrowth = 0.06f;
 
         [Header("Добыча и доставка")]
         [SerializeField] float extractionInterval = 3f;
@@ -32,13 +35,19 @@ namespace Game.Core
 
         [Header("Стоимости")]
         [SerializeField] int tileOpenCost = 20;
-        [Tooltip("Насколько дорожает открытие за каждую группу уже открытых плиток")]
-        [SerializeField] int openCostStep = 2;
-        [Tooltip("Сколько открытых плиток поднимают цену на один шаг")]
-        [SerializeField] int openCostGroup = 5;
+        [Tooltip("Во сколько раз дорожает открытие с каждой открытой плиткой")]
+        [SerializeField] float openCostGrowth = 1.04f;
         [SerializeField] int roadCost = 1;
         [Tooltip("Надбавка к дороге за мост: через реку и по воде. Полная цена — roadCost + bridgeCost")]
         [SerializeField] int bridgeCost = 2;
+
+        [Header("Множитель очков")]
+        [Tooltip("Сколько прибавляет к множителю каждая открытая плитка")]
+        [SerializeField] float multiplierStep = 0.05f;
+        [Tooltip("Ступень серии за каждый закрытый подряд контракт; провал снимает одну ступень")]
+        [SerializeField] float streakStep = 0.25f;
+        [Tooltip("Потолок надбавки серии")]
+        [SerializeField] float streakMax = 2f;
 
         [Header("Старт партии")]
         [SerializeField] int startingPoints = 40;
@@ -49,7 +58,7 @@ namespace Game.Core
         [SerializeField] int contractGoal = 3;
         [SerializeField] float contractSeconds = 45f;
         [Tooltip("Награда сверх обычных очков за обмен")]
-        [SerializeField] int contractReward = 40;
+        [SerializeField] int contractReward = 120;
         [Tooltip("Сколько Метрополия молчит между контрактами: случайно в этих границах")]
         [SerializeField] float contractPauseMin = 5f;
         [SerializeField] float contractPauseMax = 20f;
@@ -92,7 +101,16 @@ namespace Game.Core
 
         public int FullDepositBonus => fullDepositBonus;
 
-        public PriceSettings Prices => new(tileOpenCost, openCostStep, openCostGroup, roadCost, bridgeCost);
+        public float MultiplierStep => multiplierStep;
+
+        public float StreakStep => streakStep;
+
+        public float StreakMax => streakMax;
+
+        public PriceSettings Prices => new(tileOpenCost, openCostGrowth, roadCost, bridgeCost);
+
+        /// <summary>Множитель очков на партию: свой у каждой, как кошелёк.</summary>
+        public ScoreMultiplier NewMultiplier() => new(multiplierStep, streakStep, streakMax);
 
         public MapGenerationSettings MapGenerationSettings => MapGenerationSettingsFor(seed);
 
@@ -110,6 +128,7 @@ namespace Game.Core
             threeDepositsWeight,
             minDepositReserve,
             maxDepositReserve,
+            reserveRowGrowth,
             biomeNoiseScale);
     }
 }

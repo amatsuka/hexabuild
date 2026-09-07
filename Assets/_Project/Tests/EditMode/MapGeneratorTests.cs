@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Game.Economy;
 using Game.Grid;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace Game.Tests.EditMode
 {
@@ -9,7 +10,10 @@ namespace Game.Tests.EditMode
     {
         const int Rows = 14;
 
-        static MapGenerationSettings Settings(int seed) => new(Rows, seed, 30f, 45f, 20f, 5f, 8, 20);
+        const float ReserveRowGrowth = 0.06f;
+
+        static MapGenerationSettings Settings(int seed) =>
+            new(Rows, seed, 30f, 45f, 20f, 5f, 8, 20, ReserveRowGrowth);
 
         static MapGenerationSettings SettingsWithWeights(int seed, float empty, float single, float two, float three) =>
             new(Rows, seed, empty, single, two, three, 8, 20);
@@ -60,15 +64,54 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void EveryDeposit_HoldsReserveWithinConfiguredRange()
+        public void EveryDeposit_HoldsReserveWithinTheRangeOfItsRow()
         {
             for (var seed = 1; seed <= 50; seed++)
             foreach (var tile in MapGenerator.Generate(Settings(seed)).Tiles.Values)
             foreach (var deposit in tile.Deposits)
             {
+                var scale = 1f + ReserveRowGrowth * tile.Coord.R;
+                Assert.GreaterOrEqual(deposit.Reserve, Mathf.RoundToInt(8 * scale), $"seed {seed}, ряд {tile.Coord.R}");
+                Assert.LessOrEqual(deposit.Reserve, Mathf.RoundToInt(20 * scale), $"seed {seed}, ряд {tile.Coord.R}");
+                Assert.IsFalse(deposit.IsExhausted);
+            }
+        }
+
+        /// <summary>Дальние ряды живут дольше: средний запас наверху заметно выше, чем у Метрополии.</summary>
+        [Test]
+        public void Reserves_GrowTowardTheTopRows()
+        {
+            float near = 0f, far = 0f;
+            int nearCount = 0, farCount = 0;
+
+            for (var seed = 1; seed <= 50; seed++)
+            foreach (var tile in MapGenerator.Generate(Settings(seed)).Tiles.Values)
+            foreach (var deposit in tile.Deposits)
+            {
+                if (tile.Coord.R <= 2)
+                {
+                    near += deposit.Reserve;
+                    nearCount++;
+                }
+                else if (tile.Coord.R >= Rows - 3)
+                {
+                    far += deposit.Reserve;
+                    farCount++;
+                }
+            }
+
+            Assert.Greater(far / farCount, near / nearCount * 1.3f, "верхние ряды не запасливее нижних");
+        }
+
+        [Test]
+        public void ZeroRowGrowth_KeepsTheBaseRange()
+        {
+            var settings = new MapGenerationSettings(Rows, 3, 30f, 45f, 20f, 5f, 8, 20, 0f);
+            foreach (var tile in MapGenerator.Generate(settings).Tiles.Values)
+            foreach (var deposit in tile.Deposits)
+            {
                 Assert.GreaterOrEqual(deposit.Reserve, 8);
                 Assert.LessOrEqual(deposit.Reserve, 20);
-                Assert.IsFalse(deposit.IsExhausted);
             }
         }
 

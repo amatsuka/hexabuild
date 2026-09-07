@@ -227,3 +227,11 @@ GPU-инстансинг, снимать его без замера нельзя
   в `docs/runbooks/webgl-publish.md`.
 - Сборки: только `Game.Runtime` и `Game.Tests.EditMode`.
 - Структура папок — раздел 5 спеки MVP.
+- Подключённый редактор из терминала: `unity command <имя>`. Аргументы самой команды идут
+  после `--`, иначе `--timeout` съедает CLI (у него секунды) и до команды доходит дефолт 5000 мс:
+  `unity command --timeout 300 --json eval_file -- --file x.cs --timeout 200000`. Пока окно
+  редактора не в фокусе, главный поток не тикает и любой `eval_file` умирает по таймауту, что бы
+  в нём ни было, — `recompile` и `run_tests` при этом работают. Лечит
+  `unity command set_autotick -- --enable true --interval_ms 100` один раз на сеанс редактора
+  (M24, стоило часа). Сверка вариантов баланса — именно так: копия `GameConfig` через
+  `Object.Instantiate` и `SerializedObject`, бот на 200 сидах, ассет не трогается.

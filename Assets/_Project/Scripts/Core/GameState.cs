@@ -11,11 +11,16 @@ namespace Game.Core
     {
         readonly PriceSettings prices;
 
-        public GameState(HexMap map, Wallet wallet, StorageGrid storage, PriceSettings prices)
+        /// <summary>Поправка перед округлением цены вниз: 20 × 1.04⁵ в плавающей точке чуть меньше себя.</summary>
+        const double CostEpsilon = 1e-6;
+
+        public GameState(
+            HexMap map, Wallet wallet, StorageGrid storage, PriceSettings prices, ScoreMultiplier multiplier)
         {
             Map = map;
             Wallet = wallet;
             Storage = storage;
+            Multiplier = multiplier;
             this.prices = prices;
             Roads = new RoadNetwork(map);
         }
@@ -34,14 +39,20 @@ namespace Game.Core
 
         public RoadNetwork Roads { get; }
 
+        /// <summary>Множитель очков партии: колонию ему считает открытие плитки здесь.</summary>
+        public ScoreMultiplier Multiplier { get; }
+
         /// <summary>Сколько плиток открыл игрок. Метрополия не в счёт: её открывать не пришлось.</summary>
         public int OpenedTiles { get; private set; }
 
         /// <summary>
-        /// Цена следующего открытия. Растёт ступенями: чем больше поля позади, тем дороже шаг
-        /// вперёд. Иначе доход от новых плиток обгоняет расход и партия перестаёт быть выбором.
+        /// Цена следующего открытия. Растёт геометрически: `TileOpen × OpenGrowth^открытых`,
+        /// вниз до целого. Доход плитки растёт вместе с множителем колонии, и линейная цена
+        /// делала открытие безусловно выгодным — тапом, а не выбором; к концу поля отношение
+        /// дохода к цене падает, и пустая плитка становится ставкой.
         /// </summary>
-        public int NextTileCost => prices.TileOpen + prices.OpenStep * (OpenedTiles / prices.OpenGroup);
+        public int NextTileCost =>
+            (int)Math.Floor(prices.TileOpen * Math.Pow(prices.OpenGrowth, OpenedTiles) + CostEpsilon);
 
         /// <summary>Старт партии: Метрополия открыта, её соседи доступны.</summary>
         public void Begin()
@@ -92,6 +103,7 @@ namespace Game.Core
             }
 
             OpenedTiles++;
+            Multiplier.TrackOpened(OpenedTiles);
             tile.Reveal();
             TileChanged?.Invoke(tile);
             MakeNeighborsAvailable(tile);

@@ -151,7 +151,7 @@ namespace Game.Grid
                 if (pair.Key != HexCoord.Zero)
                     depositsByCoord[pair.Key] = !TileData.IsPassableBiome(pair.Value) || rivers.ContainsKey(pair.Key)
                         ? new List<Deposit>()
-                        : RollDeposits(random, settings);
+                        : RollDeposits(random, settings, pair.Key.R);
 
             EnsureStoneNextToMetropolis(depositsByCoord, biomes, rivers, random, settings);
 
@@ -798,7 +798,7 @@ namespace Game.Grid
             return false;
         }
 
-        static List<Deposit> RollDeposits(System.Random random, MapGenerationSettings settings)
+        static List<Deposit> RollDeposits(System.Random random, MapGenerationSettings settings, int row)
         {
             var count = RollDepositCount(random, settings);
             var deposits = new List<Deposit>(count);
@@ -807,7 +807,7 @@ namespace Game.Grid
             for (var i = 0; i < count; i++)
             {
                 var index = random.Next(available.Count);
-                deposits.Add(new Deposit(available[index], RollReserve(random, settings)));
+                deposits.Add(new Deposit(available[index], RollReserve(random, settings, row)));
                 available.RemoveAt(index);
             }
 
@@ -831,8 +831,18 @@ namespace Game.Grid
             return roll < settings.TwoDepositsWeight ? 2 : 3;
         }
 
-        static int RollReserve(System.Random random, MapGenerationSettings settings) =>
-            random.Next(settings.MinReserve, settings.MaxReserve + 1);
+        /// <summary>
+        /// Запас месторождения: базовый диапазон, растянутый по ряду плитки — `× (1 + рост × ряд)`.
+        /// Ряд — координата `R`, у Метрополии ноль. Дальние плитки живут дольше, к концу карты
+        /// работает больше плиток разом, и поток на склад растёт; сам склад не расширяется.
+        /// </summary>
+        static int RollReserve(System.Random random, MapGenerationSettings settings, int row)
+        {
+            var scale = 1f + settings.ReserveRowGrowth * row;
+            var min = Mathf.RoundToInt(settings.MinReserve * scale);
+            var max = Mathf.RoundToInt(settings.MaxReserve * scale);
+            return random.Next(min, Mathf.Max(min, max) + 1);
+        }
 
         /// <summary>
         /// Без камня рядом с Метрополией партия не стартует экономически. Гора и вода в соседях
@@ -846,7 +856,7 @@ namespace Game.Grid
             System.Random random,
             MapGenerationSettings settings)
         {
-            var neighbors = new List<List<Deposit>>();
+            var neighbors = new List<HexCoord>();
             foreach (var coord in HexCoord.Zero.Neighbors())
             {
                 if (!depositsByCoord.TryGetValue(coord, out var deposits))
@@ -859,14 +869,15 @@ namespace Game.Grid
                     if (deposit.Type == ResourceType.Stone)
                         return;
 
-                neighbors.Add(deposits);
+                neighbors.Add(coord);
             }
 
             if (neighbors.Count == 0)
                 return;
 
-            var chosen = neighbors[random.Next(neighbors.Count)];
-            var stone = new Deposit(ResourceType.Stone, RollReserve(random, settings));
+            var at = neighbors[random.Next(neighbors.Count)];
+            var chosen = depositsByCoord[at];
+            var stone = new Deposit(ResourceType.Stone, RollReserve(random, settings, at.R));
 
             if (chosen.Count == 0)
                 chosen.Add(stone);

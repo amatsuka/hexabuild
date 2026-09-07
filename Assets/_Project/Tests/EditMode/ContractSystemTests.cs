@@ -15,6 +15,7 @@ namespace Game.Tests.EditMode
         static readonly ResourceType[] OneType = { ResourceType.Board };
 
         Wallet wallet;
+        ScoreMultiplier multiplier;
         ContractSystem contracts;
         List<string> log;
 
@@ -22,7 +23,9 @@ namespace Game.Tests.EditMode
         public void SetUp()
         {
             wallet = new Wallet(0);
-            contracts = new ContractSystem(wallet, OneType, Goal, Seconds, Reward, MinPause, MaxPause, seed: 1);
+            multiplier = new ScoreMultiplier(0.05f, 0.25f, 0.5f);
+            contracts = new ContractSystem(
+                wallet, OneType, Goal, Seconds, Reward, MinPause, MaxPause, seed: 1, multiplier: multiplier);
             log = new List<string>();
             contracts.Issued += () => log.Add("issued");
             contracts.Progressed += () => log.Add("progressed");
@@ -199,13 +202,65 @@ namespace Game.Tests.EditMode
         public void Type_IsAlwaysOneOfTheCraftedTypes()
         {
             var types = new[] { ResourceType.Board, ResourceType.Gravel, ResourceType.Ingot };
-            var system = new ContractSystem(wallet, types, Goal, Seconds, Reward, MinPause, MaxPause, seed: 7);
+            var system = new ContractSystem(
+                wallet, types, Goal, Seconds, Reward, MinPause, MaxPause, seed: 7, multiplier: multiplier);
 
             for (var i = 0; i < 50; i++)
             {
                 system.Issue();
                 CollectionAssert.Contains(types, system.Type);
             }
+        }
+    
+        // --- M24: множитель и серия ---
+
+        [Test]
+        public void Reward_FollowsTheMultiplier()
+        {
+            multiplier.TrackOpened(4);
+            Assert.AreEqual(48, contracts.Reward, "40 × 1.2");
+        }
+
+        [Test]
+        public void Completion_PaysTheRewardBeforeTheStreakStep_ThenExtendsTheStreak()
+        {
+            contracts.Issue();
+            var seenStreak = -1f;
+            contracts.Completed += _ => seenStreak = multiplier.Streak;
+
+            for (var i = 0; i < Goal; i++)
+                contracts.Count(ResourceType.Board);
+
+            Assert.AreEqual(Reward, wallet.Points, "первый контракт закрыт без серии");
+            Assert.AreEqual(0f, seenStreak, "слушатель видит серию такой, какой она сделала награду");
+            Assert.AreEqual(0.25f, multiplier.Streak, 1e-6f);
+
+            contracts.Issue();
+            for (var i = 0; i < Goal; i++)
+                contracts.Count(ResourceType.Board);
+
+            Assert.AreEqual(Reward + 50, wallet.Points, "второй — с серией 0.25: 40 × 1.25");
+            Assert.AreEqual(0.5f, multiplier.Streak, 1e-6f, "потолок серии");
+
+            contracts.Issue();
+            for (var i = 0; i < Goal; i++)
+                contracts.Count(ResourceType.Board);
+
+            Assert.AreEqual(0.5f, multiplier.Streak, 1e-6f, "выше потолка серия не растёт");
+        }
+
+        [Test]
+        public void Failure_DropsOneStreakStep_NotTheWholeStreak()
+        {
+            multiplier.ExtendStreak();
+            multiplier.ExtendStreak();
+            Assert.AreEqual(0.5f, multiplier.Streak, 1e-6f);
+
+            contracts.Issue();
+            contracts.Tick(Seconds + 1f);
+
+            Assert.AreEqual(0.25f, multiplier.Streak, 1e-6f);
+            Assert.AreEqual(0, wallet.Points, "очками провал по-прежнему не штрафует");
         }
     }
 }

@@ -13,6 +13,7 @@ namespace Game.Tests.EditMode
         StorageGrid storage;
         Wallet wallet;
         MergeSystem merges;
+        ScoreMultiplier multiplier;
         List<string> refusals;
 
         [SetUp]
@@ -21,7 +22,8 @@ namespace Game.Tests.EditMode
             rules = ScriptableObject.CreateInstance<MergeRules>();
             storage = new StorageGrid(25);
             wallet = new Wallet(0);
-            merges = new MergeSystem(storage, wallet, rules);
+            multiplier = new ScoreMultiplier(0.05f, 0.25f, 2f);
+            merges = new MergeSystem(storage, wallet, rules, multiplier);
             refusals = new List<string>();
             merges.Refused += refusals.Add;
         }
@@ -207,6 +209,22 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(new[] { 1, 2, 3 }, reported.ConsumedCells, "списываются клетки слева направо");
             Assert.AreEqual(new[] { 1 }, reported.ResultCells, "крафт ложится в первую освободившуюся");
+        }
+    
+        [Test]
+        public void ClickOnCrafted_PaysTheCraftedPriceWithTheMultiplier_RoundedDown()
+        {
+            multiplier.TrackOpened(7);
+            multiplier.ExtendStreak();
+            Fill(ResourceType.Board, 1);
+
+            var converted = new List<int>();
+            merges.Converted += (_, _, points) => converted.Add(points);
+            merges.TryConvert(0);
+
+            // 15 × (1 + 0.05 × 7 + 0.25) = 15 × 1.6 = 24.
+            Assert.AreEqual(24, wallet.Points);
+            CollectionAssert.AreEqual(new[] { 24 }, converted, "плашка показывает то, что легло в кошелёк");
         }
     }
 }

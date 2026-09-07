@@ -101,9 +101,10 @@ namespace Game.Tests.EditMode
         /// <summary>
         /// На 200 сидах партия кончается сама, а счёт не выходит за то, что поле способно дать:
         /// обмен не приносит больше, чем крафта можно выжать из запаса достижимых месторождений
-        /// пятёрками и тройками плюс стартовый щебень, а итог — не выше аналитического потолка
-        /// с поправкой на то, чего потолок не считает: стартовый щебень, награды контрактов
-        /// и два бонуса за пройденное поле.
+        /// пятёрками и тройками плюс стартовый щебень — по цене крафта с наибольшим множителем,
+        /// какой возможен на этом поле, — а итог не выше аналитического потолка с тем же
+        /// множителем и поправкой на то, чего потолок не считает: стартовый щебень, награды
+        /// контрактов и два бонуса за пройденное поле.
         /// </summary>
         [Test]
         public void EndsOnItsOwn_AndStaysBelowTheCeiling_OnEverySeed()
@@ -117,15 +118,19 @@ namespace Game.Tests.EditMode
                 foreach (var units in UnitsByType(seed).Values)
                     achievableCrafts += Crafts(units);
 
-                var exchanged = run.Score.Earned - run.ContractsCompleted * config.ContractReward;
+                var maxMultiplier = 1f + config.MultiplierStep * run.Score.FieldTiles + config.StreakMax;
+                var craftPoints = (int)Math.Ceiling(rules.CraftedPoints * maxMultiplier);
+
+                var exchanged = run.Score.Earned - run.ContractPoints;
                 Assert.LessOrEqual(
-                    exchanged, achievableCrafts * rules.CraftedPoints,
+                    exchanged, achievableCrafts * craftPoints,
                     $"seed {seed}: обмен принёс больше, чем есть крафта на поле");
 
-                var allowance = config.StartingGravel * rules.CraftedPoints
-                    + run.ContractsCompleted * config.ContractReward
+                var allowance = config.StartingGravel * craftPoints
+                    + run.ContractPoints
                     + config.FullFieldBonus + config.FullDepositBonus;
-                Assert.LessOrEqual(run.Score.Total, run.Ceiling + allowance, $"seed {seed}: счёт выше потолка");
+                var ceiling = (int)Math.Ceiling(run.Ceiling * maxMultiplier);
+                Assert.LessOrEqual(run.Score.Total, ceiling + allowance, $"seed {seed}: счёт выше потолка");
             }
         }
 

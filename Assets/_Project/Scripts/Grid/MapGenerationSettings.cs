@@ -12,6 +12,7 @@ namespace Game.Grid
             float threeDepositsWeight,
             int minReserve,
             int maxReserve,
+            float reserveRowGrowth = 0f,
             float biomeNoiseScale = 0.18f)
         {
             Rows = rows;
@@ -22,6 +23,7 @@ namespace Game.Grid
             ThreeDepositsWeight = threeDepositsWeight;
             MinReserve = minReserve;
             MaxReserve = maxReserve;
+            ReserveRowGrowth = reserveRowGrowth;
             BiomeNoiseScale = biomeNoiseScale;
         }
 
@@ -41,6 +43,13 @@ namespace Game.Grid
         public int MinReserve { get; }
 
         public int MaxReserve { get; }
+
+        /// <summary>
+        /// На сколько растёт диапазон запаса за каждый ряд от Метрополии: границы умножаются на
+        /// `1 + ReserveRowGrowth × ряд`. Дальние плитки живут дольше, а не быстрее — интервал
+        /// добычи один на всех.
+        /// </summary>
+        public float ReserveRowGrowth { get; }
 
         /// <summary>Частота шума ландшафта: меньше — крупнее пятна биомов.</summary>
         public float BiomeNoiseScale { get; }

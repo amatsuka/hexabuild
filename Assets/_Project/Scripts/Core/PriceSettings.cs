@@ -2,28 +2,28 @@ namespace Game.Core
 {
     /// <summary>
     /// Цены партии, снятые с `GameConfig`: правила остаются чистым C#. Отдельная структура,
-    /// потому что пяти голых `int` в конструкторе `GameState` уже не разобрать на месте вызова.
+    /// потому что четыре голых числа в конструкторе `GameState` уже не разобрать на месте вызова.
     /// </summary>
     public readonly struct PriceSettings
     {
-        public PriceSettings(int tileOpen, int openStep, int openGroup, int road, int bridge)
+        public PriceSettings(int tileOpen, float openGrowth, int road, int bridge)
         {
             TileOpen = tileOpen;
-            OpenStep = openStep;
-            // Ноль в инспекторе означал бы деление на ноль в цене открытия: считаем его единицей.
-            OpenGroup = openGroup < 1 ? 1 : openGroup;
+            // Рост ниже единицы делал бы каждую следующую плитку дешевле, ноль — бесплатной:
+            // считаем единицей, то есть постоянной ценой.
+            OpenGrowth = openGrowth < 1f ? 1f : openGrowth;
             Road = road;
             Bridge = bridge;
         }
 
-        /// <summary>Цена первой открытой плитки. Дальше растёт по `OpenStep`.</summary>
+        /// <summary>Цена первой открытой плитки. Дальше растёт по <see cref="OpenGrowth"/>.</summary>
         public int TileOpen { get; }
 
-        /// <summary>Надбавка к цене открытия за каждую группу уже открытых плиток.</summary>
-        public int OpenStep { get; }
-
-        /// <summary>Сколько плиток нужно открыть, чтобы цена подросла на шаг.</summary>
-        public int OpenGroup { get; }
+        /// <summary>
+        /// Во сколько раз дорожает открытие с каждой открытой игроком плиткой:
+        /// n-я стоит `TileOpen × OpenGrowth^n` вниз до целого.
+        /// </summary>
+        public float OpenGrowth { get; }
 
         public int Road { get; }
 

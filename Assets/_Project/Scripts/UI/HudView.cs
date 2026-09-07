@@ -97,6 +97,7 @@ namespace Game.UI
 
         int shownSeconds = -1;
         ContractSystem contracts;
+        ScoreMultiplier multiplier;
         Wallet wallet;
         StorageGrid storage;
         StorageView storageView;
@@ -108,6 +109,7 @@ namespace Game.UI
         public void Bind(GameState game, ContractSystem contractSystem, StorageView storage)
         {
             contracts = contractSystem;
+            multiplier = game.Multiplier;
             wallet = game.Wallet;
             this.storage = game.Storage;
             storageView = storage;
@@ -118,7 +120,7 @@ namespace Game.UI
 
             // Слой попапов заводится последним ребёнком: попап встаёт над объектом и должен
             // идти поверх карточек HUD, а порядок рисования в канвасе — это порядок иерархии.
-            popups = PopupView.Create((RectTransform)transform, theme, storage);
+            popups = PopupView.Create((RectTransform)transform, theme, storage, multiplier);
             popups.BindCoin(coinMesh, coinMaterial, coinAngles);
 
             wallet.Changed += Refresh;
@@ -127,6 +129,8 @@ namespace Game.UI
             contracts.Progressed += RefreshContract;
             contracts.Failed += RefreshContract;
             contracts.Completed += OnContractCompleted;
+            // Награда контракта живёт с множителем: открытая плитка меняет её на карточке.
+            multiplier.Changed += RefreshContract;
             Refresh();
         }
 
@@ -236,6 +240,7 @@ namespace Game.UI
             contracts.Progressed -= RefreshContract;
             contracts.Failed -= RefreshContract;
             contracts.Completed -= OnContractCompleted;
+            multiplier.Changed -= RefreshContract;
         }
 
         void Update()

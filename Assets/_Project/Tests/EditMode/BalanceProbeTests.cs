@@ -72,8 +72,8 @@ namespace Game.Tests.EditMode
             text.AppendLine("|---|---|---|---|---|");
             Row(text, "Счёт бота (Total)", runs, run => run.Score.Total);
             Row(text, "Заработано (Earned)", runs, run => run.Score.Earned);
-            Row(text, "Аналитический потолок", runs, run => run.Ceiling);
-            Row(text, "Доля от потолка", runs, run => run.CeilingShare, "0.000");
+            Row(text, "Ресурсный потолок M17 (без множителя)", runs, run => run.Ceiling);
+            Row(text, "Доля от ресурсного потолка", runs, run => run.CeilingShare, "0.000");
             Row(text, "Открыто плиток", runs, run => run.Score.OpenedTiles);
             Row(text, "Достижимых плиток", runs, run => run.Score.FieldTiles);
             Row(text, "Доля открытых", runs, run => run.OpenedShare, "0.000");
@@ -83,6 +83,8 @@ namespace Game.Tests.EditMode
             Row(text, "Потеряно на переполнении", runs, run => run.Score.Lost);
             Row(text, "Контрактов закрыто", runs, run => run.ContractsCompleted);
             Row(text, "Контрактов провалено", runs, run => run.ContractsFailed);
+            Row(text, "Очки контрактов", runs, run => run.ContractPoints);
+            Row(text, "Доля заработка от контрактов", runs, run => run.ContractShare, "0.000");
             Row(text, "Минут партии", runs, run => run.Seconds / 60f, "0.0");
             Row(text, "Мс на сид", runs, run => run.Milliseconds);
             text.AppendLine();
@@ -92,7 +94,21 @@ namespace Game.Tests.EditMode
             text.AppendLine($"Тупиков: {runs.Count(run => run.Deadlock)} из {runs.Count} " +
                             $"({runs.Count(run => run.Deadlock) / (float)runs.Count:P1})");
             text.AppendLine($"Дошли до конца сами: {runs.Count(run => run.Ended)} из {runs.Count}");
-            text.AppendLine($"Средний счёт против потолка M17 (4074): {runs.Average(run => run.Score.Total) / 4074f:P1}");
+            text.AppendLine($"Средний Total против бота M23 (3334.5): {runs.Average(run => run.Score.Total) / 3334.5f:P1}");
+
+            var perfect = runs.Where(run => run.Score.IsPerfect).ToList();
+            if (perfect.Count > 0)
+                text.AppendLine($"Пройденное поле: средний Total {perfect.Average(run => run.Score.Total):0.0}, " +
+                                $"Earned {perfect.Average(run => run.Score.Earned):0.0}, " +
+                                $"минут {perfect.Average(run => run.Seconds / 60f):0.0}");
+
+            var deadlocks = runs.Where(run => run.Deadlock).ToList();
+            if (deadlocks.Count > 0)
+                text.AppendLine($"Тупики: средний Total {deadlocks.Average(run => run.Score.Total):0.0}, " +
+                                $"открыто {deadlocks.Average(run => run.Score.OpenedTiles):0.0}");
+
+            text.AppendLine($"Доля заработка от контрактов по сумме: " +
+                            $"{runs.Sum(run => (long)run.ContractPoints) / (float)runs.Sum(run => (long)run.Score.Earned):P1}");
             return text.ToString();
         }
 

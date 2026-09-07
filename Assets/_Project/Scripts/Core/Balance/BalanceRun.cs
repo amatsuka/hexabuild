@@ -14,6 +14,7 @@ namespace Game.Core.Balance
             int ceiling,
             int contractsCompleted,
             int contractsFailed,
+            int contractPoints,
             float seconds,
             bool ended,
             long milliseconds)
@@ -23,6 +24,7 @@ namespace Game.Core.Balance
             Ceiling = ceiling;
             ContractsCompleted = contractsCompleted;
             ContractsFailed = contractsFailed;
+            ContractPoints = contractPoints;
             Seconds = seconds;
             Ended = ended;
             Milliseconds = milliseconds;
@@ -38,6 +40,12 @@ namespace Game.Core.Balance
         public int ContractsCompleted { get; }
 
         public int ContractsFailed { get; }
+
+        /// <summary>Сколько очков заработка пришло наградами контрактов.</summary>
+        public int ContractPoints { get; }
+
+        /// <summary>Доля заработка от контрактов: «главное давление — таймер» проверяется этим числом.</summary>
+        public float ContractShare => Score.Earned > 0 ? ContractPoints / (float)Score.Earned : 0f;
 
         /// <summary>Сколько игровых секунд шла партия.</summary>
         public float Seconds { get; }
@@ -65,7 +73,7 @@ namespace Game.Core.Balance
 
         public const string CsvHeader =
             "seed;total;earned;ceiling;opened;fieldTiles;exhausted;fieldDeposits;lost;" +
-            "contractsDone;contractsFailed;seconds;perfect;deadlock;ended;ms";
+            "contractsDone;contractsFailed;contractPoints;seconds;perfect;deadlock;ended;ms";
 
         /// <summary>Строка CSV с разделителем `;`: числа в инвариантной культуре.</summary>
         public string ToCsv() => string.Join(";",
@@ -80,6 +88,7 @@ namespace Game.Core.Balance
             Score.Lost.ToString(CultureInfo.InvariantCulture),
             ContractsCompleted.ToString(CultureInfo.InvariantCulture),
             ContractsFailed.ToString(CultureInfo.InvariantCulture),
+            ContractPoints.ToString(CultureInfo.InvariantCulture),
             Seconds.ToString("0.00", CultureInfo.InvariantCulture),
             Score.IsPerfect ? "1" : "0",
             Deadlock ? "1" : "0",

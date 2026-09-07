@@ -70,11 +70,12 @@ namespace Game.Core
             var map = MapGenerator.Generate(config.MapGenerationSettingsFor(seed));
             var wallet = new Wallet(config.StartingPoints);
             var storage = new StorageGrid(config.StorageSize);
-            state = new GameState(map, wallet, storage, config.Prices);
+            var multiplier = config.NewMultiplier();
+            state = new GameState(map, wallet, storage, config.Prices, multiplier);
 
             production = new ProductionSystem(map, state.Roads, config.ExtractionInterval);
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
-            merges = new MergeSystem(storage, wallet, mergeRules);
+            merges = new MergeSystem(storage, wallet, mergeRules, multiplier);
             contracts = new ContractSystem(
                 wallet,
                 mergeRules.CraftedTypes(),
@@ -83,7 +84,8 @@ namespace Game.Core
                 config.ContractReward,
                 config.ContractPauseMin,
                 config.ContractPauseMax,
-                seed);
+                seed,
+                multiplier);
             end = new GameEndSystem(
                 state, mergeRules, deliveries, config.LossPenalty, config.FullFieldBonus, config.FullDepositBonus);
 

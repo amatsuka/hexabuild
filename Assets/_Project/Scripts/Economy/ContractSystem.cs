@@ -9,8 +9,9 @@ namespace Game.Economy
     /// молчит случайную паузу: сплошная очередь контрактов не оставляла игроку ни одной минуты,
     /// когда он играет в своё, а не в чужой заказ. Первый контракт партии выдаётся без паузы (3.8).
     ///
-    /// Провал ничем не штрафует: упущенный бонус и так стоит очков, а штраф поверх него превратил бы
-    /// контракт из возможности в налог на невнимательность.
+    /// Провал не штрафует очками: упущенный бонус и так стоит очков, а штраф поверх него превратил бы
+    /// контракт из возможности в налог на невнимательность. Он снимает ступень серии — той надбавки
+    /// к множителю, которую дают закрытые подряд контракты; награда сама идёт через множитель.
     /// </summary>
     public sealed class ContractSystem
     {
@@ -19,19 +20,22 @@ namespace Game.Economy
         readonly float seconds;
         readonly float minPause;
         readonly float maxPause;
+        readonly int baseReward;
+        readonly ScoreMultiplier multiplier;
         readonly Random random;
 
         public ContractSystem(
             Wallet wallet, IReadOnlyList<ResourceType> craftedTypes, int goal, float seconds, int reward,
-            float minPause, float maxPause, int seed)
+            float minPause, float maxPause, int seed, ScoreMultiplier multiplier)
         {
             this.wallet = wallet;
             this.craftedTypes = craftedTypes;
             this.seconds = seconds;
             this.minPause = minPause;
             this.maxPause = Math.Max(maxPause, minPause);
+            this.multiplier = multiplier;
             Goal = goal;
-            Reward = reward;
+            baseReward = reward;
             random = seed == 0 ? new Random() : new Random(seed);
         }
 
@@ -54,7 +58,11 @@ namespace Game.Economy
 
         public int Goal { get; }
 
-        public int Reward { get; }
+        /// <summary>
+        /// Награда за закрытие сейчас: базовая с множителем партии. Меняется вместе с ним,
+        /// поэтому карточка контракта перечитывает её на каждом изменении множителя.
+        /// </summary>
+        public int Reward => multiplier.Apply(baseReward);
 
         public int Delivered { get; private set; }
 
@@ -99,6 +107,7 @@ namespace Game.Economy
             SecondsLeft = 0f;
             IsActive = false;
             Failed?.Invoke();
+            multiplier.BreakStreak();
             StartPause();
         }
 
@@ -128,10 +137,15 @@ namespace Game.Economy
             if (Delivered < Goal)
                 return;
 
+            // Награда считается по серии до этого контракта: ступень, которую он даёт,
+            // достаётся следующему. Слушатели `Completed` видят множитель таким, каким он
+            // сделал награду, — плашка показывает те же числа, что и кошелёк.
             IsActive = false;
             CompletedCount++;
-            wallet.AddPoints(Reward);
-            Completed?.Invoke(Reward);
+            var reward = Reward;
+            wallet.AddPoints(reward);
+            Completed?.Invoke(reward);
+            multiplier.ExtendStreak();
             StartPause();
         }
     }
