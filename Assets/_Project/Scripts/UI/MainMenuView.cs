@@ -24,6 +24,9 @@ namespace Game.UI
         /// <summary>С запасом ниже `int.MaxValue` (10 цифр), чтобы `int.Parse` не переполнился.</summary>
         const int MaxSeedDigits = 9;
 
+        /// <summary>Фон меню лежит в `Resources` рядом со шрифтами и грузится так же.</summary>
+        const string BackgroundAsset = "main_menu_bg";
+
         const float BannerWidth = 880f;
         const float BannerHeight = 200f;
         const float ButtonWidth = 560f;
@@ -44,6 +47,8 @@ namespace Game.UI
         [SerializeField] UiTheme theme = new();
         [Tooltip("Затемнение под меню: поля ещё нет, экран стоит на пустой сцене")]
         [SerializeField] Color backdropColor = new(0.03f, 0.05f, 0.09f, 0.92f);
+        [Tooltip("Затемнение поверх фоновой картинки: под ним читаются банер и подписи кнопок")]
+        [SerializeField] Color backgroundScrim = new(0.03f, 0.06f, 0.11f, 0.55f);
         [Tooltip("Объект партии (`GameSession`): включается, когда игрок выбрал карту")]
         [SerializeField] GameObject gameRoot;
         [Tooltip("Кампания: список уровней по порядку. Пусто — пункта «Кампания» в меню нет")]
@@ -73,6 +78,7 @@ namespace Game.UI
             }
 
             GetComponent<Image>().color = backdropColor;
+            BuildBackground();
             BuildBanner();
             mainButtonsRoot = BuildMainButtons();
             keypadRoot = BuildKeypad();
@@ -97,6 +103,43 @@ namespace Game.UI
             foreach (var button in buttons)
                 if (button.TryClick(screenPosition))
                     return;
+        }
+
+        /// <summary>
+        /// Фоновая картинка под меню. Кадр обрезается по короткой стороне (`EnvelopeParent`),
+        /// а не вписывается: полей у фона не должно быть ни в портрете, ни в ландшафте.
+        /// Поверх — затемнение: середина кадра светлая, и без него банер и подписи кнопок
+        /// на ней теряются. Картинки может не оказаться — тогда меню остаётся на ровном фоне.
+        /// Строится первым, до банера и кнопок: в uGUI порядок рисования — это порядок детей.
+        /// </summary>
+        void BuildBackground()
+        {
+            var sprite = Resources.Load<Sprite>(BackgroundAsset);
+            if (sprite == null)
+                return;
+
+            var picture = NewImage("Background", sprite, Color.white).rectTransform;
+            picture.anchorMin = picture.anchorMax = picture.pivot = new Vector2(0.5f, 0.5f);
+            picture.anchoredPosition = Vector2.zero;
+
+            var fitter = picture.gameObject.AddComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            fitter.aspectRatio = sprite.rect.width / sprite.rect.height;
+
+            NewImage("Scrim", null, backgroundScrim).rectTransform.Stretch();
+        }
+
+        /// <summary>Прямоугольник картинкой или ровным цветом: спрайта нет — рисуется заливка.</summary>
+        Image NewImage(string name, Sprite sprite, Color color)
+        {
+            var created = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            created.transform.SetParent(transform, false);
+
+            var image = created.GetComponent<Image>();
+            image.sprite = sprite;
+            image.color = color;
+            image.raycastTarget = false;
+            return image;
         }
 
         void BuildBanner()
