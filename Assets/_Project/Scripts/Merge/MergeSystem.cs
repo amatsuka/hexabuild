@@ -59,6 +59,32 @@ namespace Game.Merge
         }
 
         /// <summary>
+        /// Один шаг автодоигрывания склада: продать крафт, а если крафта нет — слить то, чего
+        /// набралось на слияние. Решений в конце партии не остаётся, только доклик, и порядок
+        /// здесь тот же, каким его вёл бы игрок: крафт уходит первым и освобождает клетки,
+        /// а `TryResolve` сам предпочитает пятёрку тройке — счёт выходит тем же максимумом.
+        /// `false` — доигрывать больше нечего.
+        /// </summary>
+        public bool TryPlayOut()
+        {
+            for (var cell = 0; cell < storage.Capacity; cell++)
+            {
+                var content = storage[cell];
+                if (content.HasValue && !rules.CanMerge(content.Value))
+                    return TryConvert(cell);
+            }
+
+            for (var cell = 0; cell < storage.Capacity; cell++)
+            {
+                var content = storage[cell];
+                if (content.HasValue && storage.CountOf(content.Value) >= rules.SmallCount)
+                    return TryMerge(content.Value);
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Клик по крафтовому ресурсу: клетка освобождается, игрок получает очки — базовую цену
         /// крафта с множителем партии на момент клика.
         /// </summary>

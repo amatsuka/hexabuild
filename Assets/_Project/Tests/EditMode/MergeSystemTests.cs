@@ -226,5 +226,69 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(24, wallet.Points);
             CollectionAssert.AreEqual(new[] { 24 }, converted, "плашка показывает то, что легло в кошелёк");
         }
+
+        // --- автодоигрывание склада ---
+
+        [Test]
+        public void PlayOut_SellsCraftBeforeTouchingTheRest()
+        {
+            Fill(ResourceType.Wood, 3);
+            Fill(ResourceType.Board, 1);
+
+            Assert.IsTrue(merges.TryPlayOut());
+
+            Assert.AreEqual(0, storage.CountOf(ResourceType.Board), "крафт уходит первым и освобождает клетку");
+            Assert.AreEqual(3, storage.CountOf(ResourceType.Wood));
+            Assert.AreEqual(15, wallet.Points);
+        }
+
+        [Test]
+        public void PlayOut_MergesWhenThereIsNoCraftLeft()
+        {
+            Fill(ResourceType.Wood, 3);
+
+            Assert.IsTrue(merges.TryPlayOut());
+
+            Assert.AreEqual(0, storage.CountOf(ResourceType.Wood));
+            Assert.AreEqual(1, storage.CountOf(ResourceType.Board));
+        }
+
+        [Test]
+        public void PlayOut_PrefersTheFiveMerge()
+        {
+            Fill(ResourceType.Wood, 5);
+
+            merges.TryPlayOut();
+
+            Assert.AreEqual(2, storage.CountOf(ResourceType.Board), "пятёрка даёт две доски, тройка — одну");
+        }
+
+        [Test]
+        public void PlayOut_TurnsTheWholeTailIntoPoints()
+        {
+            Fill(ResourceType.Wood, 5);
+            Fill(ResourceType.Stone, 3);
+
+            var steps = 0;
+            while (merges.TryPlayOut())
+                steps++;
+
+            Assert.AreEqual(0, storage.Count, "доигрывание кончается пустым складом");
+            Assert.AreEqual(45, wallet.Points, "две доски и щебень — три обмена по 15");
+            Assert.AreEqual(5, steps, "два слияния и три продажи");
+            CollectionAssert.IsEmpty(refusals, "автоход не бьётся в отказы");
+        }
+
+        [Test]
+        public void PlayOut_StopsOnDeadWeight()
+        {
+            Fill(ResourceType.Wood, 2);
+
+            Assert.IsFalse(merges.TryPlayOut(), "двух брёвен не хватает на доску");
+            Assert.AreEqual(2, storage.CountOf(ResourceType.Wood));
+        }
+
+        [Test]
+        public void PlayOut_StopsOnAnEmptyStorage() => Assert.IsFalse(merges.TryPlayOut());
     }
 }

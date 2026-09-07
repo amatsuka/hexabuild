@@ -31,6 +31,13 @@ namespace Game.Core
         [SerializeField] GameOverView gameOverView;
         [SerializeField] PauseView pauseView;
 
+        /// <summary>
+        /// Пауза между автоходами доигрывания. Склад доигрывается не мгновенно: игрок должен
+        /// успеть прочитать, за что пришли последние очки, — иначе финальный экран падает
+        /// поверх непонятно чем закончившейся партии.
+        /// </summary>
+        const float PlayOutStepSeconds = 0.3f;
+
         readonly Dictionary<HexCoord, TileView> views = new();
         readonly Dictionary<Delivery, ResourceMover> movers = new();
         readonly List<HexCoord> path = new();
@@ -40,6 +47,9 @@ namespace Game.Core
 
         /// <summary>Размер экрана, под который камере посчитаны полосы интерфейса.</summary>
         Vector2Int viewport;
+
+        /// <summary>Сколько прошло с прошлого автохода доигрывания.</summary>
+        float playOutTimer;
 
         /// <summary>
         /// Над чем всплывёт отказ. Правило сообщает о нём событием, а место взаимодействия
@@ -257,7 +267,30 @@ namespace Game.Core
             production.Tick(Time.deltaTime);
             deliveries.Tick(Time.deltaTime);
             contracts.Tick(Time.deltaTime);
+            TickPlayOut(Time.deltaTime);
             end.Tick();
+        }
+
+        /// <summary>
+        /// Поле пройдено, и на складе остались только слияния и обмены — партия доигрывает их
+        /// сама, ходом в <see cref="PlayOutStepSeconds"/>. Выбора на этом этапе нет: базовый
+        /// ресурс мержится, крафтовый идёт в очки, и любой порядок даёт один и тот же итог.
+        /// Ручной доклик остаётся: игрок волен кликать те же клетки быстрее автохода.
+        /// </summary>
+        void TickPlayOut(float deltaTime)
+        {
+            if (!end.FieldPassed)
+            {
+                playOutTimer = 0f;
+                return;
+            }
+
+            playOutTimer += deltaTime;
+            if (playOutTimer < PlayOutStepSeconds)
+                return;
+
+            playOutTimer = 0f;
+            merges.TryPlayOut();
         }
 
         void SpawnTiles(HexMap map)

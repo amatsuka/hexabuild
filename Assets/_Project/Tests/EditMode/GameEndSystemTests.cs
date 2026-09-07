@@ -161,6 +161,72 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(end.HasEnded, "месторождений на поле нет вовсе");
         }
 
+        // --- доигрывание склада ---
+
+        /// <summary>Открыть всё, до чего дотягивается доступность: плитки становятся смежными волнами.</summary>
+        static void RevealEverything(GameState state)
+        {
+            bool opened;
+            do
+            {
+                opened = false;
+                foreach (var tile in state.Map.Tiles.Values)
+                    opened |= state.TryRevealTile(tile.Coord);
+            }
+            while (opened);
+        }
+
+        [Test]
+        public void FieldPassed_IsFalseWhileATileIsStillClosed()
+        {
+            var end = EndOf(NewGame(FlatMap()));
+
+            Assert.IsFalse(end.FieldPassed, "неоткрытая плитка ещё может стать дорогой и добычей");
+        }
+
+        [Test]
+        public void FieldPassed_IsTrueWhenEveryTileIsOpenedAndMinedOut()
+        {
+            var state = NewGame(FlatMap(), points: 100000);
+            RevealEverything(state);
+
+            Assert.IsTrue(EndOf(state).FieldPassed, "месторождений на этой карте нет вовсе");
+        }
+
+        [Test]
+        public void FieldPassed_IsFalseWhileATileKeepsItsReserve()
+        {
+            var state = NewGame(
+                FlatMap(deposits: c => c == new HexCoord(0, 1) ? Stone(5) : null), points: 100000);
+            RevealEverything(state);
+
+            Assert.IsFalse(EndOf(state).FieldPassed, "к плитке с запасом ещё можно дотянуть дорогу");
+        }
+
+        [Test]
+        public void FieldPassed_IsFalseWhileAResourceIsOnTheWay()
+        {
+            var state = NewGame(FlatMap(), points: 100000);
+            RevealEverything(state);
+            deliveries.Send(ResourceType.Stone, new[] { new HexCoord(0, 1), HexCoord.Zero });
+
+            Assert.IsFalse(EndOf(state).FieldPassed, "доигрывать рано, пока ресурс едет");
+        }
+
+        [Test]
+        public void DeadEnd_EndsTheGameButIsNotAPassedField()
+        {
+            // щебня нет, плитки закрыты: партия кончится сама, но склад доигрывать за игрока
+            // нельзя — там его последний щебень, и это его решение, дорога или очки.
+            var state = NewGame(FlatMap(deposits: c => c == new HexCoord(0, 1) ? Stone(5) : null), gravel: 1);
+            var end = EndOf(state);
+
+            end.Tick();
+
+            Assert.IsFalse(end.FieldPassed);
+            Assert.IsFalse(end.HasEnded, "щебень на складе сам по себе стоит очков");
+        }
+
         // --- счёт ---
 
         [Test]

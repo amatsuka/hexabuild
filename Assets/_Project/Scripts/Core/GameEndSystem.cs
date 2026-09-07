@@ -88,6 +88,17 @@ namespace Game.Core
         }
 
         /// <summary>
+        /// Поле пройдено насквозь: ничего не едет, а каждая достижимая плитка открыта и
+        /// выработана. Взять на поле больше нечего и нечем — что бы игрок ни сделал со складом.
+        /// Остаток склада в этом состоянии не решение, а доклик, и партия доигрывает его сама:
+        /// искать глазами забытый слиток игрок не должен.
+        ///
+        /// Тупик сюда намеренно не попадает: пока на поле есть неоткрытая плитка, щебень со
+        /// склада ещё может стать дорогой к ней, и распоряжаться им игрок должен сам.
+        /// </summary>
+        public bool FieldPassed => deliveries.Active.Count == 0 && IsFieldExhausted();
+
+        /// <summary>
         /// Ещё есть действие, способное дать очки. Отдельного вопроса «а хватит ли на дорогу или
         /// на открытие» здесь нет, и он не нужен: щебень на дорогу — тот же щебень, что меняется
         /// на очки, поэтому любой запас на постройку уже виден как обмениваемый ресурс. Нет
@@ -95,6 +106,21 @@ namespace Game.Core
         /// </summary>
         bool CanStillEarn() =>
             deliveries.Active.Count > 0 || HasCashableResource() || HasProducingTile();
+
+        /// <summary>Каждая достижимая плитка открыта и выработана: поле отдало всё.</summary>
+        bool IsFieldExhausted()
+        {
+            foreach (var tile in reachable)
+            {
+                if (tile.IsMetropolis)
+                    continue;
+
+                if (tile.State != TileState.Revealed || !tile.IsExhausted)
+                    return false;
+            }
+
+            return true;
+        }
 
         /// <summary>Крафт на складе меняется на очки сразу, базовый — после слияния.</summary>
         bool HasCashableResource()
