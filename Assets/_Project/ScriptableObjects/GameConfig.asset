@@ -22,8 +22,8 @@ MonoBehaviour:
   minDepositReserve: 8
   maxDepositReserve: 20
   reserveRowGrowth: 0.06
-  extractionInterval: 3
-  deliverySecondsPerTile: 1
+  extractionInterval: 1.5
+  deliverySecondsPerTile: 0.5
   storageSize: 24
   tileOpenCost: 20
   openCostGrowth: 1.04
@@ -36,7 +36,9 @@ MonoBehaviour:
   startingGravel: 3
   contractGoal: 3
   contractSeconds: 45
-  contractReward: 120
+  contractReward: 160
+  contractPauseMin: 4
+  contractPauseMax: 10
   milestoneShares:
   - 0.25
   - 0.5

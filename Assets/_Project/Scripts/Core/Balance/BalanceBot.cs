@@ -110,8 +110,18 @@ namespace Game.Core.Balance
                 end.Tick();
                 seconds += StepSeconds;
 
-                if (!end.HasEnded)
-                    Decide();
+                if (end.HasEnded)
+                    continue;
+
+                // Пройденное поле доигрывает склад само — так же, как `GameSession`. Без этого
+                // бот виснет на придержанном щебне до предела времени: `GameEndSystem` считает
+                // щебень обмениваемым и конца не объявляет, а `Decide` его бережёт под дорогу,
+                // которой уже некуда идти. На счёт это не влияло — в хвосте не зарабатывается
+                // ничего, — но `Seconds` уезжали в разы, и длину партии по ним читать было нельзя.
+                if (end.FieldPassed)
+                    merges.TryPlayOut();
+
+                Decide();
             }
 
             watch.Stop();

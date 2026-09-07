@@ -19,8 +19,8 @@ MonoBehaviour:
   reserveScale: 1.6
   contractGoal: 5
   contractSeconds: 38
-  extractionInterval: 2.7
-  botCeiling: 63908
+  extractionInterval: 1.2
+  botCeiling: 66502
   oneStarShare: 0.5
   twoStarShare: 0.75
   threeStarShare: 1
