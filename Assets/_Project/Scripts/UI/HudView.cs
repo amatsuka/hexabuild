@@ -47,6 +47,20 @@ namespace Game.UI
         const float ProgressWidth = 76f;
         const float BarInset = 3f;
 
+        /// <summary>
+        /// Бар до потолка партии — своя узкая карточка под карточкой очков, шириной с неё.
+        /// Внутрь карточки очков он не влез бы: крупное число и монета заняли её целиком, а
+        /// звёздам и подписи «рекорд карты» там места нет вовсе.
+        /// </summary>
+        const float CeilingCardHeight = 78f;
+        const float CeilingCardGap = 12f;
+        const float CeilingPadding = 16f;
+        const float CeilingBarHeight = 24f;
+        const float CeilingCaptionHeight = 30f;
+        /// <summary>Ширина колонки под процент справа от подписи «рекорд карты».</summary>
+        const float CeilingPercentWidth = 100f;
+        const float StarSize = 26f;
+
         [SerializeField] UiTheme theme = new();
 
         [Header("Иконки HUD")]
@@ -74,11 +88,27 @@ namespace Game.UI
         [SerializeField] float deliveryArc = 140f;
         [Tooltip("Во сколько раз иконка цели подскакивает, приняв ресурс")]
         [SerializeField, Range(1f, 1.6f)] float goalPunch = 1.35f;
+        [Tooltip("Во сколько раз бар подскакивает на пройденной вехе")]
+        [SerializeField, Range(1f, 1.4f)] float milestonePunch = 1.14f;
 
         readonly TextMeshProUGUI[] stripCounts = new TextMeshProUGUI[StripTypes.Length];
 
         TextMeshProUGUI pointsValue;
         RectTransform pointsCard;
+        RectTransform ceilingCard;
+        RectTransform ceilingTrack;
+        UiPanelGraphic ceilingFill;
+        TextMeshProUGUI ceilingPercent;
+        TextMeshProUGUI ceilingRecord;
+        StarGraphic[] ceilingStars;
+        float[] starShares;
+
+        /// <summary>Потолок партии в очках: доли звёзд и вех считаются от него. Ноль — бара нет.</summary>
+        int ceiling;
+
+        /// <summary>Залит ли бар золотом рекорда: перекрашивать его каждый кадр незачем.</summary>
+        bool goldFill;
+
         RectTransform contractCard;
         ResourceIcon contractIcon;
         TextMeshProUGUI contractGoal;
@@ -105,16 +135,24 @@ namespace Game.UI
         /// <summary>
         /// Склад передаётся сюда не ради данных, а ради иконок: снимки моделей печёт он, и
         /// второй такой же пекарь на партию — это второй набор `RenderTexture` ни за чем.
+        ///
+        /// Потолок партии приходит готовым числом: в кампании он лежит в `LevelConfig`, вне её
+        /// снят ботом на старте — считать его HUD не вправе. Доли звёзд есть только у уровня
+        /// кампании: вне её звёзд не выдают, и обещать их отметками на баре было бы враньём.
         /// </summary>
-        public void Bind(GameState game, ContractSystem contractSystem, StorageView storage)
+        public void Bind(
+            GameState game, ContractSystem contractSystem, StorageView storage, int gameCeiling, float[] stars)
         {
             contracts = contractSystem;
             multiplier = game.Multiplier;
             wallet = game.Wallet;
             this.storage = game.Storage;
             storageView = storage;
+            ceiling = gameCeiling;
+            starShares = stars;
 
             BuildPointsCard();
+            BuildCeilingCard();
             BuildResourceStrip();
             BuildContractCard();
 
@@ -142,7 +180,11 @@ namespace Game.UI
         {
             get
             {
-                var canvas = pointsCard != null ? pointsCard.GetComponentInParent<Canvas>() : null;
+                // Нижняя карточка левой колонки, а не карточка очков: бар потолка висит под ней
+                // и тоже закрывает поле. Карточку контракта здесь по-прежнему не считают — она
+                // приходит и уходит, и камера ходила бы за ней.
+                var lowest = ceilingCard != null ? ceilingCard : pointsCard;
+                var canvas = lowest != null ? lowest.GetComponentInParent<Canvas>() : null;
                 if (canvas == null)
                     return 0f;
 
@@ -151,7 +193,7 @@ namespace Game.UI
                 // того, как канвас узнал размер окна. Вырез под чёлку учтён: полосу в него уже
                 // не пустил `SafeAreaFitter`.
                 var corners = new Vector3[4];
-                pointsCard.GetWorldCorners(corners);
+                lowest.GetWorldCorners(corners);
                 var cardBottom = corners[0].y;
 
                 ((RectTransform)canvas.transform).GetWorldCorners(corners);
@@ -404,6 +446,150 @@ namespace Game.UI
             pointsValue = UiText.Bold("Value", card, theme, 62f, theme.Gold, TextAlignmentOptions.Right);
             pointsValue.Stretch(22f + CoinSize + 10f, 26f, 0f, 0f);
         }
+
+        /// <summary>
+        /// Бар до потолка партии: жёлоб с заливкой, процент справа сверху и подпись «рекорд
+        /// карты» слева от него, а на самом жёлобе — звёзды уровня на своих долях. Вехи своих
+        /// отметок не имеют намеренно: их доли (25 / 50 / 75%) наложились бы на звёздные
+        /// (50 / 75 / 100%), и одна полоса читалась бы двумя разметками сразу. Веха проявляется
+        /// моментом — вспышкой бара и попапом, — а постоянная разметка на нём одна, звёздная.
+        ///
+        /// Потолка нет — нет и карточки: показывать долю не от чего.
+        /// </summary>
+        void BuildCeilingCard()
+        {
+            if (ceiling <= 0)
+                return;
+
+            var card = ceilingCard = UiPanel.Create("Ceiling", transform, theme).rectTransform;
+            Place(card, new Vector2(0f, 1f), new Vector2(Margin, -(Margin + TopHeight + CeilingCardGap)),
+                new Vector2(PointsWidth, CeilingCardHeight));
+
+            var inner = PointsWidth - CeilingPadding * 2f;
+
+            // Подпись появляется только за 100%: до него она пустует, и место под ней занимает
+            // сам бар, а не строка «пока не рекорд».
+            ceilingRecord = UiText.Bold(
+                "Record", card, theme, 22f, theme.Gold, TextAlignmentOptions.Left);
+            Place(ceilingRecord.rectTransform, new Vector2(0f, 1f), new Vector2(CeilingPadding, -8f),
+                new Vector2(inner - CeilingPercentWidth, CeilingCaptionHeight));
+            ceilingRecord.text = "рекорд карты";
+            ceilingRecord.enabled = false;
+
+            ceilingPercent = UiText.Bold("Percent", card, theme, 26f, theme.Text, TextAlignmentOptions.Right);
+            Place(ceilingPercent.rectTransform, new Vector2(0f, 1f),
+                new Vector2(PointsWidth - CeilingPadding - CeilingPercentWidth, -8f),
+                new Vector2(CeilingPercentWidth, CeilingCaptionHeight));
+
+            var track = ceilingTrack = UiPanel.Create("Bar", card, theme, theme.BarTrack).rectTransform;
+            Place(track, new Vector2(0f, 1f), new Vector2(CeilingPadding, -44f),
+                new Vector2(inner, CeilingBarHeight));
+
+            ceilingFill = UiPanel.Create("Fill", track, theme, theme.CeilingFill);
+            var fill = ceilingFill.rectTransform;
+            fill.anchorMin = Vector2.zero;
+            fill.anchorMax = new Vector2(0f, 1f);
+            fill.offsetMin = new Vector2(BarInset, BarInset);
+            fill.offsetMax = new Vector2(-BarInset, -BarInset);
+
+            BuildStars(track, inner);
+        }
+
+        /// <summary>
+        /// Звёзды уровня стоят на жёлобе, каждая на своей доле потолка: игрок видит не только
+        /// «сколько набрал», но и «дотягиваю ли до второй». Заводятся после заливки — порядок
+        /// рисования в канвасе это порядок иерархии, и заведённые раньше ушли бы под неё.
+        /// </summary>
+        void BuildStars(RectTransform track, float width)
+        {
+            if (starShares == null || starShares.Length == 0)
+                return;
+
+            ceilingStars = new StarGraphic[starShares.Length];
+            for (var i = 0; i < starShares.Length; i++)
+            {
+                var star = ceilingStars[i] = StarGraphic.Create($"Star {i + 1}", track, StarSize, theme.Muted);
+
+                // Звезда стоит центром на своей доле: у трёх звёзд она же и правый торец жёлоба,
+                // и звезда садится на него, наполовину свесившись, — так и должно быть.
+                var rect = star.rectTransform;
+                rect.anchorMin = rect.anchorMax = new Vector2(0f, 0.5f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.anchoredPosition = new Vector2(width * starShares[i], 0f);
+            }
+        }
+
+        /// <summary>
+        /// Счёт изменился: бар показывает долю от потолка. За 100% полоса упирается в край и
+        /// перекрашивается в золото — дальше расти ей некуда, а разница между «дотянул» и
+        /// «обыграл бота» обязана быть видна. Процент при этом за 100% уходит: он и есть то,
+        /// насколько игрок ушёл вперёд.
+        /// </summary>
+        public void ShowProgress(int total)
+        {
+            if (ceilingCard == null)
+                return;
+
+            var share = total / (float)ceiling;
+            ceilingPercent.text = HudFormat.Percent(share);
+
+            var record = share >= 1f;
+            ceilingRecord.enabled = record;
+            ceilingPercent.color = record ? theme.Gold : theme.Text;
+
+            var filled = Mathf.Clamp01(share);
+            ceilingFill.enabled = filled > 0f;
+            ceilingFill.rectTransform.anchorMax = new Vector2(filled, 1f);
+            SetFillGold(record);
+
+            if (ceilingStars == null)
+                return;
+
+            for (var i = 0; i < ceilingStars.Length; i++)
+                ceilingStars[i].color = share >= starShares[i] ? theme.Gold : theme.Muted;
+        }
+
+        /// <summary>
+        /// Пройдена веха: плашка над баром и его короткий подскок. Отдельной анимации у вехи
+        /// нет — решение человека: третий вид празднования игроку не нужен, а плашка прибавки
+        /// уже читается как начисление.
+        /// </summary>
+        public void PlayMilestone(float share, int gravel)
+        {
+            if (ceilingCard == null)
+                return;
+
+            popups.ShowMilestone(share, gravel, PopupView.Anchor.On(ceilingCard));
+
+            if (isActiveAndEnabled)
+                StartCoroutine(FlashCeilingBar());
+        }
+
+        /// <summary>Вспышка бара: заливка на миг уходит в золото и подскакивает вместе с жёлобом.</summary>
+        IEnumerator FlashCeilingBar()
+        {
+            ApplyFill(true);
+            yield return Punch(ceilingTrack, milestonePunch);
+
+            // Возвращается то, что бару положено по счёту: вспышка могла застать его уже золотым.
+            ApplyFill(goldFill);
+        }
+
+        /// <summary>
+        /// Цвет заливки по счёту. Стиль применяется только на смене: `Apply` пересобирает меш
+        /// графики, а счёт меняется каждым обменом.
+        /// </summary>
+        void SetFillGold(bool gold)
+        {
+            if (goldFill == gold)
+                return;
+
+            goldFill = gold;
+            ApplyFill(gold);
+        }
+
+        void ApplyFill(bool gold) =>
+            ceilingFill.Apply(theme.PanelShader, gold ? theme.BarFill : theme.CeilingFill);
 
         void BuildResourceStrip()
         {

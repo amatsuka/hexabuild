@@ -78,6 +78,10 @@ namespace Game.UI
         [SerializeField] Color barTrack = new(0.02f, 0.10f, 0.20f, 0.78f);
         [SerializeField] Color barFillTop = new(1f, 0.90f, 0.48f, 1f);
         [SerializeField] Color barFillBottom = new(0.98f, 0.68f, 0.16f, 1f);
+        [Tooltip("Заливка бара потолка до 100%: холодная, чтобы золото рекорда читалось сменой цвета, " +
+                 "а не только длиной полосы")]
+        [SerializeField] Color ceilingFillTop = new(0.56f, 0.94f, 0.78f, 1f);
+        [SerializeField] Color ceilingFillBottom = new(0.16f, 0.62f, 0.52f, 1f);
 
         [Header("Текст")]
         [SerializeField] Color text = new(0.97f, 0.99f, 1f);
@@ -161,6 +165,14 @@ namespace Game.UI
         /// <summary>Заливка полосы прогресса: золото градиентом.</summary>
         public UiPanelStyle BarFill => new(
             barFillTop, barFillBottom, Color.clear, Color.clear, 12f, 0f, 0f, 0f, 0f, highlightSpread, 0f, 0f, 0f, 0f, lightDirection);
+
+        /// <summary>
+        /// Заливка бара до потолка: холодная градиентом. Золото <see cref="BarFill"/> приберегается
+        /// рекорду карты — иначе выход за 100% нечем показать, кроме упёршейся в край полосы.
+        /// </summary>
+        public UiPanelStyle CeilingFill => new(
+            ceilingFillTop, ceilingFillBottom, Color.clear, Color.clear, 12f, 0f, 0f, 0f, 0f, highlightSpread,
+            0f, 0f, 0f, 0f, lightDirection);
 
         public Color Text => text;
 

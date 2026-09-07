@@ -37,6 +37,11 @@ MonoBehaviour:
   contractGoal: 3
   contractSeconds: 45
   contractReward: 120
+  milestoneShares:
+  - 0.25
+  - 0.5
+  - 0.75
+  milestoneGravel: 3
   lossPenalty: 10
   fullFieldBonus: 500
   fullDepositBonus: 500

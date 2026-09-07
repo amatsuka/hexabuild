@@ -37,5 +37,19 @@ namespace Game.Tests.EditMode
         [TestCase(-0.25f, "−0.25")]
         public void Bonus_CarriesItsSign(float value, string expected) =>
             Assert.That(HudFormat.Bonus(value), Is.EqualTo(expected));
+
+        /// <summary>
+        /// Вниз до целого: на 99.6% бар ещё не рекорд, и подпись «100%» спорила бы с ним самим.
+        /// За 100% процент растёт дальше — этим и показан выход за потолок.
+        /// </summary>
+        [TestCase(0f, "0%")]
+        [TestCase(0.25f, "25%")]
+        [TestCase(0.786f, "78%")]
+        [TestCase(0.996f, "99%")]
+        [TestCase(1f, "100%")]
+        [TestCase(1.124f, "112%")]
+        [TestCase(-0.3f, "0%")]
+        public void Percent_IsFlooredToWholes(float share, string expected) =>
+            Assert.That(HudFormat.Percent(share), Is.EqualTo(expected));
     }
 }

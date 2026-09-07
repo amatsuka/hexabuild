@@ -35,6 +35,13 @@ namespace Game.UI
         /// <summary>Множитель с двумя знаками: «×1.35». Точка, а не запятая: так он записан в плане и на плашке.</summary>
         public static string Multiplier(float value) => "×" + value.ToString("0.00", CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// Доля потолка целыми процентами: «78%». Вниз до целого — иначе бар на 99.6% писал бы
+        /// «100%», не будучи рекордом, и подпись спорила бы с самой полосой.
+        /// </summary>
+        public static string Percent(float share) =>
+            (int)System.Math.Floor(System.Math.Max(share, 0f) * 100f) + "%";
+
         /// <summary>Надбавка к множителю со знаком: «+0.25».</summary>
         public static string Bonus(float value) =>
             (value < 0f ? "−" : "+") + System.Math.Abs(value).ToString("0.00", CultureInfo.InvariantCulture);

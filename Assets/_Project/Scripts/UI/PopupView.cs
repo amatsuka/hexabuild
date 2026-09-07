@@ -42,6 +42,12 @@ namespace Game.UI
         const float IconSize = 46f;
         const float ConfirmSize = 60f;
 
+        /// <summary>Плашка вехи в две строки: «Веха 50%» и что за неё дали. Иконка справа, как у прибавки.</summary>
+        const float MilestoneWidth = 300f;
+        const float MilestoneHeight = 116f;
+        const float MilestoneTitleHeight = 44f;
+        const float MilestoneRewardHeight = 38f;
+
         /// <summary>Сколько живёт попап, который никто не закрывает: прибавка, награда, отказ.</summary>
         const float ShowSeconds = 2f;
 
@@ -156,6 +162,39 @@ namespace Game.UI
             Place((RectTransform)icon.transform, new Vector2(1f, 0.5f), new Vector2(-Padding, 0f),
                 new Vector2(IconSize, IconSize));
             icons.ShowIcon(icon, source);
+
+            Show(popup, true);
+        }
+
+        /// <summary>
+        /// Пройдена веха: над баром встаёт плашка в две строки — какая доля потолка взята и
+        /// сколько щебня за это дали. Своей анимации у вехи нет, празднование идёт этим попапом
+        /// и вспышкой самого бара: третий вид всплывающего сообщения игроку не нужен, а плашка
+        /// прибавки уже читается как «тебе что-то начислили».
+        /// </summary>
+        public void ShowMilestone(float share, int gravel, in Anchor anchor)
+        {
+            if (!anchor.Exists)
+                return;
+
+            var popup = Push(anchor, MilestoneWidth);
+            popup.Rect.sizeDelta = new Vector2(MilestoneWidth, MilestoneHeight);
+            var textWidth = MilestoneWidth - Padding * 2f - IconSize - 8f;
+
+            var title = UiText.Bold("Title", popup.Rect, theme, 34f, theme.Gold, TextAlignmentOptions.Left);
+            Place(title.rectTransform, new Vector2(0f, 1f), new Vector2(Padding, -Padding),
+                new Vector2(textWidth, MilestoneTitleHeight));
+            title.text = "Веха " + HudFormat.Percent(share);
+
+            var reward = UiText.Bold("Reward", popup.Rect, theme, 30f, theme.Good, TextAlignmentOptions.Left);
+            Place(reward.rectTransform, new Vector2(0f, 1f), new Vector2(Padding, -Padding - MilestoneTitleHeight),
+                new Vector2(textWidth, MilestoneRewardHeight));
+            reward.text = HudFormat.Gain(gravel) + " щебня";
+
+            var icon = ResourceIcon.Create("Icon", popup.Rect, IconSize);
+            Place((RectTransform)icon.transform, new Vector2(1f, 0.5f), new Vector2(-Padding, 0f),
+                new Vector2(IconSize, IconSize));
+            icons.ShowIcon(icon, ResourceType.Gravel);
 
             Show(popup, true);
         }

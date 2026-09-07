@@ -63,6 +63,12 @@ namespace Game.Core
         [SerializeField] float contractPauseMin = 5f;
         [SerializeField] float contractPauseMax = 20f;
 
+        [Header("Вехи")]
+        [Tooltip("Доли потолка, на которых партия выдаёт награду за веху. Шкала звёзд своя")]
+        [SerializeField] float[] milestoneShares = { 0.25f, 0.5f, 0.75f };
+        [Tooltip("Сколько щебня даёт пройденная веха")]
+        [SerializeField] int milestoneGravel = 3;
+
         [Header("Финальный счёт")]
         [Tooltip("Штраф за каждый ресурс, уничтоженный переполненным складом")]
         [SerializeField] int lossPenalty = 10;
@@ -109,8 +115,18 @@ namespace Game.Core
 
         public PriceSettings Prices => new(tileOpenCost, openCostGrowth, roadCost, bridgeCost);
 
+        /// <summary>Сколько щебня приносит пройденная веха.</summary>
+        public int MilestoneGravel => milestoneGravel;
+
         /// <summary>Множитель очков на партию: свой у каждой, как кошелёк.</summary>
         public ScoreMultiplier NewMultiplier() => new(multiplierStep, streakStep, streakMax);
+
+        /// <summary>
+        /// Вехи на партию: доли отсюда, потолок — от уровня кампании или от бота, прогнанного
+        /// на старте. Свои у каждой партии по той же причине, что и множитель: они помнят
+        /// пройденное.
+        /// </summary>
+        public Milestones NewMilestones(int ceiling) => new(milestoneShares, ceiling);
 
         public MapGenerationSettings MapGenerationSettings => MapGenerationSettingsFor(seed);
 

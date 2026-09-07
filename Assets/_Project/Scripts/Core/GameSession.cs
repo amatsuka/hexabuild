@@ -56,6 +56,12 @@ namespace Game.Core
         /// <summary>Уровень кампании этой партии. Пусто — свободная игра.</summary>
         LevelConfig level;
 
+        /// <summary>Потолок партии в очках: счёт бота на этой карте. От него считаются звёзды и вехи.</summary>
+        int ceiling;
+
+        /// <summary>Вехи этой партии: доли потолка, за которые платят щебнем.</summary>
+        Milestones milestones;
+
         /// <summary>Одно вью на всю дорожную сеть: меш у неё общий.</summary>
         RoadView roadView;
 
@@ -96,12 +102,67 @@ namespace Game.Core
             end = new GameEndSystem(
                 state, mergeRules, deliveries, config.LossPenalty, config.FullFieldBonus, config.FullDepositBonus);
 
+            ceiling = MeasureCeiling();
+            milestones = config.NewMilestones(ceiling);
+
             SpawnTiles(map);
             SpawnWater(map);
             storageView.Bind(storage);
-            hudView.Bind(state, contracts, storageView);
+            hudView.Bind(state, contracts, storageView, ceiling, StarShares());
             gameOverView.Bind(storageView, production, contracts);
             pauseView.Bind(storageView);
+        }
+
+        /// <summary>
+        /// Потолок партии в очках. В кампании он снят ботом заранее и лежит в ассете уровня —
+        /// его же сверяет `CampaignTests`. Вне кампании уровня нет, и бот прогоняется прямо
+        /// здесь: без потолка «Случайная карта» и «Ввести сид» остались бы без единственной
+        /// мерки, с которой игрок может сравнить свой счёт. Прогон стоит десятки миллисекунд
+        /// на 14 рядах и до сотни на 18 — это задержка перед первым кадром, решение человека
+        /// 07.09.2026.
+        /// </summary>
+        int MeasureCeiling() =>
+            level != null && level.BotCeiling > 0
+                ? level.BotCeiling
+                : new Balance.BalanceBot(config, mergeRules, seed, level).Play().Score.Total;
+
+        /// <summary>
+        /// Доли звёзд для отметок на баре. Вне кампании звёзд не выдают вовсе — и обещать их
+        /// отметками бар не вправе: там он показывает только долю потолка.
+        /// </summary>
+        float[] StarShares() => level != null
+            ? new[] { level.OneStarShare, level.TwoStarShare, level.ThreeStarShare }
+            : null;
+
+        /// <summary>
+        /// Счёт партии изменился: бар показывает его долю от потолка, а вехи проверяют, не
+        /// перешагнул ли он свою отметку. Счёт здесь — тот же `BuildScore().Total`, который
+        /// покажет финальный экран: считай бар одно, а итог другое, и звёзды на баре разошлись
+        /// бы со звёздами на финальном экране.
+        /// </summary>
+        void RefreshProgress()
+        {
+            var total = end.BuildScore().Total;
+            hudView.ShowProgress(total);
+            milestones.Report(total);
+        }
+
+        /// <summary>
+        /// Веха пройдена: щебень на склад и празднование на баре. Награда идёт щебнем, а не
+        /// очками: очки за веху двигали бы сам счёт, по которому веха и считается. На полный
+        /// склад щебень не кладётся — переполнение уничтожает ресурс и штрафует счёт, и награда
+        /// обернулась бы наказанием; сколько щебня реально легло, столько и показывает плашка.
+        /// </summary>
+        void OnMilestoneReached(float share)
+        {
+            var given = 0;
+            while (given < config.MilestoneGravel && state.Storage.Count < state.Storage.Capacity)
+            {
+                state.Storage.TryStore(ResourceType.Gravel);
+                given++;
+            }
+
+            hudView.PlayMilestone(share, given);
         }
 
         void OnEnable()
@@ -112,6 +173,10 @@ namespace Game.Core
             state.TileChanged += OnTileChanged;
             state.ActionRefused += ShowRefusal;
             state.Roads.Changed += OnRoadsChanged;
+            // Счёт растёт обменом, а проседает потерей на складе: бар слушает оба источника.
+            state.Wallet.Changed += RefreshProgress;
+            state.Storage.Changed += RefreshProgress;
+            milestones.Reached += OnMilestoneReached;
             production.Produced += OnProduced;
             production.TileDepleted += OnTileChanged;
             deliveries.Started += OnDeliveryStarted;
@@ -135,6 +200,9 @@ namespace Game.Core
             state.TileChanged -= OnTileChanged;
             state.ActionRefused -= ShowRefusal;
             state.Roads.Changed -= OnRoadsChanged;
+            state.Wallet.Changed -= RefreshProgress;
+            state.Storage.Changed -= RefreshProgress;
+            milestones.Reached -= OnMilestoneReached;
             production.Produced -= OnProduced;
             production.TileDepleted -= OnTileChanged;
             deliveries.Started -= OnDeliveryStarted;
@@ -162,6 +230,10 @@ namespace Game.Core
             state.Begin();
             for (var i = 0; i < config.StartingGravel; i++)
                 state.Storage.TryStore(ResourceType.Gravel);
+
+            // Бар рисуется нулём до первого обмена: карточка стоит на месте с самого начала,
+            // иначе верх экрана перекладывался бы на глазах у первой же прибавки.
+            RefreshProgress();
 
             // Первый контракт партии идёт без паузы (3.8). Дальше система выдаёт их сама,
             // отмолчав между ними случайную паузу.
