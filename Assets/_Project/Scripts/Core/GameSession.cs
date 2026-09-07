@@ -65,6 +65,12 @@ namespace Game.Core
 
         int refusalCell = -1;
 
+        /// <summary>
+        /// Плитка, за которую сейчас висит подтверждение открытия. Второй тап именно по ней —
+        /// и есть согласие, поэтому её координата живёт рядом с попапом, пока он не снят.
+        /// </summary>
+        HexCoord? askedTile;
+
         /// <summary>Что прижато пальцем прямо сейчас. Указатель один, поэтому и цель одна.</summary>
         TileView pressedTile;
 
@@ -393,9 +399,6 @@ namespace Game.Core
             if (pauseView.HandlePress(screenPosition))
                 return;
 
-            if (hudView.Popups.TryPress(screenPosition))
-                return;
-
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
                 // Пустая клетка не отзывается: по ней и клик ничего не делает.
@@ -426,7 +429,6 @@ namespace Game.Core
         {
             gameOverView.ReleasePress();
             pauseView.ReleasePress();
-            hudView.Popups.ReleasePress();
 
             if (pressedCell >= 0)
             {
@@ -459,10 +461,22 @@ namespace Game.Core
             if (pauseView.HandleClick(screenPosition))
                 return;
 
-            // Пока висит подтверждение открытия, клик принадлежит ему: по галочке — открыть,
-            // мимо — только закрыть, не выполняя того, по чему попали.
-            if (hudView.Popups.TryClick(screenPosition))
+            // Пока висит ценник открытия, клик принадлежит ему. Согласие — второй тап по той
+            // же плитке: гекс под пальцем большой, а прицел в кнопку на темпе партии стоит
+            // дороже самого открытия. Всё прочее снимает ценник, ничего не выполняя, — и
+            // соседняя плитка тоже: открыть её тем же тапом, которым игрок передумал, значило
+            // бы платить за промах.
+            if (hudView.Popups.IsAsking)
+            {
+                if (askedTile.HasValue
+                    && !storageView.ContainsScreenPoint(screenPosition)
+                    && TileUnderPointer(screenPosition) == askedTile.Value)
+                    hudView.Popups.AcceptAsk();
+                else
+                    hudView.Popups.CancelAsk();
+
                 return;
+            }
 
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
@@ -490,10 +504,11 @@ namespace Game.Core
         }
 
         /// <summary>
-        /// Клик по полю. Открытие плитки стоит очков и потому спрашивает подтверждения попапом
-        /// над самой плиткой; дорога и отказы идут сразу — щебень столько не весит, а отказ и
-        /// есть ответ. Цену попап берёт до клика: она растёт по ходу партии (3.1), и показать
-        /// её ровно там, где игрок целится, — единственное место, где она ему нужна.
+        /// Клик по полю. Открытие плитки стоит очков и потому идёт в два тапа: первый вешает
+        /// ценник над самой плиткой, второй по ней же открывает. Дорога и отказы идут сразу —
+        /// щебень столько не весит, а отказ и есть ответ. Цену попап берёт до клика: она растёт
+        /// по ходу партии (3.1), и показать её ровно там, где игрок целится, — единственное
+        /// место, где она ему нужна.
         /// </summary>
         void OnFieldClicked(HexCoord coord)
         {
@@ -506,6 +521,7 @@ namespace Game.Core
 
             if (tile.State == TileState.Available && tile.IsPassable)
             {
+                askedTile = coord;
                 hudView.Popups.Ask(state.NextTileCost, refusalAnchor, () => state.TryRevealTile(coord));
                 return;
             }

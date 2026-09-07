@@ -27,7 +27,11 @@ namespace Game.UI
 
         const float MessageWidth = 430f;
         const float GainWidth = 360f;
-        const float AskWidth = 232f;
+        /// <summary>
+        /// Потолок ценника: монета, зазор и цена в четыре знака. Фактическая ширина считается
+        /// по самому числу — цена растёт по ходу партии, и ценник ужимается под неё.
+        /// </summary>
+        const float AskWidth = 190f;
         const float MinHeight = 84f;
 
         /// <summary>
@@ -40,7 +44,6 @@ namespace Game.UI
         const float GainFactorHeight = 42f;
         const float GainDetailHeight = 28f;
         const float IconSize = 46f;
-        const float ConfirmSize = 60f;
 
         /// <summary>Плашка вехи в две строки: «Веха 50%» и что за неё дали. Иконка справа, как у прибавки.</summary>
         const float MilestoneWidth = 300f;
@@ -74,13 +77,15 @@ namespace Game.UI
         Material coinMaterial;
         Vector3 coinAngles;
 
-        /// <summary>Попап подтверждения: он один, срока жизни не имеет и ждёт клика.</summary>
+        /// <summary>Ценник открытия: он один, срока жизни не имеет и ждёт ответа.</summary>
         Popup asking;
 
-        UiButton confirm;
         Action confirmed;
 
-        /// <summary>Ждём ли мы сейчас подтверждения: пока ждём, клик принадлежит попапу.</summary>
+        /// <summary>
+        /// Висит ли сейчас ценник: пока висит, клик принадлежит ему, а разбирает клик
+        /// <c>GameSession</c> — по той же плитке согласие, мимо отмена.
+        /// </summary>
         public bool IsAsking => asking != null;
 
         /// <summary>
@@ -200,10 +205,11 @@ namespace Game.UI
         }
 
         /// <summary>
-        /// Открытие плитки подтверждают: над самой плиткой встаёт попап с ценой и зелёной
-        /// галочкой. Он один на экране и сам не гаснет — его закрывает либо галочка, либо клик
-        /// мимо. Хватает очков или нет, здесь не спрашивают: цена показана, а отказ придёт
-        /// от правила, когда игрок согласится, и встанет на то же место.
+        /// Открытие плитки подтверждают вторым тапом по ней же, а попап — только ценник: монета
+        /// и число над самой плиткой. Кнопки на нём нет, соглашаются в гекс, а не в попап. Он
+        /// один на экране и сам не гаснет — его снимает либо согласие, либо клик мимо. Хватает
+        /// очков или нет, здесь не спрашивают: цена показана, а отказ придёт от правила, когда
+        /// игрок согласится, и встанет на то же место.
         /// </summary>
         public void Ask(int cost, in Anchor anchor, Action accepted)
         {
@@ -220,15 +226,15 @@ namespace Game.UI
             icons.ShowIcon(coin, coinMesh, coinMaterial, coinAngles);
 
             var price = UiText.Bold("Cost", popup.Rect, theme, 40f, theme.Gold, TextAlignmentOptions.Left);
-            Place(price.rectTransform, new Vector2(0f, 0.5f), new Vector2(Padding + IconSize + 8f, 0f),
-                new Vector2(AskWidth - Padding * 2f - IconSize - ConfirmSize - 16f, 52f));
             price.text = cost.ToString();
 
-            // Кнопка плотная и зелёная: стеклом она не читается нажимаемой, а на стекле попапа
-            // зелёная галочка без подложки тонет в карте, которая сквозь него видна.
-            confirm = UiButton.Create("Confirm", popup.Rect, theme, theme.ButtonConfirm, "✓", 40f, Accept);
-            Place(confirm.Rect, new Vector2(1f, 0.5f), new Vector2(-Padding * 0.7f, 0f),
-                new Vector2(ConfirmSize, ConfirmSize));
+            // Ширина — по самому числу, как у отказа по его тексту: цена идёт от двух знаков
+            // к четырём, и ценник фиксированной ширины зиял бы пустотой под коротким.
+            price.ForceMeshUpdate();
+            var digits = Mathf.Ceil(price.preferredWidth);
+            Place(price.rectTransform, new Vector2(0f, 0.5f), new Vector2(Padding + IconSize + 8f, 0f),
+                new Vector2(digits, 52f));
+            popup.Rect.sizeDelta = new Vector2(Padding * 2f + IconSize + 8f + digits, MinHeight);
 
             asking = popup;
             confirmed = accepted;
@@ -236,39 +242,17 @@ namespace Game.UI
         }
 
         /// <summary>
-        /// Клик, пока висит подтверждение, принадлежит ему: по галочке — согласие, мимо — отмена.
-        /// Мимо клик отменой и остаётся: выполнить заодно то, по чему попали, значило бы открыть
-        /// соседнюю плитку тем же тапом, которым игрок передумал.
+        /// Согласие: игрок тапнул по той же плитке ещё раз. Кому принадлежит клик, пока висит
+        /// ценник, решает <c>GameSession</c> — попап только выполняет то, о чём спросил.
         /// </summary>
-        public bool TryClick(Vector2 screenPosition)
+        public void AcceptAsk()
         {
             if (asking == null)
-                return false;
+                return;
 
-            if (!confirm.TryClick(screenPosition))
-                CancelAsk();
-
-            return true;
-        }
-
-        /// <summary>
-        /// Нажатие на висящее подтверждение: галочка под пальцем проседает. Ответ тот же, что
-        /// у <see cref="TryClick"/> — true значит, что нажатие принадлежит попапу.
-        /// </summary>
-        public bool TryPress(Vector2 screenPosition)
-        {
-            if (asking == null)
-                return false;
-
-            confirm.TryPress(screenPosition);
-            return true;
-        }
-
-        /// <summary>Палец снят: галочка возвращается. Подтверждения может уже и не быть.</summary>
-        public void ReleasePress()
-        {
-            if (asking != null)
-                confirm.Release();
+            var accepted = confirmed;
+            CancelAsk();
+            accepted?.Invoke();
         }
 
         /// <summary>Подтверждение снято: попап уходит, ничего не выполнив.</summary>
@@ -283,13 +267,6 @@ namespace Game.UI
         {
             for (var i = live.Count - 1; i >= 0; i--)
                 Remove(live[i]);
-        }
-
-        void Accept()
-        {
-            var accepted = confirmed;
-            CancelAsk();
-            accepted?.Invoke();
         }
 
         /// <summary>
@@ -357,7 +334,6 @@ namespace Game.UI
             if (popup == asking)
             {
                 asking = null;
-                confirm = null;
                 confirmed = null;
             }
 
