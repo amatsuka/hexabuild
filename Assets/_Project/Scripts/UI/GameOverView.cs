@@ -38,6 +38,8 @@ namespace Game.UI
         const float PlateWidth = 640f;
         const float PlateHeight = 88f;
         const float DividerHeight = 2f;
+        const float StarSize = 84f;
+        const float StarGap = 24f;
 
         [SerializeField] UiTheme theme = new();
         [Tooltip("Затемнение поля под экраном. Карта сквозь него видна, но спорить с карточками " +
@@ -60,12 +62,17 @@ namespace Game.UI
         ProductionSystem production;
         ContractSystem contracts;
 
-        UiButton repeat;
-        UiButton renew;
+        UiButton[] buttons = Array.Empty<UiButton>();
         bool built;
 
         /// <summary>Игрок просит новую партию. `true` — та же карта, `false` — свежая.</summary>
         public event Action<bool> RestartRequested;
+
+        /// <summary>Игрок идёт на следующий уровень кампании.</summary>
+        public event Action NextLevelRequested;
+
+        /// <summary>Игрок уходит в главное меню: последний уровень кампании пройден.</summary>
+        public event Action MenuRequested;
 
         /// <summary>
         /// Экран берёт снимки моделей у склада — второй пекарь на партию завёл бы второй набор
@@ -88,6 +95,12 @@ namespace Game.UI
             built = true;
             var isRecord = HighScore.Submit(final.Total);
 
+            // Уровень кампании считает свои звёзды и свой рекорд — до того, как прогресс
+            // запишется: иначе «Новый рекорд уровня» сравнивался бы с только что сохранённым.
+            var level = CampaignSession.Level;
+            var stars = level != null ? level.Stars(final.Total) : 0;
+            var levelRecord = level != null && final.Total > CampaignProgress.BestAt(CampaignSession.Index);
+
             GetComponent<Image>().color = backdropColor;
 
             // Корона и конфетти — за пройденное поле, а не за любой конец партии: праздновать
@@ -98,11 +111,14 @@ namespace Game.UI
                 BuildCrown();
             }
 
-            BuildBanner(final.IsPerfect);
-            BuildCard(final, isRecord);
-            BuildButtons();
+            BuildBanner(final.IsPerfect, level, stars);
+            BuildCard(final, level != null ? levelRecord : isRecord, level);
+            BuildButtons(level != null);
 
             gameObject.SetActive(true);
+
+            if (level != null)
+                CampaignProgress.Submit(CampaignSession.Index, final.Total, stars, CampaignSession.Count);
         }
 
         /// <summary>
@@ -114,8 +130,9 @@ namespace Game.UI
             if (!built)
                 return;
 
-            if (!repeat.TryClick(screenPosition))
-                renew.TryClick(screenPosition);
+            foreach (var button in buttons)
+                if (button.TryClick(screenPosition))
+                    return;
         }
 
         void BuildConfetti()
@@ -135,7 +152,7 @@ namespace Game.UI
         }
 
         /// <summary>Лента заголовка: чем кончилась партия, одной строкой и подписью под ней.</summary>
-        void BuildBanner(bool isPerfect)
+        void BuildBanner(bool isPerfect, LevelConfig level, int stars)
         {
             var banner = UiPanel.Create("Banner", transform, theme).rectTransform;
             Place(banner, new Vector2(0.5f, 1f), new Vector2(0f, isPerfect ? -250f : -110f),
@@ -144,7 +161,19 @@ namespace Game.UI
             var title = UiText.Bold("Title", banner, theme, 68f, theme.Gold, TextAlignmentOptions.Center);
             Place(title.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -30f),
                 new Vector2(CardWidth - CardPadding * 2f, 90f));
-            title.text = isPerfect ? "Отличная работа!" : "Партия окончена";
+            title.text = level != null
+                ? $"Уровень {CampaignSession.Index + 1}"
+                : isPerfect ? "Отличная работа!" : "Партия окончена";
+
+            // В кампании подпись занимают звёзды: они и есть итог уровня, а «партия окончена»
+            // игрок уже понял по самому экрану.
+            if (level != null)
+            {
+                var row = StarGraphic.Row("Stars", banner, stars, 3, StarSize, StarGap, theme.Gold, theme.Divider.FillTop);
+                Place(row, new Vector2(0.5f, 1f), new Vector2(0f, -110f),
+                    new Vector2(StarSize * 3f + StarGap * 2f, StarSize));
+                return;
+            }
 
             var subtitle = UiText.Label("Subtitle", banner, theme, 36f, theme.Muted, TextAlignmentOptions.Center);
             Place(subtitle.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -126f),
@@ -156,7 +185,7 @@ namespace Game.UI
         /// Карточка итога: счёт крупно, добытое иконками, закрытые контракты и рекорд. Слагаемых
         /// счёта тут нет — решение человека 01.09.2026, состав экрана взят с референса.
         /// </summary>
-        void BuildCard(FinalScore final, bool isRecord)
+        void BuildCard(FinalScore final, bool isRecord, LevelConfig level)
         {
             var card = UiPanel.Create("Result", transform, theme).rectTransform;
             Place(card, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(CardWidth, CardHeight));
@@ -186,7 +215,7 @@ namespace Game.UI
             Caption(card, "ContractsLabel", "Выполнено контрактов", 526f);
             BuildContracts(card);
 
-            BuildRecord(card, isRecord);
+            BuildRecord(card, isRecord, level);
         }
 
         /// <summary>Добытое: иконка ресурса и число под ней, три столбца в ряд.</summary>
@@ -227,7 +256,7 @@ namespace Game.UI
         }
 
         /// <summary>Плашка рекорда: побитый — золотом, иначе прежний счёт спокойной строкой.</summary>
-        void BuildRecord(RectTransform card, bool isRecord)
+        void BuildRecord(RectTransform card, bool isRecord, LevelConfig level)
         {
             var plate = UiPanel.Create("Record", card, theme, theme.Accent).rectTransform;
             Place(plate, new Vector2(0.5f, 1f), new Vector2(0f, -668f), new Vector2(PlateWidth, PlateHeight));
@@ -235,26 +264,41 @@ namespace Game.UI
             var line = UiText.Bold("Text", plate, theme, 40f, isRecord ? theme.Gold : theme.Muted,
                 TextAlignmentOptions.Center);
             line.Stretch(20f, 20f, 8f, 8f);
-            line.text = isRecord ? "Новый рекорд!" : "Рекорд: " + HudFormat.Points(HighScore.Best);
+            // В кампании рекорд свой у каждого уровня: сравнивать счёт на десяти рядах
+            // с восемнадцатью незачем, там разный потолок.
+            var best = level != null ? CampaignProgress.BestAt(CampaignSession.Index) : HighScore.Best;
+            line.text = isRecord ? "Новый рекорд!" : "Рекорд: " + HudFormat.Points(best);
         }
 
         /// <summary>
         /// Кнопки внизу экрана. «Новая карта» — главная и тёплая: партия кончилась, и по
         /// умолчанию игрок идёт дальше, а не переигрывает ту же карту.
         /// </summary>
-        void BuildButtons()
+        void BuildButtons(bool campaign)
         {
             var offset = (ButtonWidth + ButtonGap) * 0.5f;
 
-            repeat = UiButton.Create("Repeat", transform, theme, theme.ButtonSecondary,
-                "Повторить\nкарту", 42f, () => RestartRequested?.Invoke(true));
+            var repeat = UiButton.Create("Repeat", transform, theme, theme.ButtonSecondary,
+                campaign ? "Заново" : "Повторить\nкарту", 42f, () => RestartRequested?.Invoke(true));
             Place(repeat.Rect, new Vector2(0.5f, 0f), new Vector2(-offset, ButtonBottom),
                 new Vector2(ButtonWidth, ButtonHeight));
 
-            renew = UiButton.Create("Renew", transform, theme, theme.ButtonPrimary,
-                "Новая карта", 46f, () => RestartRequested?.Invoke(false));
-            Place(renew.Rect, new Vector2(0.5f, 0f), new Vector2(offset, ButtonBottom),
+            // Вне кампании справа стоит «Новая карта»; в кампании карта задана уровнем, и
+            // главная кнопка ведёт дальше по ней — а с последнего уровня возвращает в меню,
+            // иначе с финального экрана было бы некуда уйти: шестерёнка паузы к этому моменту
+            // уже погашена.
+            var forward = campaign
+                ? CampaignSession.HasNext
+                    ? UiButton.Create("Next", transform, theme, theme.ButtonPrimary,
+                        "Следующий\nуровень", 42f, () => NextLevelRequested?.Invoke())
+                    : UiButton.Create("Menu", transform, theme, theme.ButtonPrimary,
+                        "В главное\nменю", 42f, () => MenuRequested?.Invoke())
+                : UiButton.Create("Renew", transform, theme, theme.ButtonPrimary,
+                    "Новая карта", 46f, () => RestartRequested?.Invoke(false));
+            Place(forward.Rect, new Vector2(0.5f, 0f), new Vector2(offset, ButtonBottom),
                 new Vector2(ButtonWidth, ButtonHeight));
+
+            buttons = new[] { repeat, forward };
         }
 
         /// <summary>Подпись блока: мелкая строка по центру карточки.</summary>

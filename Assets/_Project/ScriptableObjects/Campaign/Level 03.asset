@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bea9258f736034ca9bf8fe1c6bf07077, type: 3}
+  m_Name: Level 03
+  m_EditorClassIdentifier: Game.Runtime::Game.Core.LevelConfig
+  seed: 33
+  fieldRows: 12
+  waterCeiling: 0.2
+  rocksCeiling: 0.71
+  reserveScale: 1.2
+  contractGoal: 4
+  contractSeconds: 52
+  extractionInterval: 2.95
+  botCeiling: 24169
+  oneStarShare: 0.5
+  twoStarShare: 0.75
+  threeStarShare: 1

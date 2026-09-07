@@ -31,6 +31,11 @@ namespace Game.UI
         const float ButtonGap = 26f;
 
         const float KeypadWidth = 546f;
+        const float LevelSize = 150f;
+        const float LevelGap = 22f;
+        const int LevelColumns = 3;
+        const float LevelStarSize = 26f;
+        const float LevelStarGap = 6f;
         const float KeySize = 150f;
         const float KeyGap = 18f;
         const float DisplayHeight = 100f;
@@ -41,15 +46,19 @@ namespace Game.UI
         [SerializeField] Color backdropColor = new(0.03f, 0.05f, 0.09f, 0.92f);
         [Tooltip("Объект партии (`GameSession`): включается, когда игрок выбрал карту")]
         [SerializeField] GameObject gameRoot;
+        [Tooltip("Кампания: список уровней по порядку. Пусто — пункта «Кампания» в меню нет")]
+        [SerializeField] CampaignConfig campaign;
         [SerializeField] GameInput input;
 
         readonly StringBuilder digits = new();
 
         GameObject mainButtonsRoot;
         GameObject keypadRoot;
+        GameObject levelsRoot;
         TextMeshProUGUI digitsDisplay;
         UiButton[] mainButtons;
         UiButton[] keypadButtons;
+        UiButton[] levelButtons;
 
         void Awake()
         {
@@ -68,6 +77,8 @@ namespace Game.UI
             mainButtonsRoot = BuildMainButtons();
             keypadRoot = BuildKeypad();
             keypadRoot.SetActive(false);
+            levelsRoot = BuildLevels();
+            levelsRoot.SetActive(false);
         }
 
         void OnEnable() => input.Clicked += HandleClick;
@@ -80,7 +91,9 @@ namespace Game.UI
         /// </summary>
         void HandleClick(Vector2 screenPosition)
         {
-            var buttons = keypadRoot.activeSelf ? keypadButtons : mainButtons;
+            var buttons = keypadRoot.activeSelf ? keypadButtons
+                : levelsRoot.activeSelf ? levelButtons
+                : mainButtons;
             foreach (var button in buttons)
                 if (button.TryClick(screenPosition))
                     return;
@@ -107,10 +120,23 @@ namespace Game.UI
             var root = UiPanel.NewRect("MainButtons", transform);
             Place(root, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(ButtonWidth, ButtonHeight));
 
-            var buttons = new List<UiButton>(3);
-            var y = ButtonHeight + ButtonGap;
+            var buttons = new List<UiButton>(4);
+            var y = (ButtonHeight + ButtonGap) * (campaign != null && campaign.Count > 0 ? 1.5f : 1f);
 
-            var random = UiButton.Create("Random", root, theme, theme.ButtonPrimary,
+            // Кампания — главный путь, поэтому она первая и тёплая; свободная игра остаётся
+            // рядом. Кампании нет в ассете — нет и пункта: мёртвая кнопка хуже её отсутствия.
+            if (campaign != null && campaign.Count > 0)
+            {
+                var levels = UiButton.Create("Campaign", root, theme, theme.ButtonPrimary,
+                    "Кампания", 40f, OpenLevels);
+                Place(levels.Rect, new Vector2(0.5f, 0.5f), new Vector2(0f, y),
+                    new Vector2(ButtonWidth, ButtonHeight));
+                buttons.Add(levels);
+                y -= ButtonHeight + ButtonGap;
+            }
+
+            var random = UiButton.Create("Random", root, theme,
+                campaign != null && campaign.Count > 0 ? theme.ButtonSecondary : theme.ButtonPrimary,
                 "Случайная карта", 40f, StartRandom);
             Place(random.Rect, new Vector2(0.5f, 0.5f), new Vector2(0f, y), new Vector2(ButtonWidth, ButtonHeight));
             buttons.Add(random);
@@ -188,6 +214,73 @@ namespace Game.UI
             return root.gameObject;
         }
 
+        /// <summary>
+        /// Выбор уровня: сетка кнопок с номером и звёздами под ним. Закрытые уровни нарисованы
+        /// приглушённо и клик не принимают — прогресс живёт в `CampaignProgress` и переживает
+        /// перезапуск. Экран строится один раз в `Awake`: между его открытиями прогресс не
+        /// меняется, партия для этого должна успеть кончиться, а она перезагружает сцену.
+        /// </summary>
+        GameObject BuildLevels()
+        {
+            var root = UiPanel.NewRect("Levels", transform);
+            Place(root, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(KeypadWidth, 1f));
+
+            var buttons = new List<UiButton>();
+            var count = campaign != null ? campaign.Count : 0;
+            var rows = Mathf.CeilToInt(count / (float)LevelColumns);
+            var step = LevelSize + LevelGap;
+            var top = (rows - 1) * step * 0.5f;
+
+            for (var i = 0; i < count; i++)
+            {
+                var index = i;
+                var unlocked = CampaignProgress.IsUnlocked(index);
+                var style = unlocked ? theme.ButtonSecondary : theme.SlotEmpty;
+                var button = UiButton.Create($"Level {index + 1}", root, theme, style,
+                    (index + 1).ToString(), 44f, () => StartLevel(index));
+                Place(button.Rect, new Vector2(0.5f, 0.5f),
+                    new Vector2((index % LevelColumns - 1) * step, top - index / LevelColumns * step),
+                    new Vector2(LevelSize, LevelSize));
+
+                var stars = StarGraphic.Row("Stars", button.Rect, unlocked ? CampaignProgress.StarsAt(index) : 0, 3,
+                    LevelStarSize, LevelStarGap, theme.Gold, theme.Divider.FillTop);
+                Place(stars, new Vector2(0.5f, 0f), new Vector2(0f, 26f),
+                    new Vector2(LevelStarSize * 3f + LevelStarGap * 2f, LevelStarSize));
+
+                buttons.Add(button);
+            }
+
+            var back = UiButton.Create("Back", root, theme, theme.ButtonSecondary, "Назад", 36f, CloseLevels);
+            Place(back.Rect, new Vector2(0.5f, 0.5f), new Vector2(0f, top - rows * step - 30f),
+                new Vector2(KeypadWidth, StartButtonHeight));
+            buttons.Add(back);
+
+            levelButtons = buttons.ToArray();
+            return root.gameObject;
+        }
+
+        void OpenLevels()
+        {
+            mainButtonsRoot.SetActive(false);
+            levelsRoot.SetActive(true);
+        }
+
+        void CloseLevels()
+        {
+            levelsRoot.SetActive(false);
+            mainButtonsRoot.SetActive(true);
+        }
+
+        /// <summary>Уровень кампании: закрытый молчит, открытый заказывает свой сид и партию.</summary>
+        void StartLevel(int index)
+        {
+            if (!CampaignProgress.IsUnlocked(index))
+                return;
+
+            CampaignSession.Begin(campaign, index);
+            BeginGame();
+        }
+
         Action KeyAction(string label) => label switch
         {
             "Назад" => CloseKeypad,
@@ -231,6 +324,7 @@ namespace Game.UI
         /// <summary>«Случайная карта» обязана значить это буквально, а не «сид из конфига».</summary>
         void StartRandom()
         {
+            CampaignSession.Clear();
             SessionSeed.Renew();
             BeginGame();
         }
@@ -245,6 +339,7 @@ namespace Game.UI
             if (seed == 0)
                 return;
 
+            CampaignSession.Clear();
             SessionSeed.Repeat(seed);
             BeginGame();
         }

@@ -53,6 +53,9 @@ namespace Game.Core
         /// </summary>
         int seed;
 
+        /// <summary>Уровень кампании этой партии. Пусто — свободная игра.</summary>
+        LevelConfig level;
+
         /// <summary>Одно вью на всю дорожную сеть: меш у неё общий.</summary>
         RoadView roadView;
 
@@ -65,22 +68,26 @@ namespace Game.Core
 
         void Awake()
         {
+            // Уровень кампании выбран в меню и лежит статикой: он переопределяет рычаги
+            // `GameConfig` — поле, таймер и цель контракта, интервал добычи, щедрость карты
+            // и доли воды и гор. Вне кампании его нет, и партия идёт на дефолтах.
+            level = CampaignSession.Level;
             seed = SessionSeed.Take(config.Seed);
 
-            var map = MapGenerator.Generate(config.MapGenerationSettingsFor(seed));
+            var map = MapGenerator.Generate(config.MapGenerationSettingsFor(seed, level));
             var wallet = new Wallet(config.StartingPoints);
             var storage = new StorageGrid(config.StorageSize);
             var multiplier = config.NewMultiplier();
             state = new GameState(map, wallet, storage, config.Prices, multiplier);
 
-            production = new ProductionSystem(map, state.Roads, config.ExtractionInterval);
+            production = new ProductionSystem(map, state.Roads, config.ExtractionIntervalFor(level));
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
             merges = new MergeSystem(storage, wallet, mergeRules, multiplier);
             contracts = new ContractSystem(
                 wallet,
                 mergeRules.CraftedTypes(),
-                config.ContractGoal,
-                config.ContractSeconds,
+                config.ContractGoalFor(level),
+                config.ContractSecondsFor(level),
                 config.ContractReward,
                 config.ContractPauseMin,
                 config.ContractPauseMax,
@@ -114,6 +121,8 @@ namespace Game.Core
             merges.Converted += OnConverted;
             end.Ended += OnGameEnded;
             gameOverView.RestartRequested += Restart;
+            gameOverView.NextLevelRequested += NextLevel;
+            gameOverView.MenuRequested += ExitToMenu;
             pauseView.RestartRequested += RestartSameMap;
             pauseView.ExitRequested += ExitToMenu;
         }
@@ -135,6 +144,8 @@ namespace Game.Core
             merges.Converted -= OnConverted;
             end.Ended -= OnGameEnded;
             gameOverView.RestartRequested -= Restart;
+            gameOverView.NextLevelRequested -= NextLevel;
+            gameOverView.MenuRequested -= ExitToMenu;
             pauseView.RestartRequested -= RestartSameMap;
             pauseView.ExitRequested -= ExitToMenu;
         }
@@ -369,11 +380,28 @@ namespace Game.Core
         void RestartSameMap() => Restart(true);
 
         /// <summary>
+        /// «Следующий уровень»: кампания сдвигается на шаг и сама заказывает сид нового уровня,
+        /// сцена перезагружается прямо в партию — меню между уровнями не показывается.
+        /// </summary>
+        void NextLevel()
+        {
+            CampaignSession.Advance();
+            SessionSeed.SkipMenu = true;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+
+        /// <summary>
         /// «Выход в главное меню» из паузы: сцена просто перезагружается, без заказа сида.
         /// `Game` в сохранённой сцене выключен по умолчанию, `MainMenu` включён — reload
         /// естественно возвращает на экран меню.
         /// </summary>
-        void ExitToMenu() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        void ExitToMenu()
+        {
+            // Уровень кампании остаётся выбранным до самого меню, иначе перезагрузка подняла бы
+            // партию по нему заново. Прогресс от этого не страдает: он лежит в `PlayerPrefs`.
+            CampaignSession.Clear();
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
 
         void OnTileChanged(TileData tile)
         {

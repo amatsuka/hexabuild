@@ -115,12 +115,26 @@ namespace Game.Core
         public MapGenerationSettings MapGenerationSettings => MapGenerationSettingsFor(seed);
 
         /// <summary>
+        /// Числа, которые переопределяет уровень кампании. Ноль в уровне значит «взять
+        /// дефолт»: ни рядов, ни секунд, ни цели, ни интервала со значением ноль не бывает.
+        /// Вне кампании уровня нет, и все три отдают дефолт.
+        /// </summary>
+        public int ContractGoalFor(LevelConfig level) =>
+            level != null && level.ContractGoal > 0 ? level.ContractGoal : contractGoal;
+
+        public float ContractSecondsFor(LevelConfig level) =>
+            level != null && level.ContractSeconds > 0f ? level.ContractSeconds : contractSeconds;
+
+        public float ExtractionIntervalFor(LevelConfig level) =>
+            level != null && level.ExtractionInterval > 0f ? level.ExtractionInterval : extractionInterval;
+
+        /// <summary>
         /// Та же генерация своим сидом. Нужна кнопкам финального экрана: «Повторить карту»
         /// перезапускает партию с сидом прошлой, а «Новая карта» — со свежим, и оба они не
-        /// вправе править ассет конфига.
+        /// вправе править ассет конфига. Уровень кампании накладывает свои рычаги поверх дефолтов.
         /// </summary>
-        public MapGenerationSettings MapGenerationSettingsFor(int mapSeed) => new(
-            fieldRows,
+        public MapGenerationSettings MapGenerationSettingsFor(int mapSeed, LevelConfig level = null) => new(
+            level != null && level.FieldRows > 0 ? level.FieldRows : fieldRows,
             mapSeed,
             emptyWeight,
             singleDepositWeight,
@@ -129,6 +143,9 @@ namespace Game.Core
             minDepositReserve,
             maxDepositReserve,
             reserveRowGrowth,
-            biomeNoiseScale);
+            biomeNoiseScale,
+            level != null ? level.ReserveScale : 1f,
+            level != null ? level.WaterCeiling : MapGenerator.WaterCeiling,
+            level != null ? level.RocksCeiling : MapGenerator.RocksCeiling);
     }
 }

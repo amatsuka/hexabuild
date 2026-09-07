@@ -367,6 +367,7 @@ MonoBehaviour:
     textShadowSoftness: 0.12
   backdropColor: {r: 0.03, g: 0.05, b: 0.09, a: 0.92}
   gameRoot: {fileID: 127816810}
+  campaign: {fileID: 11400000, guid: 8df6d12db44cc403b8ad68a0e7f230a1, type: 2}
   input: {fileID: 1601929506}
 --- !u!1 &381356107
 GameObject:

@@ -13,7 +13,10 @@ namespace Game.Grid
             int minReserve,
             int maxReserve,
             float reserveRowGrowth = 0f,
-            float biomeNoiseScale = 0.18f)
+            float biomeNoiseScale = 0.18f,
+            float reserveScale = 1f,
+            float waterCeiling = MapGenerator.WaterCeiling,
+            float rocksCeiling = MapGenerator.RocksCeiling)
         {
             Rows = rows;
             Seed = seed;
@@ -25,6 +28,12 @@ namespace Game.Grid
             MaxReserve = maxReserve;
             ReserveRowGrowth = reserveRowGrowth;
             BiomeNoiseScale = biomeNoiseScale;
+            ReserveScale = reserveScale <= 0f ? 1f : reserveScale;
+            // Порог воды выше порога скал вывернул бы кривую наизнанку: вода оказалась бы над
+            // горами. Негодную пару считаем канонической, а не чиним по одному числу.
+            var proper = waterCeiling >= 0f && rocksCeiling <= 1f && waterCeiling < rocksCeiling;
+            WaterCeiling = proper ? waterCeiling : MapGenerator.WaterCeiling;
+            RocksCeiling = proper ? rocksCeiling : MapGenerator.RocksCeiling;
         }
 
         public int Rows { get; }
@@ -53,5 +62,23 @@ namespace Game.Grid
 
         /// <summary>Частота шума ландшафта: меньше — крупнее пятна биомов.</summary>
         public float BiomeNoiseScale { get; }
+
+        /// <summary>
+        /// Во сколько раз уровень кампании растягивает базовый диапазон запаса поверх роста
+        /// по рядам. Единица — как в `GameConfig`, двойка — вдвое более щедрая карта.
+        /// </summary>
+        public float ReserveScale { get; }
+
+        /// <summary>
+        /// Доля сырого шума, ниже которой плитка уходит под воду. Ноль — воды на карте нет.
+        /// Порог считается по шуму до растяжки: и биом, и высота дальше живут на канонических
+        /// отметках `MapGenerator`, а карта растягивается под уровень (см. `MapGenerator.Stretch`).
+        /// </summary>
+        public float WaterCeiling { get; }
+
+        /// <summary>
+        /// Доля сырого шума, выше которой начинаются непроходимые горы. Единица — гор нет.
+        /// </summary>
+        public float RocksCeiling { get; }
     }
 }

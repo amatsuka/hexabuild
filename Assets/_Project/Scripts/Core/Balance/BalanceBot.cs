@@ -35,6 +35,10 @@ namespace Game.Core.Balance
         readonly GameConfig config;
         readonly MergeRules rules;
         readonly int seed;
+
+        /// <summary>Уровень кампании, чьи рычаги легли поверх дефолтов. Пусто — партия вне кампании.</summary>
+        readonly LevelConfig level;
+
         readonly List<ResourceType> craftedTypes;
         readonly List<ResourceType> baseTypes = new();
         readonly List<HexCoord> path = new();
@@ -60,7 +64,7 @@ namespace Game.Core.Balance
         /// <summary>Очки, пришедшие наградами контрактов: их доля в заработке — число стадии.</summary>
         int contractPoints;
 
-        public BalanceBot(GameConfig config, MergeRules rules, int seed)
+        public BalanceBot(GameConfig config, MergeRules rules, int seed, LevelConfig level = null)
         {
             if (seed == 0)
                 throw new ArgumentException("сид 0 значит «случайный»: замер обязан быть воспроизводим", nameof(seed));
@@ -68,6 +72,7 @@ namespace Game.Core.Balance
             this.config = config;
             this.rules = rules;
             this.seed = seed;
+            this.level = level;
             craftedTypes = rules.CraftedTypes();
 
             foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
@@ -92,7 +97,7 @@ namespace Game.Core.Balance
             played = true;
             var watch = Stopwatch.StartNew();
 
-            var map = MapGenerator.Generate(config.MapGenerationSettingsFor(seed));
+            var map = MapGenerator.Generate(config.MapGenerationSettingsFor(seed, level));
             var ceiling = BalanceCeiling.Of(map, rules, config.Prices);
             Assemble(map);
 
@@ -132,14 +137,14 @@ namespace Game.Core.Balance
             var multiplier = config.NewMultiplier();
             state = new GameState(map, wallet, storage, config.Prices, multiplier);
 
-            production = new ProductionSystem(map, state.Roads, config.ExtractionInterval);
+            production = new ProductionSystem(map, state.Roads, config.ExtractionIntervalFor(level));
             deliveries = new DeliverySystem(config.DeliverySecondsPerTile);
             merges = new MergeSystem(storage, wallet, rules, multiplier);
             contracts = new ContractSystem(
                 wallet,
                 craftedTypes,
-                config.ContractGoal,
-                config.ContractSeconds,
+                config.ContractGoalFor(level),
+                config.ContractSecondsFor(level),
                 config.ContractReward,
                 config.ContractPauseMin,
                 config.ContractPauseMax,

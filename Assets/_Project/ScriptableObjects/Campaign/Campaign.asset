@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4fcd3f72409645dbbc0e9c8894f4c7e, type: 3}
+  m_Name: Campaign
+  m_EditorClassIdentifier: Game.Runtime::Game.Core.CampaignConfig
+  levels:
+  - {fileID: 11400000, guid: 3846200af4b7641b5aa3cd2de555f3d4, type: 2}
+  - {fileID: 11400000, guid: 0951d900689994119b35a28b2a2460ab, type: 2}
+  - {fileID: 11400000, guid: 104f7f39c865642f794e298a6456cd8c, type: 2}
+  - {fileID: 11400000, guid: 0099ff5f219de41f59f77efb04dac250, type: 2}
+  - {fileID: 11400000, guid: 2c7bdd3024f2e4474b77f561492222d8, type: 2}
+  - {fileID: 11400000, guid: eaf3e78577d79465d87956e07f6af801, type: 2}
+  - {fileID: 11400000, guid: 7fb8199ddb93a49c4b8b2a0271bcc0cb, type: 2}
+  - {fileID: 11400000, guid: 018417474647247c4a116bdb2c66e0c6, type: 2}
+  - {fileID: 11400000, guid: 71b4cd0048f3d4eb6bdfee2da94714fa, type: 2}
+  - {fileID: 11400000, guid: a4eb22f2f40014362ab230f75491f394, type: 2}

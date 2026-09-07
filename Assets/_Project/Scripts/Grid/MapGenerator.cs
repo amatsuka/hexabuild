@@ -131,7 +131,10 @@ namespace Game.Grid
             var biomes = new Dictionary<HexCoord, BiomeType>();
             foreach (var coord in HexMap.CoordsInFlare(settings.Rows))
             {
-                var elevation = Height(coord, settings.BiomeNoiseScale, noiseOrigin);
+                var elevation = Stretch(
+                    Height(coord, settings.BiomeNoiseScale, noiseOrigin),
+                    settings.WaterCeiling,
+                    settings.RocksCeiling);
                 elevations[coord] = elevation;
                 biomes[coord] = BiomeAt(elevation);
             }
@@ -191,6 +194,31 @@ namespace Game.Grid
 
             return height < RocksCeiling ? BiomeType.Rocks : BiomeType.Mountains;
         }
+
+        /// <summary>
+        /// Растяжка шума под пороги уровня. Уровень кампании говорит, какая доля сырого шума
+        /// уходит под воду и с какой начинаются горы; кривая переводит эти две отметки
+        /// в канонические `WaterCeiling` и `RocksCeiling`, а всё остальное тянет между ними
+        /// линейно. Так биом и высота остаются на одних и тех же узлах: `TileView.TerrainHeight`
+        /// и пороги `BiomeAt` продолжают читать одно число, и суша не уходит под урез. При
+        /// канонических порогах кривая — тождество, то есть карта вне кампании не меняется.
+        ///
+        /// Ноль как порог воды означает буквально «воды нет»: сравнение строгое, и ниже нуля
+        /// шум не опускается.
+        /// </summary>
+        public static float Stretch(float noise, float waterCeiling, float rocksCeiling)
+        {
+            if (noise < waterCeiling)
+                return Mathf.Lerp(0f, WaterCeiling, Ratio(noise, 0f, waterCeiling));
+            if (noise < rocksCeiling)
+                return Mathf.Lerp(WaterCeiling, RocksCeiling, Ratio(noise, waterCeiling, rocksCeiling));
+
+            return Mathf.Lerp(RocksCeiling, 1f, Ratio(noise, rocksCeiling, 1f));
+        }
+
+        /// <summary>Доля значения на отрезке; пустой отрезок — ноль, а не деление на ноль.</summary>
+        static float Ratio(float value, float from, float to) =>
+            to - from <= Mathf.Epsilon ? 0f : Mathf.Clamp01((value - from) / (to - from));
 
         static float Height(HexCoord coord, float noiseScale, Vector2 noiseOrigin)
         {
@@ -832,13 +860,14 @@ namespace Game.Grid
         }
 
         /// <summary>
-        /// Запас месторождения: базовый диапазон, растянутый по ряду плитки — `× (1 + рост × ряд)`.
+        /// Запас месторождения: базовый диапазон, растянутый по ряду плитки — `× (1 + рост × ряд)`,
+        /// и ещё раз — щедростью уровня кампании (`ReserveScale`).
         /// Ряд — координата `R`, у Метрополии ноль. Дальние плитки живут дольше, к концу карты
         /// работает больше плиток разом, и поток на склад растёт; сам склад не расширяется.
         /// </summary>
         static int RollReserve(System.Random random, MapGenerationSettings settings, int row)
         {
-            var scale = 1f + settings.ReserveRowGrowth * row;
+            var scale = (1f + settings.ReserveRowGrowth * row) * settings.ReserveScale;
             var min = Mathf.RoundToInt(settings.MinReserve * scale);
             var max = Mathf.RoundToInt(settings.MaxReserve * scale);
             return random.Next(min, Mathf.Max(min, max) + 1);
