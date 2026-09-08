@@ -77,6 +77,35 @@ namespace Game.Storage
         [Tooltip("На сколько пикселей падает число множителя, пока гаснет")]
         [SerializeField] float burnDrop = 28f;
 
+        [Header("Каждое действие платит")]
+        [Tooltip("Выше какой доли накала кромка склада становится горячей")]
+        [SerializeField, Range(0f, 1f)] float hotEdgeShare = 0.7f;
+
+        [Tooltip("Сколько живёт призрак прибавки накала и на сколько пикселей он всплывает")]
+        [SerializeField] float ghostSeconds = 0.55f;
+        [SerializeField] float ghostRise = 62f;
+        [Tooltip("Снос призрака вбок: над клеткой уже стоит плашка прибавки очков")]
+        [SerializeField] float ghostDrift = 30f;
+        [SerializeField] float ghostSize = 26f;
+
+        [Tooltip("Сколько живёт кольцо ударной волны и во сколько раз оно разрастается")]
+        [SerializeField] float ringSeconds = 0.3f;
+        [SerializeField] float ringScale = 2.4f;
+
+        [Header("Истечение паузы")]
+        [Tooltip("Сколько живёт искра на голове полосы утечки и во сколько раз она разрастается")]
+        [SerializeField] float sparkSeconds = 0.32f;
+        [SerializeField] float sparkScale = 3.4f;
+        [Tooltip("Размах и длительность дрожи числа множителя, когда накал потёк")]
+        [SerializeField] float factorShake = 7f;
+        [SerializeField] float factorShakeSeconds = 0.3f;
+
+        [Header("Волна премии")]
+        [Tooltip("Задержка волны на клетку расстояния от той, которой склад дочистили")]
+        [SerializeField] float sweepStepSeconds = 0.045f;
+        [Tooltip("Сколько горит одна клетка в волне")]
+        [SerializeField] float sweepCellSeconds = 0.3f;
+
 
         [Header("Анимация слияния")]
         [SerializeField] float flySeconds = 0.28f;
@@ -84,6 +113,14 @@ namespace Game.Storage
         [Tooltip("Амплитуда удара по клетке, из которой крафт ушёл в очки")]
         [SerializeField] float popScale = 1.3f;
         [SerializeField] float flyEndScale = 0.45f;
+
+        /// <summary>
+        /// Сколько призраков и колец держим наготове. Больше на экране и не бывает: призрак
+        /// живёт полсекунды, а быстрее четырёх действий в секунду по складу не кликают.
+        /// </summary>
+        const int GhostCount = 4;
+
+        const int RingCount = 3;
 
         readonly HashSet<int> pendingCells = new();
 
@@ -99,11 +136,42 @@ namespace Game.Storage
         float burnTimer;
         float alarmPhase;
         bool alarmOn;
+        bool hotEdge;
+
+        /// <summary>Время от начала волны премии. Отрицательное — волны нет.</summary>
+        float sweepWave = -1f;
+
+        /// <summary>Клетка, которой склад дочистили: из неё волна и расходится.</summary>
+        int sweepOrigin;
+
+        /// <summary>Пауза до утечки ещё не вышла на прошлом кадре: по этому и ловится её конец.</summary>
+        bool holding;
+
+        float factorShakeTimer;
 
         /// <summary>Клетка под пальцем: её цвет ведёт нажатие, и тревога в него не лезет.</summary>
         int pressedCell = -1;
 
         UiPanelGraphic burnPanel;
+
+        /// <summary>
+        /// Призраки прибавки и кольца ударной волны заведены штуками и переиспользуются,
+        /// а не создаются на каждое действие. Причина не в экономии объектов, а в TMP:
+        /// `UiText` правит `fontMaterial`, то есть на каждую созданную строку заводится свой
+        /// инстанс материала, — а действий на складе несколько в секунду.
+        /// </summary>
+        TextMeshProUGUI[] ghosts;
+
+        Coroutine[] ghostRuns;
+        int ghostCursor;
+
+        UiPanelGraphic[] rings;
+        Coroutine[] ringRuns;
+        int ringCursor;
+
+        RectTransform spark;
+        UiPanelGraphic sparkPanel;
+        Coroutine sparkRun;
 
         TextMeshProUGUI factor;
         RectTransform fuse;
@@ -176,6 +244,7 @@ namespace Game.Storage
             if (resultCells.Count == 0 || !isActiveAndEnabled)
                 return;
 
+            PlayHeatGain(resultCells[0]);
             StartCoroutine(AnimateMerge(consumedCells, resultCells, movedType));
         }
 
@@ -214,6 +283,10 @@ namespace Game.Storage
             foreach (var copy in flying)
                 Destroy(copy.gameObject);
 
+            // Кольцо идёт не с клика, а отсюда: копии только что сошлись в одну точку, и удар
+            // случается здесь. На клике его перебила бы сама сходка.
+            PlayRing(resultCells[0]);
+
             yield return PopCells(resultCells);
         }
 
@@ -250,6 +323,7 @@ namespace Game.Storage
                 return;
 
             PressPulse.Cancel(cellPanels[index]);
+            PlayHeatGain(index);
             StartCoroutine(Punch(index));
         }
 
@@ -339,8 +413,18 @@ namespace Game.Storage
             grid.ResourceLost -= OnResourceLost;
         }
 
-        /// <summary>Премия за чистый склад: он вспыхивает золотом и коротко раздувается.</summary>
-        public void PlaySweep() => sweepTimer = sweepSeconds;
+        /// <summary>
+        /// Премия за чистый склад: сам склад коротко раздувается, а золото идёт волной по
+        /// клеткам от той, которой его дочистили. Одновременная вспышка всей панели говорила
+        /// «что-то случилось», волна говорит «вот это ты и разгрёб» — и показывает пустоту,
+        /// за которую заплатили, клетка за клеткой.
+        /// </summary>
+        public void PlaySweep(int cell)
+        {
+            sweepTimer = sweepSeconds;
+            sweepWave = 0f;
+            sweepOrigin = cell;
+        }
 
         /// <summary>
         /// Накал сгорел на переполнении: карточка выбеливается вспышкой, а число множителя
@@ -357,6 +441,129 @@ namespace Game.Storage
             burnPanel.gameObject.SetActive(true);
         }
 
+        /// <summary>
+        /// Действие на складе заплатило накалом: от клетки вылетает призрачное «+0.05» и тает.
+        /// До M30 каждое действие платило молча — накал рос числом, которого игрок не связывал
+        /// со своим кликом. На потолке призрака нет вовсе: там действие не платит ничего, и
+        /// нарисовать прибавку значило бы соврать.
+        /// </summary>
+        void PlayHeatGain(int cell)
+        {
+            var gain = multiplier?.LastBump ?? 0f;
+            if (!isActiveAndEnabled || gain <= 0f || ghosts == null)
+                return;
+
+            var slot = ghostCursor;
+            ghostCursor = (ghostCursor + 1) % ghosts.Length;
+
+            if (ghostRuns[slot] != null)
+                StopCoroutine(ghostRuns[slot]);
+
+            ghosts[slot].text = HudFormat.Bonus(gain);
+            ghostRuns[slot] = StartCoroutine(FloatGhost(slot, LocalPointOf(cells[cell])));
+        }
+
+        IEnumerator FloatGhost(int slot, Vector3 from)
+        {
+            var ghost = ghosts[slot];
+            ghost.gameObject.SetActive(true);
+
+            for (var elapsed = 0f; elapsed < ghostSeconds; elapsed += Time.deltaTime)
+            {
+                var progress = elapsed / ghostSeconds;
+
+                // Вверх с замедлением, вбок ровно: так призрак читается всплывающим, а не
+                // брошенным. Вбок — потому что прямо над клеткой стоит плашка прибавки очков.
+                ghost.rectTransform.localPosition = from + new Vector3(
+                    ghostDrift * progress, ghostRise * Mathf.Sqrt(progress), 0f);
+
+                var color = theme.Gold;
+                color.a = 1f - progress * progress;
+                ghost.color = color;
+                yield return null;
+            }
+
+            ghost.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Кольцо ударной волны от точки слияния: кромка без заливки, разрастается масштабом
+        /// и гаснет. Масштабом, а не размером: радиус скругления и толщина кромки живут в
+        /// пикселях меша, и растущий прямоугольник перестал бы быть кругом на втором кадре.
+        /// </summary>
+        void PlayRing(int cell)
+        {
+            if (!isActiveAndEnabled || rings == null)
+                return;
+
+            var slot = ringCursor;
+            ringCursor = (ringCursor + 1) % rings.Length;
+
+            if (ringRuns[slot] != null)
+                StopCoroutine(ringRuns[slot]);
+
+            rings[slot].rectTransform.localPosition = LocalPointOf(cells[cell]);
+            ringRuns[slot] = StartCoroutine(ExpandRing(slot));
+        }
+
+        IEnumerator ExpandRing(int slot)
+        {
+            var ring = rings[slot];
+            ring.gameObject.SetActive(true);
+
+            for (var elapsed = 0f; elapsed < ringSeconds; elapsed += Time.deltaTime)
+            {
+                var progress = elapsed / ringSeconds;
+                ring.rectTransform.localScale = Vector3.one * Mathf.Lerp(1f, ringScale, Mathf.Sqrt(progress));
+                ring.color = new Color(1f, 1f, 1f, 1f - progress);
+                yield return null;
+            }
+
+            ring.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Пауза вышла, накал потёк: искра на голове полосы и дрожь числа множителя. Окно в
+        /// 2.5 с игрок выучивает только тогда, когда слышен его конец, — до M30 полоса молча
+        /// доезжала до нуля, и утечка начиналась ниоткуда.
+        /// </summary>
+        void PlayLeak()
+        {
+            factorShakeTimer = factorShakeSeconds;
+
+            if (!isActiveAndEnabled || spark == null)
+                return;
+
+            if (sparkRun != null)
+                StopCoroutine(sparkRun);
+
+            // Голова полосы там, где её застало истечение: это край заливки, а он к этому
+            // моменту доехал до левого конца жёлоба.
+            spark.anchoredPosition = new Vector2((multiplier.HoldShare - 0.5f) * fuse.sizeDelta.x, 0f);
+            sparkRun = StartCoroutine(FlashSpark());
+        }
+
+        IEnumerator FlashSpark()
+        {
+            spark.gameObject.SetActive(true);
+
+            for (var elapsed = 0f; elapsed < sparkSeconds; elapsed += Time.deltaTime)
+            {
+                var progress = elapsed / sparkSeconds;
+                spark.localScale = Vector3.one * Mathf.Lerp(1f, sparkScale, progress);
+                sparkPanel.color = new Color(heatTint.r, heatTint.g, heatTint.b, 1f - progress);
+                yield return null;
+            }
+
+            spark.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Точка клетки в координатах слоя, на котором живут призраки и кольца. Мировая точка
+        /// им не годится: смещения заданы в пикселях канваса, а канвас масштабируется под экран.
+        /// </summary>
+        Vector3 LocalPointOf(RectTransform cell) => transform.parent.InverseTransformPoint(cell.position);
+
         void Update()
         {
             // Склад стоит в сцене с её загрузки, а собирается только в `Bind`: до первой партии
@@ -367,8 +574,70 @@ namespace Game.Storage
 
             TickPanelTint();
             TickHeat();
+            TickSweepWave();
             TickAlarm();
             TickBurn();
+            PlaceFactor();
+        }
+
+        /// <summary>
+        /// Волна премии: клетка загорается тем позже, чем дальше она от той, которой склад
+        /// дочистили. Расстояние считается по сетке, а не по номеру клетки: соседний ряд — это
+        /// соседняя клетка глазами, а по номеру он в восьми шагах.
+        ///
+        /// Идёт волна **до** тревоги: тревога — про угрозу, и перебивать её праздником нельзя.
+        /// Практически они не встречаются — премию платят на разгребённом складе, — но порядок
+        /// здесь смысловой, а не случайный.
+        /// </summary>
+        void TickSweepWave()
+        {
+            if (sweepWave < 0f)
+                return;
+
+            sweepWave += Time.deltaTime;
+            var running = false;
+
+            for (var i = 0; i < cellPanels.Length; i++)
+            {
+                if (i == pressedCell || PressPulse.IsBusy(cellPanels[i]))
+                    continue;
+
+                var progress = (sweepWave - CellDistance(i, sweepOrigin) * sweepStepSeconds) / sweepCellSeconds;
+                if (progress >= 1f)
+                {
+                    cellPanels[i].color = Color.white;
+                    continue;
+                }
+
+                running = true;
+                if (progress > 0f)
+                    cellPanels[i].color = Color.Lerp(Color.white, sweepFlashTint, Anim.Hop(progress));
+            }
+
+            if (!running)
+                sweepWave = -1f;
+        }
+
+        /// <summary>Сколько шагов по сетке между клетками: столько раз волна и задержится.</summary>
+        int CellDistance(int from, int to) =>
+            Mathf.Abs(from % columns - to % columns) + Mathf.Abs(from / columns - to / columns);
+
+        /// <summary>
+        /// Место числа множителя: просвет над складом, падение на сгорании и дрожь на истечении
+        /// паузы пишут одну и ту же координату, и складывать их приходится в одном месте — иначе
+        /// последний в кадре стирает работу остальных.
+        /// </summary>
+        void PlaceFactor()
+        {
+            var shake = 0f;
+            if (factorShakeTimer > 0f)
+            {
+                factorShakeTimer = Mathf.Max(0f, factorShakeTimer - Time.deltaTime);
+                shake = Anim.Shake(1f - factorShakeTimer / factorShakeSeconds) * factorShake;
+            }
+
+            var drop = burnTimer > 0f ? burnDrop * (1f - burnTimer / burnSeconds) : 0f;
+            factor.rectTransform.anchoredPosition = new Vector2(shake, factorGap - drop);
         }
 
         /// <summary>
@@ -439,16 +708,14 @@ namespace Game.Storage
             if (burnTimer <= 0f)
             {
                 burnPanel.gameObject.SetActive(false);
-                factor.rectTransform.anchoredPosition = new Vector2(0f, factorGap);
                 return;
             }
 
             var progress = 1f - burnTimer / burnSeconds;
             burnPanel.color = new Color(burnTint.r, burnTint.g, burnTint.b, burnTint.a * Anim.Hop(progress));
 
-            // Число уже пересчитано `TickHeat` на этом же кадре — здесь оно только падает и
-            // гаснет. Порядок в `Update` на это и рассчитан.
-            factor.rectTransform.anchoredPosition = new Vector2(0f, factorGap - burnDrop * progress);
+            // Число уже пересчитано `TickHeat` на этом же кадре — здесь оно только гаснет,
+            // а падает его в `PlaceFactor`. Порядок в `Update` на это и рассчитан.
             var faded = factor.color;
             faded.a = 1f - progress;
             factor.color = faded;
@@ -465,12 +732,14 @@ namespace Game.Storage
             var heat = multiplier?.HeatShare ?? 0f;
             var tint = Color.Lerp(Color.white, heatTint, heat);
 
+            // Раздутие склада на премии. Цвет его больше не сопровождает: золото ушло волной
+            // по клеткам, а панель целиком вспыхивала мимо того, за что премию дали.
             if (sweepTimer > 0f)
             {
                 sweepTimer = Mathf.Max(0f, sweepTimer - Time.deltaTime);
-                var progress = 1f - sweepTimer / sweepSeconds;
-                tint = Color.Lerp(tint, sweepFlashTint, Anim.Hop(progress));
-                transform.localScale = Vector3.one * Mathf.Lerp(1f, sweepScale, Anim.Hop(progress));
+                transform.localScale = sweepTimer > 0f
+                    ? Vector3.one * Mathf.Lerp(1f, sweepScale, Anim.Hop(1f - sweepTimer / sweepSeconds))
+                    : Vector3.one;
             }
 
             if (flashTimer > 0f)
@@ -480,6 +749,16 @@ namespace Game.Storage
             }
 
             panel.color = tint;
+
+            // Выше порога у карточки меняется не тинт, а сама кромка: вершинный цвет лежит в
+            // `Color32` и ярче собственного цвета карточку не сделает. Материал переставляется
+            // на переходе, а не каждый кадр, — их всего два и меняются они на ступени.
+            var hot = heat >= hotEdgeShare;
+            if (hot == hotEdge)
+                return;
+
+            hotEdge = hot;
+            panel.Apply(theme.PanelShader, hot ? theme.CardHot : theme.Card);
         }
 
         /// <summary>
@@ -492,6 +771,15 @@ namespace Game.Storage
                 return;
 
             var heat = multiplier.HeatShare;
+
+            // Пауза кончилась ровно сейчас: это и есть окно 2.5 с, которое игрок выучивает
+            // только тогда, когда его конец слышно. Полоса до этого молча доезжала до нуля.
+            var held = multiplier.HoldShare > 0f;
+            if (holding && !held && multiplier.Heat > 0f)
+                PlayLeak();
+
+            holding = held;
+
             factor.text = HudFormat.Multiplier(multiplier.Total);
             factor.fontSize = Mathf.Lerp(factorSizeCold, factorSizeHot, heat);
             factor.color = Color.Lerp(theme.Muted, theme.Gold, heat);
@@ -565,6 +853,36 @@ namespace Game.Storage
             burnPanel.rectTransform.Stretch();
             burnPanel.raycastTarget = false;
             burnPanel.gameObject.SetActive(false);
+
+            BuildGhosts();
+        }
+
+        /// <summary>
+        /// Призраки прибавки и кольца ударной волны. Живут не на самой панели, а рядом с ней:
+        /// у панели `GridLayoutGroup`, он растащил бы их по клеткам сетки, — и вылетать им
+        /// нужно за её край. Заводятся штуками и переиспользуются по кругу: `UiText` правит
+        /// `fontMaterial`, то есть каждая созданная строка — это ещё один инстанс материала.
+        /// </summary>
+        void BuildGhosts()
+        {
+            ghosts = new TextMeshProUGUI[GhostCount];
+            ghostRuns = new Coroutine[GhostCount];
+            for (var i = 0; i < GhostCount; i++)
+            {
+                ghosts[i] = UiText.Bold(
+                    $"Heat gain {i}", transform.parent, theme, ghostSize, theme.Gold, TextAlignmentOptions.Center);
+                ghosts[i].rectTransform.sizeDelta = new Vector2(cellSize * 2f, ghostSize * 1.6f);
+                ghosts[i].gameObject.SetActive(false);
+            }
+
+            rings = new UiPanelGraphic[RingCount];
+            ringRuns = new Coroutine[RingCount];
+            for (var i = 0; i < RingCount; i++)
+            {
+                rings[i] = UiPanel.Create($"Ring {i}", transform.parent, theme, theme.Ring(cellSize));
+                rings[i].rectTransform.sizeDelta = Vector2.one * cellSize;
+                rings[i].gameObject.SetActive(false);
+            }
         }
 
         /// <summary>
@@ -591,6 +909,14 @@ namespace Game.Storage
             fuseFill.anchorMin = Vector2.zero;
             fuseFill.anchorMax = new Vector2(1f, 1f);
             fuseFill.offsetMin = fuseFill.offsetMax = Vector2.zero;
+
+            // Искра сидит на самой полосе: она отмечает голову заливки, и уезжать ей нужно
+            // вместе с полосой, а не считаться от склада.
+            sparkPanel = UiPanel.Create("Spark", fuse, theme, theme.Flash);
+            spark = sparkPanel.rectTransform;
+            spark.anchorMin = spark.anchorMax = spark.pivot = new Vector2(0.5f, 0.5f);
+            spark.sizeDelta = Vector2.one * fuseHeight * 2f;
+            spark.gameObject.SetActive(false);
 
             fuse.gameObject.SetActive(false);
         }

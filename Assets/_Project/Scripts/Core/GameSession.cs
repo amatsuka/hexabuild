@@ -745,7 +745,7 @@ namespace Game.Core
         /// </summary>
         void OnSwept(int cell, int points)
         {
-            storageView.PlaySweep();
+            storageView.PlaySweep(cell);
             hudView.Popups.ShowSweep(points, PopupView.Anchor.On(storageView.CellRect(cell)));
         }
 

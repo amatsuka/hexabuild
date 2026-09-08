@@ -85,6 +85,13 @@ namespace Game.Economy
         /// <summary>Итоговый множитель: колония плюс серия плюс накал.</summary>
         public float Total => Colony + Streak + Heat;
 
+        /// <summary>
+        /// Сколько накала дало последнее действие на складе. Это и есть число на призраке,
+        /// который вылетает от клетки: на потолке действие не платит ничего, и ноль здесь —
+        /// не отсутствие данных, а честный ответ «эта ставка уже сыграна».
+        /// </summary>
+        public float LastBump { get; private set; }
+
         /// <summary>Накал долей от потолка: по ней греется рамка склада.</summary>
         public float HeatShare => HeatMax > 0f ? Heat / HeatMax : 0f;
 
@@ -129,7 +136,9 @@ namespace Game.Economy
         public void Bump()
         {
             silence = 0f;
-            SetHeat(Math.Min(Heat + HeatStep, HeatMax));
+            var grown = Math.Min(Heat + HeatStep, HeatMax);
+            LastBump = Math.Max(0f, grown - Heat);
+            SetHeat(grown);
         }
 
         /// <summary>

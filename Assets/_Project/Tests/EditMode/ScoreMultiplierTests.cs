@@ -103,6 +103,28 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(multiplier.HeatAtMax);
         }
 
+        /// <summary>
+        /// Призрак прибавки на складе показывает `LastBump`, а не ступень: у самого потолка
+        /// действие платит только остаток, а на потолке — ничего. Числа взяты некратные
+        /// нарочно, иначе последний шаг не отличить от полного.
+        /// </summary>
+        [Test]
+        public void LastBump_IsWhatTheActionActuallyPaid()
+        {
+            var multiplier = new ScoreMultiplier(0.05f, 0.25f, 2f, 0.03f, 0.1f, 2.5f, 2f);
+            multiplier.Bump();
+            Assert.AreEqual(0.03f, multiplier.LastBump, 1e-5f, "обычное действие платит полную ступень");
+
+            multiplier.Bump();
+            multiplier.Bump();
+            multiplier.Bump();
+            Assert.AreEqual(0.01f, multiplier.LastBump, 1e-5f, "у потолка платится только остаток");
+            Assert.IsTrue(multiplier.HeatAtMax);
+
+            multiplier.Bump();
+            Assert.AreEqual(0f, multiplier.LastBump, 1e-5f, "на потолке действие не платит ничего");
+        }
+
         [Test]
         public void Heat_HoldsForThePauseAndThenLeaksToZero()
         {

@@ -44,6 +44,13 @@ namespace Game.UI
                  "одинаковым над тёмной картой и над яркой водой")]
         [SerializeField, Range(0f, 1f)] float darken = 0.62f;
 
+        [Tooltip("Кромка карточки выше порога накала. Канвас в Overlay, то есть рисуется после " +
+                 "постобработки: bloom его не трогает, и канал выше единицы просто клампится — " +
+                 "яркость берётся цветом, а не свечением")]
+        [SerializeField, ColorUsage(true, true)] Color edgeHot = new(1.6f, 1.15f, 0.62f, 1f);
+        [Tooltip("Во сколько раз толще кромка на пике накала")]
+        [SerializeField, Range(1f, 3f)] float edgeHotWidth = 1.5f;
+
         [Header("Клетка склада")]
         [SerializeField] Color slotEmptyTop = new(0.20f, 0.40f, 0.56f, 0.22f);
         [SerializeField] Color slotEmptyBottom = new(0.03f, 0.12f, 0.22f, 0.30f);
@@ -108,6 +115,26 @@ namespace Game.UI
         public UiPanelStyle Card => new(
             fillTop, fillBottom, edge, glow, radius, edgeWidth, glowSize, glowOffset, highlight, highlightSpread,
             sheen, darken, backLight, spec, lightDirection);
+
+        /// <summary>
+        /// Карточка на пике накала: та же карточка с тёплой и яркой кромкой. Вершинным цветом
+        /// этого не сказать — он лежит в `Color32` и выше единицы не поднимается, — поэтому
+        /// яркость сидит в самом материале, и на неё уходит второй материал: стили кэшируются
+        /// по значению.
+        /// </summary>
+        public UiPanelStyle CardHot => new(
+            fillTop, fillBottom, edgeHot, glow, radius, edgeWidth * edgeHotWidth, glowSize, glowOffset,
+            highlight, highlightSpread, sheen, darken, backLight, spec, lightDirection);
+
+        /// <summary>
+        /// Кольцо ударной волны от точки слияния: заливки нет вовсе, есть только кромка.
+        /// Радиус — половина стороны, то есть квадрат становится кругом; растёт кольцо
+        /// масштабом, а не размером, иначе кромка и радиус остались бы в пикселях меша
+        /// и круг на глазах превратился бы в скруглённый квадрат.
+        /// </summary>
+        public UiPanelStyle Ring(float diameter) => new(
+            Color.clear, Color.clear, edgeHot, Color.clear, diameter * 0.5f, 3f, 0f, 0f, 0f,
+            highlightSpread, 0f, 0f, 0f, 0f, lightDirection);
 
         /// <summary>Пустая клетка склада: та же карточка мельче и без свечения.</summary>
         public UiPanelStyle SlotEmpty => new(
