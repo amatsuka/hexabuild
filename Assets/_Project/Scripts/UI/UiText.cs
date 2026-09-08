@@ -42,6 +42,24 @@ namespace Game.UI
             return text;
         }
 
+        /// <summary>
+        /// Строка в одну линию: перенос выключен, а кегль ужимается, пока число не влезет
+        /// в свою ширину. Счёт за партию вырастает на порядок, и разделитель тысяч из
+        /// <see cref="HudFormat.Points"/> давал точку переноса: с пятизначного счёта «25 195»
+        /// ломалось на две строки и вываливалось из карточки вверх и вниз.
+        /// </summary>
+        public static TextMeshProUGUI Fit(this TextMeshProUGUI text, float minSize)
+        {
+            // Кегль читается до включения автоподбора: с ним `fontSize` уже подобранный,
+            // и потолок съехал бы на первое же длинное число.
+            var size = text.fontSize;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+            text.fontSizeMax = size;
+            text.fontSizeMin = minSize;
+            text.enableAutoSizing = true;
+            return text;
+        }
+
         static TextMeshProUGUI Create(
             string name, Transform parent, TMP_FontAsset font, UiTheme theme,
             float size, Color color, TextAlignmentOptions alignment, float outlineWidth, float faceWeight)

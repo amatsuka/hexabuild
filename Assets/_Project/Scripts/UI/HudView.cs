@@ -23,6 +23,11 @@ namespace Game.UI
         const float Margin = 24f;
         const float TopHeight = 116f;
         const float PointsWidth = 320f;
+        /// <summary>
+        /// Докуда ужимается счёт: место под него в карточке одно, а число растёт. 62 держит
+        /// четыре знака, 34 — восемь, и до восьми знаков партия не доходит ни на одном уровне.
+        /// </summary>
+        const float PointsMinSize = 34f;
         const float IslandWidth = 158f;
         const float IslandSpacing = 12f;
         const float IslandPadding = 14f;
@@ -444,7 +449,7 @@ namespace Game.UI
             storageView.ShowIcon(coin, coinMesh, coinMaterial, coinAngles);
 
             pointsValue = UiText.Bold("Value", card, theme, 62f, theme.Gold, TextAlignmentOptions.Right);
-            pointsValue.Stretch(22f + CoinSize + 10f, 26f, 0f, 0f);
+            pointsValue.Stretch(22f + CoinSize + 10f, 26f, 0f, 0f).Fit(PointsMinSize);
         }
 
         /// <summary>
