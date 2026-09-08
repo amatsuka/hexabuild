@@ -92,17 +92,29 @@ namespace Game.Storage
             // Кадр просится у самого конвейера, а не `Camera.Render()`: в SRP тот идёт мимо
             // конвейера, и в плеере отдаёт не то, что в редакторе. `StandardRequest` живёт
             // в ядре рендера, ссылки на пакет URP для него не нужно.
-            var request = new RenderPipeline.StandardRequest { destination = texture };
-            if (RenderPipeline.SupportsRenderRequest(stageCamera, request))
+            // Модель на съёмочной площадке носит материал поля, а поле дышит и ходит волной.
+            // Снимок печётся один раз и навсегда — в том числе посреди партии, когда игрок
+            // впервые увидел этот ресурс, — поэтому на кадр съёмки движение гасится целиком.
+            Game.Grid.FieldPulse.Motion(false);
+
+            try
             {
-                RenderPipeline.SubmitRenderRequest(stageCamera, request);
+                var request = new RenderPipeline.StandardRequest { destination = texture };
+                if (RenderPipeline.SupportsRenderRequest(stageCamera, request))
+                {
+                    RenderPipeline.SubmitRenderRequest(stageCamera, request);
+                    return texture;
+                }
+
+                stageCamera.targetTexture = texture;
+                stageCamera.Render();
+                stageCamera.targetTexture = null;
                 return texture;
             }
-
-            stageCamera.targetTexture = texture;
-            stageCamera.Render();
-            stageCamera.targetTexture = null;
-            return texture;
+            finally
+            {
+                Game.Grid.FieldPulse.Motion(true);
+            }
         }
 
         void EnsureStage()

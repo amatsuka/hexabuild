@@ -115,6 +115,10 @@ namespace Game.Core
             level = CampaignSession.Level;
             seed = SessionSeed.Take(config.Seed);
 
+            // Глобалы поля переживают перезагрузку сцены, а рестарт партии — это она: без
+            // сброса новое поле началось бы разогретым с прошлой партии.
+            FieldPulse.Reset();
+
             var map = MapGenerator.Generate(config.MapGenerationSettingsFor(seed, level));
             var wallet = new Wallet(config.StartingPoints);
             var storage = new StorageGrid(config.StorageSize);
@@ -302,6 +306,11 @@ namespace Game.Core
             if (viewport.x != Screen.width || viewport.y != Screen.height)
                 ApplyViewportInsets();
 
+            // Накал склада греет и поле: ободок плиток уползает в тёплое. Стоит это одного
+            // глобала в кадр, и ставится он до всех выходов — на паузе и после конца партии
+            // поле обязано остаться таким же тёплым, каким его застали.
+            FieldPulse.Heat(state.Multiplier.HeatShare);
+
             if (end.HasEnded || pauseView.IsOpen)
                 return;
 
@@ -340,7 +349,9 @@ namespace Game.Core
             foreach (var tile in map.Tiles.Values)
             {
                 var view = Instantiate(tilePrefab, tilesRoot);
-                view.Bind(tile);
+                // Интервал добычи плитка знает не ради счёта, а ради картинки: по нему стек
+                // накаляется к своей выдаче. В кампании он свой на каждом уровне.
+                view.Bind(tile, config.ExtractionIntervalFor(level));
                 views.Add(tile.Coord, view);
                 fieldCeiling = Mathf.Max(fieldCeiling, view.SurfaceHeight);
             }

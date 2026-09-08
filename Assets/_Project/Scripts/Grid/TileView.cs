@@ -82,6 +82,7 @@ namespace Game.Grid
         static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         static readonly int StateFogId = Shader.PropertyToID("_StateFog");
         static readonly int StateFadeId = Shader.PropertyToID("_StateFade");
+        static readonly int RimStrengthId = Shader.PropertyToID("_RimStrength");
 
         // Высота плитки идёт из того же шума, что и биом. Ноль возвращает прежнее плоское поле,
         // поэтому весь рельеф откатывается одним числом `heightScale`.
@@ -150,6 +151,10 @@ namespace Game.Grid
         [SerializeField] float extractionHop = 0.07f;
         [SerializeField] float sparkScale = 0.08f;
         [SerializeField] float sparkRise = 0.24f;
+        [Tooltip("Сила ободка стека в покое: столько же стоит в материале `TileState`")]
+        [SerializeField, Range(0f, 1f)] float depositRimRest = 0.22f;
+        [Tooltip("Докуда ободок стека доходит к следующей выдаче")]
+        [SerializeField, Range(0f, 1f)] float depositRimPeak = 0.85f;
 
         [Header("Отклик")]
         [Tooltip("На сколько плитка проседает под пальцем, юниты")]
@@ -206,6 +211,12 @@ namespace Game.Grid
         MaterialPropertyBlock propertyBlock;
         float surfaceHeight;
 
+        /// <summary>Сколько секунд идёт цикл добычи на этой плитке: по нему накаляется стек.</summary>
+        float cycleSeconds;
+
+        /// <summary>Накал стека к следующей выдаче. Живёт только на плитке, которая добывает.</summary>
+        Coroutine rimPulse;
+
         // Состояние, которое плитка уже показывает. Нужно затем, что подскок играется не на
         // «плитка открыта», а на «плитка открылась»: `Apply` зовут и на каждой добыче тоже.
         TileState? shownState;
@@ -221,9 +232,10 @@ namespace Game.Grid
         /// </summary>
         public float SurfaceHeight => surfaceHeight;
 
-        public void Bind(TileData tile)
+        public void Bind(TileData tile, float extractionInterval)
         {
             Coord = tile.Coord;
+            cycleSeconds = extractionInterval;
             name = $"Hex {tile.Coord}";
             // Высота плитки — это подъём её корня по Y. Дети едут вместе с ней и сохраняют свою
             // раскладку, а юбка добирает вниз до общего дна поля.
@@ -289,12 +301,61 @@ namespace Game.Grid
             if (!isActiveAndEnabled)
                 return;
 
+            // Ободок стека копится к следующей выдаче и обнуляется этой: цикл добычи — самое
+            // долгое ожидание в партии, и до сих пор о нём говорил только сам момент выдачи.
+            if (rimPulse != null)
+                StopCoroutine(rimPulse);
+            rimPulse = StartCoroutine(ChargeRim());
+
             for (var i = 0; i < tile.Deposits.Count && i < deposits.Count; i++)
                 if (tile.Deposits[i].Type == type)
                 {
                     StartCoroutine(Extract(deposits[i], resources.Get(type)));
                     return;
                 }
+        }
+
+        /// <summary>
+        /// Накал стека между выдачами. Ходит только на добывающей плитке и сам гаснет, если
+        /// следующей выдачи не пришло: дорога оборвалась или месторождение кончилось.
+        /// </summary>
+        IEnumerator ChargeRim()
+        {
+            var seconds = Mathf.Max(cycleSeconds, 0.05f);
+            var elapsed = 0f;
+
+            while (elapsed < seconds)
+            {
+                elapsed += Time.deltaTime;
+                // Квадрат, а не прямая: первую половину цикла ободок почти не растёт, и накал
+                // читается ожиданием, а не ровной подсветкой.
+                var share = Mathf.Clamp01(elapsed / seconds);
+                SetRim(Mathf.Lerp(depositRimRest, depositRimPeak, share * share));
+                yield return null;
+            }
+
+            SetRim(depositRimRest);
+            rimPulse = null;
+        }
+
+        /// <summary>Сила ободка на всех стеках плитки: они ходят по одному таймеру.</summary>
+        void SetRim(float strength)
+        {
+            propertyBlock ??= new MaterialPropertyBlock();
+
+            for (var i = 0; i < deposits.Count; i++)
+            {
+                SetRim(deposits[i].Body, strength);
+                if (deposits[i].Accent != null)
+                    SetRim(deposits[i].Accent, strength);
+            }
+        }
+
+        void SetRim(MeshRenderer target, float strength)
+        {
+            target.GetPropertyBlock(propertyBlock);
+            propertyBlock.SetFloat(RimStrengthId, strength);
+            target.SetPropertyBlock(propertyBlock);
         }
 
         /// <summary>Палец лёг на плитку: она проседает и держится, пока его не снимут.</summary>
@@ -319,6 +380,9 @@ namespace Game.Grid
             // Пружина нажатия пишет ту же позицию: не оборви её — и она дорисует свой возврат
             // поверх подскока.
             PressPulse.Cancel(this);
+            // Открытие — самое дорогое действие партии, и платит за него всё поле: от этой
+            // плитки по соседям расходится волна. Считает её шейдер, отсюда уходит одна точка.
+            FieldPulse.Wave(transform.position);
             StartCoroutine(Reveal());
         }
 

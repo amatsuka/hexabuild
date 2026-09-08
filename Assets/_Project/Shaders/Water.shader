@@ -27,6 +27,12 @@ Shader "Game/Water"
         _SparkleScale ("Частота бликов", Range(0.5, 20)) = 3.6
         _SparkleSpeed ("Скорость бликов", Range(0, 3)) = 0.45
         _SparkleStrength ("Сила бликов", Range(0, 1)) = 0.1
+        // Полосы поверх искр: искра — точка, полоса — длинная волна, идущая по воде. Порознь
+        // вода либо в горошек, либо в рельсах, вместе читается течением.
+        _StreakScale ("Частота полос", Range(0.2, 12)) = 3.4
+        _StreakSpeed ("Скорость полос", Range(0, 3)) = 0.35
+        _StreakStrength ("Сила полос", Range(0, 1)) = 0.09
+        _StreakBend ("Излом полос", Range(0, 4)) = 1.6
         _SwellStrength ("Сила зыби", Range(0, 0.2)) = 0.04
         _Gloss ("Резкость солнечного пятна", Range(4, 256)) = 48
         _GlossStrength ("Сила солнечного пятна", Range(0, 2)) = 0.6
@@ -84,6 +90,10 @@ Shader "Game/Water"
                 half _SparkleScale;
                 half _SparkleSpeed;
                 half _SparkleStrength;
+                half _StreakScale;
+                half _StreakSpeed;
+                half _StreakStrength;
+                half _StreakBend;
                 half _SwellStrength;
                 half _Gloss;
                 half _GlossStrength;
@@ -192,8 +202,18 @@ Shader "Game/Water"
                 float patch = saturate(0.35 + 0.75 * sin(dot(flow, float2(0.6, 0.8)) * 0.28 + time * 0.11));
                 half sparkle = smoothstep(2.05h, 2.32h, ripple) * _SparkleStrength * patch;
 
-                lit += _SparkleColor.rgb * (gloss + sparkle) * mainLight.shadowAttenuation;
-                alpha = saturate(alpha + sparkle);
+                // Полоса — тот же блик, но вытянутый: частота считается поперёк направления,
+                // вдоль него блик не кончается вовсе. Прямая полоса читается рельсой, поэтому
+                // гребень изламывается медленной волной вдоль себя же.
+                float2 streakDir = float2(0.87, 0.49);
+                float across = dot(flow, float2(-streakDir.y, streakDir.x));
+                float along = dot(flow, streakDir);
+                float band = sin(across * _StreakScale
+                    + sin(along * 0.31 + time * 0.13) * _StreakBend + time * _StreakSpeed);
+                half streak = smoothstep(0.93h, 1.0h, band) * _StreakStrength * patch;
+
+                lit += _SparkleColor.rgb * (gloss + sparkle + streak) * mainLight.shadowAttenuation;
+                alpha = saturate(alpha + sparkle + streak);
 
                 return half4(lit, alpha);
             }

@@ -23,8 +23,25 @@ Shader "Game/TileState"
         // Ободок по силуэту. Ради него он и заведён: тёмное дерево на тёмной плитке
         // отличается от неё только контуром.
         _RimColor ("Цвет ободка", Color) = (0.62, 0.78, 0.95, 1)
+        // Куда уползает ободок на полном накале склада: поле греется вместе с ним.
+        _RimHotColor ("Цвет ободка на накале", Color) = (1.0, 0.62, 0.28, 1)
         _RimPower ("Резкость ободка", Range(0.5, 8)) = 3
         _RimStrength ("Сила ободка", Range(0, 1)) = 0.22
+
+        // Дыхание поля. Смещение всегда вверх: ловушка «суша ниже 0.09 пускает воду в канавку
+        // между фасками» — отрицательная полуволна обвела бы пеной каждую береговую плитку.
+        _BreathHeight ("Высота дыхания", Range(0, 0.05)) = 0.015
+        _BreathSpeed ("Вдохов в секунду", Range(0, 3)) = 0.55
+        _BreathScale ("Фаза на юнит", Range(0.05, 3)) = 0.7
+        // Насколько дымка глушит дыхание: 2.5 — доступная плитка (0.45) уже неподвижна.
+        _BreathFog ("Глушение дымкой", Range(0.5, 6)) = 2.5
+
+        // Волна открытия. Кольцо расходится от той плитки, по которой заплатили.
+        _WaveHeight ("Высота волны", Range(0, 0.2)) = 0.06
+        _WaveSpeed ("Скорость волны", Range(1, 30)) = 7
+        _WaveWidth ("Ширина гребня", Range(0.1, 4)) = 1.4
+        _WaveSeconds ("Жизнь волны", Range(0.1, 4)) = 1.1
+        _WaveRange ("Докуда доходит", Range(1, 30)) = 7
     }
 
     SubShader
@@ -35,6 +52,67 @@ Shader "Game/TileState"
             "RenderPipeline" = "UniversalPipeline"
             "Queue" = "Geometry"
         }
+
+        // Смещение вершин обязано быть одинаковым во всех проходах: считай его только
+        // в ForwardLit — и тень с SSAO остались бы от недвинутой геометрии. Отсюда общий
+        // блок: он вставляется в каждый проход, и инстанс-буфер объявлен здесь же.
+        HLSLINCLUDE
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+        // Глобалы поля — их ставит `Game.Grid.FieldPulse`. Свойством на плитку это не сделать:
+        // анимация общая для всего поля, а инстанс-буфер стоит замера (§5).
+        // xyz — откуда пошла волна, w — когда (в секундах `_Time.y`).
+        float4 _FieldWave;
+        // Доля накала склада: поле греется вместе с карточкой.
+        half _FieldHeat;
+        // Общий рубильник движения. Ноль — поле стоит: `ResourceIconBaker` печёт иконки тем же
+        // материалом, и волна, пришедшая в момент выпечки, впеклась бы в иконку навсегда.
+        half _FieldPulse;
+
+        half _BreathHeight;
+        half _BreathSpeed;
+        half _BreathScale;
+        half _BreathFog;
+        half _WaveHeight;
+        half _WaveSpeed;
+        half _WaveWidth;
+        half _WaveSeconds;
+        half _WaveRange;
+
+        UNITY_INSTANCING_BUFFER_START(Props)
+            UNITY_DEFINE_INSTANCED_PROP(float4, _BaseColor)
+            UNITY_DEFINE_INSTANCED_PROP(float4, _FogColor)
+            UNITY_DEFINE_INSTANCED_PROP(float, _StateFog)
+            UNITY_DEFINE_INSTANCED_PROP(float, _StateFade)
+            // Сила ободка живёт в буфере ради одного: стек месторождения накаляется к своей
+            // выдаче, и каждый стек идёт по своему таймеру. Замер инстансинга — в записи M30.
+            UNITY_DEFINE_INSTANCED_PROP(float, _RimStrength)
+        UNITY_INSTANCING_BUFFER_END(Props)
+
+        /// Насколько поднята вершина. Фаза берётся из мировой позиции, а не из позиции объекта:
+        /// так крышка, лента русла, берег, декор, стеки и дорога едут одним куском — русло лежит
+        /// в 0.012 над крышкой, и раздельное движение съело бы ленту первым же вдохом.
+        float FieldLift(float3 positionWS, half fog)
+        {
+            // Дыхание: живая плитка дышит, доступная и скрытая стоят. Дымка уже лежит
+            // в инстанс-буфере, и нового поля на это не нужно.
+            half alive = saturate(1.0h - fog * _BreathFog);
+            float phase = positionWS.x * _BreathScale + positionWS.z * _BreathScale * 0.73;
+            float breath = (0.5 + 0.5 * sin(_Time.y * _BreathSpeed * 6.2831853 + phase))
+                * _BreathHeight * alive;
+
+            // Волна: кольцо уходит от точки открытия и гаснет и по времени, и по расстоянию.
+            float age = _Time.y - _FieldWave.w;
+            float spread = length(positionWS.xz - _FieldWave.xz);
+            float crest = abs(spread - age * _WaveSpeed);
+            float ring = 1.0 - smoothstep(0.0, max(_WaveWidth, 1e-3), crest);
+            float life = saturate(1.0 - age / max(_WaveSeconds, 1e-3)) * step(0.0, age);
+            float reach = saturate(1.0 - spread / max(_WaveRange, 1e-3));
+            float wave = ring * life * reach * _WaveHeight;
+
+            return (breath + wave) * _FieldPulse;
+        }
+        ENDHLSL
 
         Pass
         {
@@ -54,7 +132,6 @@ Shader "Game/TileState"
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile_instancing
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             // Текстура одна на материал и в инстанс-буфер не кладётся: там только то, что
@@ -69,15 +146,8 @@ Shader "Game/TileState"
             half _LightWrap;
             half4 _ShadowColor;
             half4 _RimColor;
+            half4 _RimHotColor;
             half _RimPower;
-            half _RimStrength;
-
-            UNITY_INSTANCING_BUFFER_START(Props)
-                UNITY_DEFINE_INSTANCED_PROP(float4, _BaseColor)
-                UNITY_DEFINE_INSTANCED_PROP(float4, _FogColor)
-                UNITY_DEFINE_INSTANCED_PROP(float, _StateFog)
-                UNITY_DEFINE_INSTANCED_PROP(float, _StateFade)
-            UNITY_INSTANCING_BUFFER_END(Props)
 
             struct Attributes
             {
@@ -103,6 +173,8 @@ Shader "Game/TileState"
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
 
                 output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                output.positionWS.y += FieldLift(
+                    output.positionWS, UNITY_ACCESS_INSTANCED_PROP(Props, _StateFog));
                 output.positionCS = TransformWorldToHClip(output.positionWS);
                 output.normalWS = TransformObjectToWorldNormal(input.normalOS);
                 output.uv = input.uv;
@@ -138,8 +210,12 @@ Shader "Game/TileState"
 
                 // Ободок гасится в тумане вместе со всем остальным: `lerp` ниже общий.
                 half3 viewWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
-                half rim = pow(1.0h - saturate(dot(normalWS, viewWS)), _RimPower) * _RimStrength;
-                lit += _RimColor.rgb * rim;
+                half rim = pow(1.0h - saturate(dot(normalWS, viewWS)), _RimPower)
+                    * UNITY_ACCESS_INSTANCED_PROP(Props, _RimStrength);
+                // Накал склада не остаётся на складе: ободок всего поля уползает в тёплое.
+                // Множится на общий рубильник — иначе разогретый ободок впёкся бы в иконку.
+                half3 rimColor = lerp(_RimColor.rgb, _RimHotColor.rgb, saturate(_FieldHeat * _FieldPulse));
+                lit += rimColor * rim;
 
                 return half4(lerp(lit, fogColor.rgb, fog), 1.0h);
             }
@@ -161,7 +237,6 @@ Shader "Game/TileState"
             #pragma multi_compile_instancing
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
             float3 _LightDirection;
@@ -185,6 +260,7 @@ Shader "Game/TileState"
                 UNITY_SETUP_INSTANCE_ID(input);
 
                 float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                positionWS.y += FieldLift(positionWS, UNITY_ACCESS_INSTANCED_PROP(Props, _StateFog));
                 float3 normalWS = TransformObjectToWorldNormal(input.normalOS);
 
                 #if defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
@@ -225,8 +301,6 @@ Shader "Game/TileState"
             #pragma fragment DepthFragment
             #pragma multi_compile_instancing
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
             struct Attributes
             {
                 float4 positionOS : POSITION;
@@ -242,7 +316,9 @@ Shader "Game/TileState"
             {
                 Varyings output;
                 UNITY_SETUP_INSTANCE_ID(input);
-                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                positionWS.y += FieldLift(positionWS, UNITY_ACCESS_INSTANCED_PROP(Props, _StateFog));
+                output.positionCS = TransformWorldToHClip(positionWS);
                 return output;
             }
 
@@ -266,8 +342,6 @@ Shader "Game/TileState"
             #pragma fragment NormalsFragment
             #pragma multi_compile_instancing
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
             struct Attributes
             {
                 float4 positionOS : POSITION;
@@ -285,7 +359,9 @@ Shader "Game/TileState"
             {
                 Varyings output;
                 UNITY_SETUP_INSTANCE_ID(input);
-                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                positionWS.y += FieldLift(positionWS, UNITY_ACCESS_INSTANCED_PROP(Props, _StateFog));
+                output.positionCS = TransformWorldToHClip(positionWS);
                 output.normalWS = TransformObjectToWorldNormal(input.normalOS);
                 return output;
             }
