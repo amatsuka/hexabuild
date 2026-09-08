@@ -58,6 +58,26 @@ namespace Game.Storage
         [SerializeField] float fuseHeight = 6f;
         [SerializeField] float fuseGap = 5f;
 
+        [Header("Тревога и сгорание")]
+        [Tooltip("При скольких свободных клетках склад начинает тревожиться. Тревога идёт до переполнения, а не после него")]
+        [SerializeField] int alarmFreeCells = 3;
+
+        [Tooltip("Цвет тревожной пульсации на свободных клетках")]
+        [SerializeField] Color alarmTint = new(1f, 0.40f, 0.32f, 1f);
+
+        [Tooltip("Пульсаций в секунду, когда свободна последняя клетка. На трёх свободных втрое реже")]
+        [SerializeField] float alarmSpeed = 1.1f;
+
+        [Tooltip("Сколько длится вспышка сгоревшего накала")]
+        [SerializeField] float burnSeconds = 0.34f;
+
+        [Tooltip("Цвет вспышки: карточка выбеливается, а не краснеет — красное уже занято потерей ресурса")]
+        [SerializeField] Color burnTint = new(1f, 0.90f, 0.78f, 0.85f);
+
+        [Tooltip("На сколько пикселей падает число множителя, пока гаснет")]
+        [SerializeField] float burnDrop = 28f;
+
+
         [Header("Анимация слияния")]
         [SerializeField] float flySeconds = 0.28f;
         [SerializeField] float popSeconds = 0.18f;
@@ -76,6 +96,14 @@ namespace Game.Storage
         ResourceIconBaker snapshots;
         float flashTimer;
         float sweepTimer;
+        float burnTimer;
+        float alarmPhase;
+        bool alarmOn;
+
+        /// <summary>Клетка под пальцем: её цвет ведёт нажатие, и тревога в него не лезет.</summary>
+        int pressedCell = -1;
+
+        UiPanelGraphic burnPanel;
 
         TextMeshProUGUI factor;
         RectTransform fuse;
@@ -104,10 +132,20 @@ namespace Game.Storage
         }
 
         /// <summary>Палец лёг на клетку: она проседает, как кнопка.</summary>
-        public void PressCell(int index) => PressPulse.HoldCard(cellPanels[index]);
+        public void PressCell(int index)
+        {
+            pressedCell = index;
+            PressPulse.HoldCard(cellPanels[index]);
+        }
 
         /// <summary>Палец снят с клетки.</summary>
-        public void ReleasePress(int index) => PressPulse.Release(cellPanels[index]);
+        public void ReleasePress(int index)
+        {
+            if (pressedCell == index)
+                pressedCell = -1;
+
+            PressPulse.Release(cellPanels[index]);
+        }
 
         /// <summary>Отказ по клетке: она коротко дрожит поперёк.</summary>
         public void ShakeCell(int index) => PressPulse.ShakeSideways(cellPanels[index], refusalShake);
@@ -304,6 +342,21 @@ namespace Game.Storage
         /// <summary>Премия за чистый склад: он вспыхивает золотом и коротко раздувается.</summary>
         public void PlaySweep() => sweepTimer = sweepSeconds;
 
+        /// <summary>
+        /// Накал сгорел на переполнении: карточка выбеливается вспышкой, а число множителя
+        /// падает вниз и гаснет — оно и есть то, что игрок только что потерял. Красное здесь
+        /// не годится: красным уже мигает потеря самого ресурса, и два разных убытка одним
+        /// цветом слились бы в один.
+        /// </summary>
+        public void PlayBurn()
+        {
+            if (burnPanel == null)
+                return;
+
+            burnTimer = burnSeconds;
+            burnPanel.gameObject.SetActive(true);
+        }
+
         void Update()
         {
             // Склад стоит в сцене с её загрузки, а собирается только в `Bind`: до первой партии
@@ -314,6 +367,91 @@ namespace Game.Storage
 
             TickPanelTint();
             TickHeat();
+            TickAlarm();
+            TickBurn();
+        }
+
+        /// <summary>
+        /// Тревога склада. Пульсируют **свободные** клетки, потому что кончаются именно они, и
+        /// идёт она **до** переполнения, а не после: после терять уже нечего, а весь смысл в
+        /// том, чтобы игрок успел разгрести склад и не сжечь накал. До M30 угроза была не видна
+        /// вовсе — первым сигналом был улетевший ресурс, то есть уже случившийся убыток.
+        ///
+        /// Цвет пишется только тем клеткам, которые его меняют: `Graphic.color` на равном
+        /// значении не трогает меш, а тревога по определению зажигается на двух-трёх клетках
+        /// из двадцати четырёх.
+        /// </summary>
+        void TickAlarm()
+        {
+            var free = grid.Capacity - grid.Count;
+            var alarmed = free > 0 && free <= alarmFreeCells;
+
+            if (!alarmed)
+            {
+                if (!alarmOn)
+                    return;
+
+                alarmOn = false;
+                alarmPhase = 0f;
+                foreach (var cell in cellPanels)
+                    if (!PressPulse.IsBusy(cell))
+                        cell.color = Color.white;
+
+                return;
+            }
+
+            alarmOn = true;
+
+            // Чем меньше осталось, тем чаще пульс: на последней клетке он втрое быстрее, чем
+            // на трёх свободных. Ровный пульс сообщал бы «склад полнеет», а нужно «сейчас будет».
+            alarmPhase += Time.deltaTime * alarmSpeed * (alarmFreeCells + 1 - free);
+            var pulse = 0.5f - 0.5f * Mathf.Cos(alarmPhase * Mathf.PI * 2f);
+            var tint = Color.Lerp(Color.white, alarmTint, pulse);
+
+            for (var i = 0; i < cellPanels.Length; i++)
+            {
+                if (i == pressedCell || PressPulse.IsBusy(cellPanels[i]))
+                    continue;
+
+                cellPanels[i].color = grid[i].HasValue ? Color.white : tint;
+            }
+        }
+
+        /// <summary>
+        /// Вспышка сгорания — своим слоем поверх клеток, а не вершинным цветом карточки, как
+        /// нагрев и потеря. Причина техническая и стоит того, чтобы её тут записать: вершинный
+        /// цвет uGUI лежит в `Color32`, выше единицы он не поднимается, и «ярче обычного» им не
+        /// сказать вовсе — белый тинт это ровно карточка в своём цвете. Поднять карточку выше
+        /// её собственной яркости можно только чем-то, что лежит сверху.
+        ///
+        /// Слой гасится целиком, когда отыграл: лишний прозрачный прямоугольник во весь склад
+        /// каждый кадр — это overdraw ни за чем.
+        /// </summary>
+        void TickBurn()
+        {
+            if (burnTimer <= 0f)
+                return;
+
+            // Нескалированное время: сгорание совпадает с hitstop по времени, а вспышка обязана
+            // отыграть свои доли секунды целиком.
+            burnTimer = Mathf.Max(0f, burnTimer - Time.unscaledDeltaTime);
+
+            if (burnTimer <= 0f)
+            {
+                burnPanel.gameObject.SetActive(false);
+                factor.rectTransform.anchoredPosition = new Vector2(0f, factorGap);
+                return;
+            }
+
+            var progress = 1f - burnTimer / burnSeconds;
+            burnPanel.color = new Color(burnTint.r, burnTint.g, burnTint.b, burnTint.a * Anim.Hop(progress));
+
+            // Число уже пересчитано `TickHeat` на этом же кадре — здесь оно только падает и
+            // гаснет. Порядок в `Update` на это и рассчитан.
+            factor.rectTransform.anchoredPosition = new Vector2(0f, factorGap - burnDrop * progress);
+            var faded = factor.color;
+            faded.a = 1f - progress;
+            factor.color = faded;
         }
 
         /// <summary>
@@ -420,6 +558,13 @@ namespace Game.Storage
                 icons[i] = icon.GetComponent<ResourceIcon>();
                 icons[i].raycastTarget = false;
             }
+
+            // Последним ребёнком, то есть поверх клеток: вспышка гасит карточку целиком, а не
+            // подкрашивает её подложку снизу, как это делает нагрев.
+            burnPanel = UiPanel.Create("Burn", transform, theme, theme.Flash);
+            burnPanel.rectTransform.Stretch();
+            burnPanel.raycastTarget = false;
+            burnPanel.gameObject.SetActive(false);
         }
 
         /// <summary>

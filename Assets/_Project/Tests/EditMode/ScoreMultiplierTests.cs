@@ -148,6 +148,32 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void Burn_ReportsTheMomentOnceWhenThereWasHeat()
+        {
+            var multiplier = Hot();
+            var burned = 0;
+            multiplier.Burned += () => burned++;
+
+            multiplier.Bump();
+            multiplier.Burn();
+
+            Assert.AreEqual(1, burned, "сгорел накал — у момента есть свой кадр");
+        }
+
+        [Test]
+        public void Burn_OnColdStorage_ReportsNothing()
+        {
+            var multiplier = Hot();
+            var burned = 0;
+            multiplier.Burned += () => burned++;
+
+            multiplier.Burn();
+            multiplier.Burn();
+
+            Assert.AreEqual(0, burned, "гореть было нечему: переполнение на холодном складе видно и без вспышки");
+        }
+
+        [Test]
         public void HeatShare_IsTheShareOfTheCap()
         {
             var multiplier = Hot();

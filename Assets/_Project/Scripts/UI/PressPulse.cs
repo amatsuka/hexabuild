@@ -106,6 +106,14 @@ namespace Game.UI
         /// забирает себе другая анимация: масштаб клетки склада на слиянии, высота плитки
         /// на открытии — иначе затухающая пружина дорисовывала бы поверх них своё.
         /// </summary>
+        /// <summary>
+        /// Нажатие уже ведёт цвет и положение этого объекта. Спрашивают те, кто красит те же
+        /// карточки по своему поводу: пока пружина не улеглась, она пишет цвет каждый кадр,
+        /// и второй хозяин цвета дал бы мерцание, а не два эффекта.
+        /// </summary>
+        public static bool IsBusy(Component target) =>
+            target != null && target.TryGetComponent<PressPulse>(out var pulse) && pulse.enabled;
+
         public static void Cancel(Component target)
         {
             var pulse = target.GetComponent<PressPulse>();

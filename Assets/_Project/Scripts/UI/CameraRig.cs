@@ -33,6 +33,15 @@ namespace Game.UI
         [Tooltip("Отвод камеры от земли. При ортографии влияет только на клиппинг и дальность теней")]
         [SerializeField] float distance = 20f;
 
+        // Тряска кадра. До M30 камеру не трогали вовсе — игрок ей панит, и дёрганый кадр читался
+        // бы как сбой пана. Решением человека 08.09.2026 запрет снят ради одного события:
+        // переполнение сожгло накал. Больше её никто не дёргает.
+        [Header("Тряска")]
+        [Tooltip("Сколько длится удар по кадру")]
+        [SerializeField] float shakeSeconds = 0.32f;
+        [Tooltip("Размах тряски в долях полукадра: на дальнем зуме мировая единица мельче, а удар обязан читаться так же")]
+        [SerializeField, Range(0f, 0.2f)] float shakeShare = 0.045f;
+
         /// <summary>Запас вокруг поля на самом дальнем зуме: край не должен лежать впритык к кромке.</summary>
         const float FitMargin = 1.04f;
 
@@ -58,6 +67,9 @@ namespace Game.UI
         float fitAspect;
 
         bool initialized;
+
+        /// <summary>Сколько осталось трясти. Ноль — камера стоит там, где её оставил игрок.</summary>
+        float shakeTimer;
 
         /// <summary>Точка земли, на которую смотрит камера: x вправо, y вглубь поля. Позиция выводится из неё.</summary>
         Vector2 focus;
@@ -86,6 +98,27 @@ namespace Game.UI
         void Awake()
         {
             Initialize();
+            ApplyTransform();
+        }
+
+        /// <summary>
+        /// Удар по кадру. Ходит только вбок: вертикальная тряска на наклонённой камере читается
+        /// как скачок поля к наблюдателю, а не как удар, — по той же причине клетки склада трясёт
+        /// вбок <see cref="PressPulse.ShakeSideways"/>.
+        /// </summary>
+        public void Shake() => shakeTimer = shakeSeconds;
+
+        void Update()
+        {
+            if (shakeTimer <= 0f)
+                return;
+
+            // Нескалированное время: hitstop замедляет партию, а удар обязан отыграть свои
+            // 0.32 с целиком — иначе он размазывается ровно там, где должен быть резким.
+            shakeTimer = Mathf.Max(0f, shakeTimer - Time.unscaledDeltaTime);
+
+            // Последний кадр приходит с нулевым таймером и возвращает камеру на место сам:
+            // отдельного «конец тряски» не нужно.
             ApplyTransform();
         }
 
@@ -231,8 +264,20 @@ namespace Game.UI
         {
             var rotation = Quaternion.Euler(pitch, 0f, 0f);
             transform.rotation = rotation;
-            transform.position = new Vector3(focus.x, 0f, focus.y) - rotation * Vector3.forward * distance;
+            transform.position = new Vector3(focus.x, 0f, focus.y)
+                - rotation * Vector3.forward * distance
+                + rotation * Vector3.right * ShakeOffset();
         }
+
+        /// <summary>
+        /// Смещение тряски вбок, в мировых единицах. Размах считается от текущего зума, а не
+        /// задан числом: одна и та же мировая амплитуда на ближнем зуме сносит поле на полэкрана,
+        /// а на дальнем не видна вовсе.
+        /// </summary>
+        float ShakeOffset() =>
+            shakeTimer <= 0f
+                ? 0f
+                : Anim.Shake(1f - shakeTimer / shakeSeconds) * Cam.orthographicSize * shakeShare;
 
         /// <summary>
         /// Предел фокуса по оси. `half` — полкадра, `lowMargin` и `highMargin` — насколько

@@ -29,6 +29,10 @@ namespace Game.Core
         [SerializeField] StorageView storageView;
         [Tooltip("Пульс виньетки на высоком накале. Пусто — эффекта нет, партия идёт как раньше")]
         [SerializeField] HeatVignette heatVignette;
+        [Tooltip("Провал цвета в момент, когда переполнение сожгло накал. Пусто — кадр не реагирует")]
+        [SerializeField] BurnFlash burnFlash;
+        [Tooltip("Проба M30: остановка времени на крупном слиянии. Пусто — партия идёт как раньше")]
+        [SerializeField] Hitstop hitstop;
         [SerializeField] HudView hudView;
         [SerializeField] GameOverView gameOverView;
         [SerializeField] PauseView pauseView;
@@ -143,6 +147,11 @@ namespace Game.Core
 
             if (heatVignette != null)
                 heatVignette.Bind(multiplier);
+
+            // Сгорание накала — момент, а не состояние, и рассылает его партия, как и остальные
+            // моменты склада: вью про множитель знают ровно столько, сколько им сказали.
+            // Отписки нет намеренно — множитель живёт ровно партию и уходит вместе с ней.
+            multiplier.Burned += OnBurned;
 
             hudView.Bind(state, contracts, storageView, ceiling, StarShares());
             gameOverView.Bind(storageView, production, contracts);
@@ -690,6 +699,26 @@ namespace Game.Core
         void OnMerged(MergeReport report)
         {
             storageView.PlayMerge(report.ConsumedCells, report.ResultCells, report.Outcome.Source);
+
+            // Удар временем — только на крупном слиянии. На тройке он звучал бы каждые несколько
+            // секунд и из удара превратился бы в тик метронома.
+            if (hitstop != null && report.Outcome.Consumed >= mergeRules.LargeCount)
+                hitstop.Play();
+        }
+
+        /// <summary>
+        /// Переполнение сожгло накал. Три эффекта на один момент, и это не украшательство:
+        /// потеря накала не видна ни в одной цифре, кроме множителя, — вспышка говорит «на
+        /// складе», провал цвета «в партии», удар по камере «прямо сейчас». Ресурс при этом
+        /// теряется отдельно и мигает своим красным.
+        /// </summary>
+        void OnBurned()
+        {
+            storageView.PlayBurn();
+            cameraRig.Shake();
+
+            if (burnFlash != null)
+                burnFlash.Play();
         }
 
         /// <summary>

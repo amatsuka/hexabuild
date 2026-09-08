@@ -130,6 +130,8 @@ GameObject:
   - component: {fileID: 106828385}
   - component: {fileID: 106828384}
   - component: {fileID: 106828386}
+  - component: {fileID: 106828388}
+  - component: {fileID: 106828387}
   m_Layer: 0
   m_Name: Post
   m_TagString: Untagged
@@ -187,6 +189,36 @@ MonoBehaviour:
   pulseSpeed: 2.2
   tint: {r: 0.32, g: 0.1, b: 0.02, a: 1}
   priority: 10
+--- !u!114 &106828387
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 106828383}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c82b57e41ae141958e2ec73e0d739fe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Runtime::Game.UI.Hitstop
+  scale: 0.12
+  seconds: 0.07
+--- !u!114 &106828388
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 106828383}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e4d6227a5e1643bd87620a47d0aaec9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game.Runtime::Game.UI.BurnFlash
+  seconds: 0.24
+  saturation: -72
+  exposure: -1.1
+  priority: 20
 --- !u!1 &127816810
 GameObject:
   m_ObjectHideFlags: 0
@@ -229,6 +261,8 @@ MonoBehaviour:
   cameraRig: {fileID: 381356108}
   storageView: {fileID: 1637872535}
   heatVignette: {fileID: 106828386}
+  burnFlash: {fileID: 106828388}
+  hitstop: {fileID: 106828387}
   hudView: {fileID: 868732729}
   gameOverView: {fileID: 883969606}
   pauseView: {fileID: 2059318244}
@@ -430,6 +464,8 @@ MonoBehaviour:
   panSlack: 0.5
   pitch: 55
   distance: 20
+  shakeSeconds: 0.32
+  shakeShare: 0.045
 --- !u!20 &381356109
 Camera:
   m_ObjectHideFlags: 0
@@ -1275,6 +1311,12 @@ MonoBehaviour:
   factorGap: 10
   fuseHeight: 6
   fuseGap: 5
+  alarmFreeCells: 3
+  alarmTint: {r: 1, g: 0.4, b: 0.32, a: 1}
+  alarmSpeed: 1.1
+  burnSeconds: 0.34
+  burnTint: {r: 1, g: 0.9, b: 0.78, a: 0.85}
+  burnDrop: 28
   flySeconds: 0.28
   popSeconds: 0.18
   popScale: 1.3

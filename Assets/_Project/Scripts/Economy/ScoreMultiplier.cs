@@ -42,6 +42,14 @@ namespace Game.Economy
         /// <summary>Колония, серия или накал изменились: карточкам пора пересчитать числа.</summary>
         public event Action Changed;
 
+        /// <summary>
+        /// Накал сгорел на переполнении, и было чему гореть. Отдельно от <see cref="Changed"/>
+        /// затем, что это не «число стало другим», а момент: у него свой кадр — вспышка склада,
+        /// провал цвета и удар по камере. Пустой накал события не даёт: переполнение на холодном
+        /// складе игрок и так видит по улетевшему ресурсу, и бить его дважды не за что.
+        /// </summary>
+        public event Action Burned;
+
         /// <summary>Сколько прибавляет к множителю каждая открытая плитка.</summary>
         public float ColonyStep { get; }
 
@@ -130,8 +138,12 @@ namespace Game.Economy
         /// </summary>
         public void Burn()
         {
+            var hadHeat = Heat > Quantum;
             silence = HeatHoldSeconds;
             SetHeat(0f);
+
+            if (hadHeat)
+                Burned?.Invoke();
         }
 
         /// <summary>

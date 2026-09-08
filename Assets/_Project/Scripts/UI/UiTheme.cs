@@ -153,6 +153,15 @@ namespace Game.UI
             accentTop, accentBottom, accentEdge, Color.clear, 22f, 2.5f, 0f, 0f, highlight, highlightSpread,
             sheen * 0.6f, darken * 0.6f, backLight, spec, lightDirection);
 
+        /// <summary>
+        /// Вспышка поверх карточки: сплошная заливка без кромки, объёма и свечения, того же
+        /// радиуса, что и сама карточка. Цвет и прозрачность задаёт вершинный цвет вспышки —
+        /// стиль держит только форму, иначе на каждый оттенок заводился бы свой материал.
+        /// </summary>
+        public UiPanelStyle Flash => new(
+            Color.white, Color.white, Color.clear, Color.clear, radius, 0f, 0f, 0f, 0f, highlightSpread,
+            0f, 0f, 0f, 0f, lightDirection);
+
         /// <summary>Разделитель блоков: линия без кромки, объёма и свечения.</summary>
         public UiPanelStyle Divider => new(
             divider, divider, Color.clear, Color.clear, 1f, 0f, 0f, 0f, 0f, highlightSpread, 0f, 0f, 0f, 0f,
