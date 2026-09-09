@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Game.Economy;
 using Game.Grid;
@@ -33,16 +34,12 @@ namespace Game.Core
         [SerializeField] BurnFlash burnFlash;
         [Tooltip("Проба M30: остановка времени на крупном слиянии. Пусто — партия идёт как раньше")]
         [SerializeField] Hitstop hitstop;
+        [Tooltip("Шаг волны продажи пачкой: столько между двумя проданными единицами")]
+        [SerializeField] float sellStepSeconds = 0.05f;
+
         [SerializeField] HudView hudView;
         [SerializeField] GameOverView gameOverView;
         [SerializeField] PauseView pauseView;
-
-        /// <summary>
-        /// Пауза между автоходами доигрывания. Склад доигрывается не мгновенно: игрок должен
-        /// успеть прочитать, за что пришли последние очки, — иначе финальный экран падает
-        /// поверх непонятно чем закончившейся партии.
-        /// </summary>
-        const float PlayOutStepSeconds = 0.3f;
 
         readonly Dictionary<HexCoord, TileView> views = new();
         readonly Dictionary<Delivery, ResourceMover> movers = new();
@@ -53,9 +50,6 @@ namespace Game.Core
 
         /// <summary>Размер экрана, под который камере посчитаны полосы интерфейса.</summary>
         Vector2Int viewport;
-
-        /// <summary>Сколько прошло с прошлого автохода доигрывания.</summary>
-        float playOutTimer;
 
         /// <summary>
         /// Над чем всплывёт отказ. Правило сообщает о нём событием, а место взаимодействия
@@ -104,6 +98,10 @@ namespace Game.Core
         ProductionSystem production;
         DeliverySystem deliveries;
         MergeSystem merges;
+        BatchSale sale;
+
+        /// <summary>Идущая волна продажи. Пока она идёт, кнопки на экране нет.</summary>
+        Coroutine selling;
         ContractSystem contracts;
         GameEndSystem end;
 
@@ -141,6 +139,10 @@ namespace Game.Core
                 multiplier);
             end = new GameEndSystem(
                 state, mergeRules, deliveries, config.LossPenalty, config.FullFieldBonus, config.FullDepositBonus);
+            // Свой поток жребия: приход кнопки не должен ходить в такт с паузами контрактов.
+            sale = new BatchSale(
+                storage, merges, mergeRules, end, config.SellPauseMin, config.SellPauseMax,
+                config.SellReserveGravel, config.SellReserveBoards, seed + 7919);
 
             ceiling = MeasureCeiling();
             milestones = config.NewMilestones(ceiling);
@@ -235,6 +237,7 @@ namespace Game.Core
             merges.Refused += ShowRefusal;
             merges.Merged += OnMerged;
             merges.Converted += OnConverted;
+            storageView.SellRequested += SellBatch;
             merges.Swept += OnSwept;
             end.Ended += OnGameEnded;
             gameOverView.RestartRequested += Restart;
@@ -264,6 +267,7 @@ namespace Game.Core
             merges.Refused -= ShowRefusal;
             merges.Merged -= OnMerged;
             merges.Converted -= OnConverted;
+            storageView.SellRequested -= SellBatch;
             merges.Swept -= OnSwept;
             end.Ended -= OnGameEnded;
             gameOverView.RestartRequested -= Restart;
@@ -311,6 +315,11 @@ namespace Game.Core
             // поле обязано остаться таким же тёплым, каким его застали.
             FieldPulse.Heat(state.Multiplier.HeatShare);
 
+            // Кнопка продажи опрашивается и на паузе, и после конца партии: там она обязана
+            // пропасть с экрана, а не остаться висеть под карточкой.
+            storageView.ShowSellButton(
+                !end.HasEnded && !pauseView.IsOpen && selling == null && sale.CanSell, sale.Everything);
+
             if (end.HasEnded || pauseView.IsOpen)
                 return;
 
@@ -318,7 +327,7 @@ namespace Game.Core
             deliveries.Tick(Time.deltaTime);
             contracts.Tick(Time.deltaTime);
             state.Multiplier.Tick(Time.deltaTime);
-            TickPlayOut(Time.deltaTime);
+            sale.Tick(Time.deltaTime);
             end.Tick();
         }
 
@@ -351,28 +360,6 @@ namespace Game.Core
                 return;
 
             pauseView.Open();
-        }
-
-        /// <summary>
-        /// Поле пройдено, и на складе остались только слияния и обмены — партия доигрывает их
-        /// сама, ходом в <see cref="PlayOutStepSeconds"/>. Выбора на этом этапе нет: базовый
-        /// ресурс мержится, крафтовый идёт в очки, и любой порядок даёт один и тот же итог.
-        /// Ручной доклик остаётся: игрок волен кликать те же клетки быстрее автохода.
-        /// </summary>
-        void TickPlayOut(float deltaTime)
-        {
-            if (!end.FieldPassed)
-            {
-                playOutTimer = 0f;
-                return;
-            }
-
-            playOutTimer += deltaTime;
-            if (playOutTimer < PlayOutStepSeconds)
-                return;
-
-            playOutTimer = 0f;
-            merges.TryPlayOut();
         }
 
         void SpawnTiles(HexMap map)
@@ -460,6 +447,9 @@ namespace Game.Core
             if (pauseView.HandlePress(screenPosition))
                 return;
 
+            if (storageView.TrySellPress(screenPosition))
+                return;
+
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
                 // Пустая клетка не отзывается: по ней и клик ничего не делает.
@@ -490,6 +480,7 @@ namespace Game.Core
         {
             gameOverView.ReleasePress();
             pauseView.ReleasePress();
+            storageView.ReleaseSellPress();
 
             if (pressedCell >= 0)
             {
@@ -539,6 +530,11 @@ namespace Game.Core
                 return;
             }
 
+            // Кнопка продажи сама зовёт `SellBatch` через `SellRequested`: здесь важно только
+            // то, что клик её и дальше не идёт.
+            if (storageView.TrySellClick(screenPosition))
+                return;
+
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
                 var content = state.Storage[cell];
@@ -551,7 +547,7 @@ namespace Game.Core
 
                 // Базовый ресурс мержится, крафтовый превращается в очки.
                 if (mergeRules.CanMerge(content.Value))
-                    merges.TryMerge(content.Value);
+                    merges.TryMerge(cell);
                 else
                     merges.TryConvert(cell);
 
@@ -800,6 +796,30 @@ namespace Game.Core
             hudView.Popups.Clear();
             pauseView.gameObject.SetActive(false);
             gameOverView.Show(score);
+        }
+
+        /// <summary>
+        /// Кнопку нажали: пачка уходит не одним кадром, а волной по клетке за шаг. Двадцать
+        /// прибавок, двадцать полётов в карточку контракта и двадцать ступеней накала в один
+        /// кадр не читаются вовсе — а по шагам это ровно та же последовательность действий,
+        /// какую бот делает мгновенно, только растянутая настолько, чтобы её было видно.
+        /// </summary>
+        void SellBatch()
+        {
+            if (selling != null)
+                return;
+
+            sale.Begin();
+            selling = StartCoroutine(SellWave());
+        }
+
+        IEnumerator SellWave()
+        {
+            var step = new WaitForSeconds(sellStepSeconds);
+            while (!end.HasEnded && sale.TrySellOne())
+                yield return step;
+
+            selling = null;
         }
 
         /// <summary>Доехавший ресурс перепрыгивает с Метрополии в свою клетку склада.</summary>

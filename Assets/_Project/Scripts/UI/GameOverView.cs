@@ -35,8 +35,8 @@ namespace Game.UI
         const float CoinSize = 100f;
         const float ScrollSize = 76f;
         const float MinedIconSize = 96f;
-        const float PlateWidth = 640f;
-        const float PlateHeight = 88f;
+        const float PlateWidth = 560f;
+        const float PlateHeight = 96f;
         const float DividerHeight = 2f;
         const float StarSize = 84f;
         const float StarGap = 24f;

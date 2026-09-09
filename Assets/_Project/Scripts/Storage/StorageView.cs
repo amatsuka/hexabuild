@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Game.Economy;
@@ -54,6 +55,11 @@ namespace Game.Storage
         [SerializeField] float factorSizeHot = 50f;
         [Tooltip("Просвет между числом множителя и верхом склада")]
         [SerializeField] float factorGap = 10f;
+        [Tooltip("Кнопка «Продать всё» над складом справа: ширина, высота и кегль подписи")]
+        [SerializeField] float sellWidth = 232f;
+        [SerializeField] float sellHeight = 62f;
+        [SerializeField] float sellFontSize = 30f;
+
         [Tooltip("Высота полосы утечки под складом и её просвет от панели")]
         [SerializeField] float fuseHeight = 6f;
         [SerializeField] float fuseGap = 5f;
@@ -174,9 +180,46 @@ namespace Game.Storage
         Coroutine sparkRun;
 
         TextMeshProUGUI factor;
+        UiButton sellButton;
+
+        /// <summary>Кнопка сейчас в режиме подсказки конца партии: цвет и подпись уже стоят.</summary>
+        bool sellHint;
+
         RectTransform fuse;
         RectTransform fuseFill;
         UiPanelGraphic fuseFillPanel;
+
+        /// <summary>Кнопку «Продать всё» нажали. Что она продаёт, знает партия, а не склад.</summary>
+        public event Action SellRequested;
+
+        /// <summary>
+        /// Кнопка на экране, и в каком она виде. Пока партия идёт — холодная «Продать всё»;
+        /// когда на поле не осталось хода — тёплая «Забрать всё»: это и есть подсказка, что
+        /// докликивать хвост партии не надо, и она приходит и на пройденном поле, и в тупике.
+        /// </summary>
+        public void ShowSellButton(bool visible, bool endOfGame)
+        {
+            if (sellButton == null)
+                return;
+
+            sellButton.Visible = visible;
+            if (!visible || endOfGame == sellHint)
+                return;
+
+            sellHint = endOfGame;
+            sellButton.Restyle(
+                theme,
+                endOfGame ? theme.ButtonPrimary : theme.ButtonSecondary,
+                endOfGame ? "Забрать всё" : "Продать всё");
+        }
+
+        public bool TrySellPress(Vector2 screenPosition) =>
+            sellButton != null && sellButton.TryPress(screenPosition);
+
+        public void ReleaseSellPress() => sellButton?.Release();
+
+        public bool TrySellClick(Vector2 screenPosition) =>
+            sellButton != null && sellButton.TryClick(screenPosition);
 
         public void Bind(StorageGrid storage, ScoreMultiplier score)
         {
@@ -822,6 +865,7 @@ namespace Game.Storage
             layout.constraintCount = columns;
 
             BuildHeat(rect);
+            BuildSellButton();
 
             cells = new RectTransform[grid.Capacity];
             cellPanels = new UiPanelGraphic[grid.Capacity];
@@ -883,6 +927,26 @@ namespace Game.Storage
                 rings[i].rectTransform.sizeDelta = Vector2.one * cellSize;
                 rings[i].gameObject.SetActive(false);
             }
+        }
+
+        /// <summary>
+        /// Кнопка «Продать всё» — над складом, прижата к правому краю панели. Палец на темпе
+        /// партии и так живёт над складом, а число множителя стоит по центру и остаётся видно.
+        /// Спрятанная кнопка не ловит ни нажатий, ни кликов, поэтому её место ничего не отнимает
+        /// у поля, пока она не пришла.
+        /// </summary>
+        void BuildSellButton()
+        {
+            sellButton = UiButton.Create(
+                "Sell", transform, theme, theme.ButtonSecondary, "Продать всё", sellFontSize,
+                () => SellRequested?.Invoke());
+
+            var button = sellButton.Rect;
+            button.anchorMin = button.anchorMax = new Vector2(1f, 1f);
+            button.pivot = new Vector2(1f, 0f);
+            button.sizeDelta = new Vector2(sellWidth, sellHeight);
+            button.anchoredPosition = new Vector2(0f, factorGap);
+            sellButton.Visible = false;
         }
 
         /// <summary>

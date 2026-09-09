@@ -177,53 +177,86 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
-        public void FieldPassed_IsFalseWhileATileIsStillClosed()
+        public void NothingLeftOnField_IsFalseWhileATileIsStillClosed()
         {
             var end = EndOf(NewGame(FlatMap()));
 
-            Assert.IsFalse(end.FieldPassed, "неоткрытая плитка ещё может стать дорогой и добычей");
+            Assert.IsFalse(end.NothingLeftOnField, "неоткрытая плитка ещё может стать дорогой и добычей");
         }
 
         [Test]
-        public void FieldPassed_IsTrueWhenEveryTileIsOpenedAndMinedOut()
+        public void NothingLeftOnField_IsTrueWhenEveryTileIsOpenedAndMinedOut()
         {
             var state = NewGame(FlatMap(), points: 100000);
             RevealEverything(state);
 
-            Assert.IsTrue(EndOf(state).FieldPassed, "месторождений на этой карте нет вовсе");
+            Assert.IsTrue(EndOf(state).NothingLeftOnField, "месторождений на этой карте нет вовсе");
         }
 
         [Test]
-        public void FieldPassed_IsFalseWhileATileKeepsItsReserve()
+        public void NothingLeftOnField_IsFalseWhileATileKeepsItsReserve()
         {
             var state = NewGame(
                 FlatMap(deposits: c => c == new HexCoord(0, 1) ? Stone(5) : null), points: 100000);
             RevealEverything(state);
 
-            Assert.IsFalse(EndOf(state).FieldPassed, "к плитке с запасом ещё можно дотянуть дорогу");
+            Assert.IsFalse(EndOf(state).NothingLeftOnField, "к плитке с запасом ещё можно дотянуть дорогу");
         }
 
         [Test]
-        public void FieldPassed_IsFalseWhileAResourceIsOnTheWay()
+        public void NothingLeftOnField_IsFalseWhileAResourceIsOnTheWay()
         {
             var state = NewGame(FlatMap(), points: 100000);
             RevealEverything(state);
             deliveries.Send(ResourceType.Stone, new[] { new HexCoord(0, 1), HexCoord.Zero });
 
-            Assert.IsFalse(EndOf(state).FieldPassed, "доигрывать рано, пока ресурс едет");
+            Assert.IsFalse(EndOf(state).NothingLeftOnField, "продавать рано, пока ресурс едет");
         }
 
         [Test]
-        public void DeadEnd_EndsTheGameButIsNotAPassedField()
+        public void DeadEnd_LeavesTheFieldWithoutAMoveWhileTheStorageStillPays()
         {
-            // щебня нет, плитки закрыты: партия кончится сама, но склад доигрывать за игрока
-            // нельзя — там его последний щебень, и это его решение, дорога или очки.
+            // Плитка с запасом открыта, но не подключена, а щебня нет и взяться ему неоткуда:
+            // на поле хода не осталось. Партия при этом не кончена — на складе лежит доска,
+            // и её ещё меняют на очки. Это и есть тупик, до M32 в коде не названный.
+            var state = NewGame(
+                FlatMap(deposits: c => c == new HexCoord(0, 1) ? Stone(5) : null),
+                points: 100000,
+                gravel: 0);
+            RevealEverything(state);
+            state.Storage.TryStore(ResourceType.Board);
+            var end = EndOf(state);
+
+            end.Tick();
+
+            Assert.IsTrue(end.NothingLeftOnField, "к плитке с запасом больше не дотянуться");
+            Assert.IsFalse(end.HasEnded, "доска на складе сама по себе стоит очков");
+        }
+
+        [Test]
+        public void DeadEnd_IsNotDeclaredWhileStoneCanStillBecomeGravel()
+        {
+            var state = NewGame(
+                FlatMap(deposits: c => c == new HexCoord(0, 1) ? Stone(5) : null),
+                points: 100000,
+                gravel: 0);
+            RevealEverything(state);
+            for (var i = 0; i < 3; i++)
+                state.Storage.TryStore(ResourceType.Stone);
+
+            Assert.IsFalse(EndOf(state).NothingLeftOnField, "три камня — это будущий щебень и будущая дорога");
+        }
+
+        [Test]
+        public void ClosedTilesAndNoGravel_AreStillAMove()
+        {
+            // щебня почти нет, плитки закрыты: открывать ещё есть на что, и это решение игрока.
             var state = NewGame(FlatMap(deposits: c => c == new HexCoord(0, 1) ? Stone(5) : null), gravel: 1);
             var end = EndOf(state);
 
             end.Tick();
 
-            Assert.IsFalse(end.FieldPassed);
+            Assert.IsFalse(end.NothingLeftOnField, "очков хватает открыть плитку");
             Assert.IsFalse(end.HasEnded, "щебень на складе сам по себе стоит очков");
         }
 

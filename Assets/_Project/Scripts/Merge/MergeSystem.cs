@@ -54,8 +54,21 @@ namespace Game.Merge
         /// </summary>
         public event Action<int, int> Swept;
 
-        public bool TryMerge(ResourceType type)
+        /// <summary>
+        /// Слияние по нажатой клетке. Клетка здесь не украшение для вида, а само правило:
+        /// `TryRemove` берёт первые N клеток нужного типа, и нажатая в них попадать не обязана —
+        /// тапнули дерево в клетке 7, списались 0, 1, 2, а результат уехал в первую свободную,
+        /// то есть из-под пальца. Поэтому нажатая списывается первой, остальные добираются
+        /// сканом, и в неё же встаёт результат: следующее слияние делается тем же пальцем
+        /// на том же месте, без доклика по новой клетке.
+        /// </summary>
+        public bool TryMerge(int cellIndex)
         {
+            var content = storage[cellIndex];
+            if (!content.HasValue)
+                return false;
+
+            var type = content.Value;
             if (!rules.CanMerge(type))
             {
                 Refused?.Invoke("Крафтовый ресурс не мержится, кликните его ради очков");
@@ -68,13 +81,16 @@ namespace Game.Merge
                 return false;
             }
 
-            var consumedCells = new List<int>(outcome.Consumed);
-            storage.TryRemove(outcome.Source, outcome.Consumed, consumedCells);
+            var consumedCells = new List<int>(outcome.Consumed) { cellIndex };
+            storage.TryRemoveAt(cellIndex);
+            storage.TryRemove(outcome.Source, outcome.Consumed - 1, consumedCells);
 
             var resultCells = new List<int>(outcome.Produced);
-            for (var i = 0; i < outcome.Produced; i++)
-                if (storage.TryStore(outcome.Result, out var cell))
-                    resultCells.Add(cell);
+            if (storage.TryStoreAt(cellIndex, outcome.Result))
+                resultCells.Add(cellIndex);
+
+            while (resultCells.Count < outcome.Produced && storage.TryStore(outcome.Result, out var cell))
+                resultCells.Add(cell);
 
             multiplier.Bump();
             Merged?.Invoke(new MergeReport(outcome, consumedCells, resultCells));
@@ -102,7 +118,7 @@ namespace Game.Merge
             {
                 var content = storage[cell];
                 if (content.HasValue && storage.CountOf(content.Value) >= rules.SmallCount)
-                    return TryMerge(content.Value);
+                    return TryMerge(cell);
             }
 
             return false;

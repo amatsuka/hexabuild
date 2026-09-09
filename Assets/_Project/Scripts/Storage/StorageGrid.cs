@@ -50,6 +50,31 @@ namespace Game.Storage
             return false;
         }
 
+        /// <summary>
+        /// Положить ресурс в конкретную пустую клетку. Нужна слиянию: результат встаёт в ту
+        /// клетку, по которой ударил палец, а не в первую свободную где-то слева.
+        /// </summary>
+        public bool TryStoreAt(int index, ResourceType type)
+        {
+            if (index < 0 || index >= cells.Length || cells[index].HasValue)
+                return false;
+
+            cells[index] = type;
+            Count++;
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>Первая клетка с этим ресурсом или -1: с неё начинают те, у кого есть тип, но нет клетки.</summary>
+        public int IndexOf(ResourceType type)
+        {
+            for (var i = 0; i < cells.Length; i++)
+                if (cells[i] == type)
+                    return i;
+
+            return -1;
+        }
+
         /// <summary>Убрать одну единицу из конкретной клетки: клик по ресурсу.</summary>
         public bool TryRemoveAt(int index)
         {

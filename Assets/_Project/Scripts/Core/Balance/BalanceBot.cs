@@ -60,6 +60,7 @@ namespace Game.Core.Balance
         ProductionSystem production;
         DeliverySystem deliveries;
         MergeSystem merges;
+        BatchSale sale;
         ContractSystem contracts;
         GameEndSystem end;
 
@@ -129,6 +130,7 @@ namespace Game.Core.Balance
                 deliveries.Tick(StepSeconds);
                 contracts.Tick(StepSeconds);
                 state.Multiplier.Tick(StepSeconds);
+                sale.Tick(StepSeconds);
                 end.Tick();
                 seconds += StepSeconds;
 
@@ -137,15 +139,18 @@ namespace Game.Core.Balance
                 if (end.HasEnded)
                     continue;
 
-                // Пройденное поле доигрывает склад само — так же, как `GameSession`. Без этого
-                // бот виснет на придержанном щебне до предела времени: `GameEndSystem` считает
-                // щебень обмениваемым и конца не объявляет, а `Decide` его бережёт под дорогу,
-                // которой уже некуда идти. На счёт это не влияло — в хвосте не зарабатывается
-                // ничего, — но `Seconds` уезжали в разы, и длину партии по ним читать было нельзя.
-                // Доигрывание тоже стоит руки: иначе хвост партии шёл бы вчетверо быстрее,
-                // чем игрок способен доклацать те же клетки.
-                if (end.FieldPassed && actions >= 1f && merges.TryPlayOut())
-                    actions -= 1f;
+                // Кнопка «Продать всё» — то же действие, что у игрока, и в том же потолке руки:
+                // одно нажатие на всю пачку. Бот жмёт её сразу, как она пришла: обменять
+                // накопленный крафт одним действием вместо двадцати выгодно всегда, а стратегию
+                // «придержать до полного склада» человек не играет. Она же закрывает хвост
+                // партии: без неё бот виснет на придержанном щебне до предела времени —
+                // `GameEndSystem` считает щебень обмениваемым и конца не объявляет.
+                if (sale.CanSell && TrySpend())
+                {
+                    sale.Begin();
+                    sale.Sell();
+                    dirty = true;
+                }
 
                 Decide();
             }
@@ -189,6 +194,10 @@ namespace Game.Core.Balance
                 multiplier);
             end = new GameEndSystem(
                 state, rules, deliveries, config.LossPenalty, config.FullFieldBonus, config.FullDepositBonus);
+            // Свой поток жребия: приход кнопки не должен ходить в такт с паузами контрактов.
+            sale = new BatchSale(
+                storage, merges, rules, end, config.SellPauseMin, config.SellPauseMax,
+                config.SellReserveGravel, config.SellReserveBoards, seed + 7919);
 
             state.ActionRefused += OnRefused;
             merges.Refused += OnRefused;
@@ -374,7 +383,8 @@ namespace Game.Core.Balance
                     if (!large && !needed)
                         break;
 
-                    if (!TrySpend() || !merges.TryMerge(type))
+                    var cell = storage.IndexOf(type);
+                    if (cell < 0 || !TrySpend() || !merges.TryMerge(cell))
                         break;
                 }
         }

@@ -81,6 +81,16 @@ namespace Game.Core
         [Tooltip("Сколько щебня даёт пройденная веха")]
         [SerializeField] int milestoneGravel = 3;
 
+        [Header("Продажа пачкой")]
+        [Tooltip("Через сколько секунд после нажатия кнопка «Продать всё» приходит снова, минимум")]
+        [SerializeField] float sellPauseMin = 10f;
+        [Tooltip("Тот же приход, максимум: интервал берётся жребием между ними")]
+        [SerializeField] float sellPauseMax = 20f;
+        [Tooltip("Сколько щебня кнопка не продаёт: на дорогу и мост")]
+        [SerializeField] int sellReserveGravel = 4;
+        [Tooltip("Сколько досок кнопка не продаёт")]
+        [SerializeField] int sellReserveBoards = 4;
+
         [Header("Финальный счёт")]
         [Tooltip("Штраф за каждый ресурс, уничтоженный переполненным складом")]
         [SerializeField] int lossPenalty = 10;
@@ -118,6 +128,14 @@ namespace Game.Core
         public float ContractPauseMin => contractPauseMin;
 
         public float ContractPauseMax => contractPauseMax;
+
+        public float SellPauseMin => sellPauseMin;
+
+        public float SellPauseMax => sellPauseMax;
+
+        public int SellReserveGravel => sellReserveGravel;
+
+        public int SellReserveBoards => sellReserveBoards;
 
         public int LossPenalty => lossPenalty;
 

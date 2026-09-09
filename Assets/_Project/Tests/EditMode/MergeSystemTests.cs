@@ -42,7 +42,7 @@ namespace Game.Tests.EditMode
         {
             Fill(ResourceType.Wood, 5);
 
-            Assert.IsTrue(merges.TryMerge(ResourceType.Wood));
+            Assert.IsTrue(merges.TryMerge(0));
 
             Assert.AreEqual(0, storage.CountOf(ResourceType.Wood));
             Assert.AreEqual(2, storage.CountOf(ResourceType.Board));
@@ -55,7 +55,7 @@ namespace Game.Tests.EditMode
         {
             Fill(ResourceType.Wood, 5);
 
-            merges.TryMerge(ResourceType.Wood);
+            merges.TryMerge(0);
 
             Assert.AreEqual(ResourceType.Board, storage[0]);
             Assert.AreEqual(ResourceType.Board, storage[1]);
@@ -63,11 +63,37 @@ namespace Game.Tests.EditMode
         }
 
         [Test]
+        public void MergeResult_LandsInTheCellThatWasTapped()
+        {
+            storage.TryStore(ResourceType.Gravel);
+            storage.TryStore(ResourceType.Gravel);
+            Fill(ResourceType.Wood, 3);
+
+            // Палец бьёт по последнему бревну, а не по первому: до M32 списались бы клетки
+            // 2, 3, 4 сканом слева, и доска уехала бы из-под пальца в клетку 2.
+            Assert.IsTrue(merges.TryMerge(4));
+
+            Assert.AreEqual(ResourceType.Board, storage[4], "результат встаёт под палец");
+            Assert.AreEqual(0, storage.CountOf(ResourceType.Wood));
+            Assert.AreEqual(2, storage.CountOf(ResourceType.Gravel), "чужие клетки не тронуты");
+        }
+
+        [Test]
+        public void MergeOnAnEmptyCell_DoesNothing()
+        {
+            Fill(ResourceType.Wood, 5);
+
+            Assert.IsFalse(merges.TryMerge(7));
+            Assert.AreEqual(5, storage.CountOf(ResourceType.Wood));
+            CollectionAssert.IsEmpty(refusals, "промах по пустой клетке — не отказ правила");
+        }
+
+        [Test]
         public void FourWood_MergeThreeAndLeaveTheRest()
         {
             Fill(ResourceType.Wood, 4);
 
-            Assert.IsTrue(merges.TryMerge(ResourceType.Wood));
+            Assert.IsTrue(merges.TryMerge(0));
 
             Assert.AreEqual(1, storage.CountOf(ResourceType.Wood));
             Assert.AreEqual(1, storage.CountOf(ResourceType.Board));
@@ -79,7 +105,7 @@ namespace Game.Tests.EditMode
         {
             Fill(ResourceType.Wood, 2);
 
-            Assert.IsFalse(merges.TryMerge(ResourceType.Wood));
+            Assert.IsFalse(merges.TryMerge(0));
 
             Assert.AreEqual(2, storage.CountOf(ResourceType.Wood));
             Assert.AreEqual(0, wallet.Points);
@@ -91,7 +117,7 @@ namespace Game.Tests.EditMode
         {
             Fill(ResourceType.Board, 5);
 
-            Assert.IsFalse(merges.TryMerge(ResourceType.Board));
+            Assert.IsFalse(merges.TryMerge(0));
 
             Assert.AreEqual(5, storage.CountOf(ResourceType.Board));
             Assert.AreEqual(0, wallet.Points);
@@ -137,7 +163,7 @@ namespace Game.Tests.EditMode
         {
             Fill(ResourceType.Ore, 5);
 
-            merges.TryMerge(ResourceType.Ore);
+            merges.TryMerge(0);
             merges.TryConvert(0);
             merges.TryConvert(1);
 
@@ -152,7 +178,7 @@ namespace Game.Tests.EditMode
         {
             Fill(ResourceType.Stone, 3);
 
-            merges.TryMerge(ResourceType.Stone);
+            merges.TryMerge(0);
 
             Assert.AreEqual(1, storage.CountOf(ResourceType.Gravel));
             Assert.IsTrue(storage.TryRemove(ResourceType.Gravel, 1));
@@ -163,7 +189,7 @@ namespace Game.Tests.EditMode
         {
             Fill(ResourceType.Wood, 25);
 
-            merges.TryMerge(ResourceType.Wood);
+            merges.TryMerge(0);
 
             Assert.AreEqual(20, storage.CountOf(ResourceType.Wood));
             Assert.AreEqual(2, storage.CountOf(ResourceType.Board));
@@ -178,7 +204,7 @@ namespace Game.Tests.EditMode
             MergeReport reported = default;
             merges.Merged += report => reported = report;
 
-            merges.TryMerge(ResourceType.Ore);
+            merges.TryMerge(0);
 
             Assert.AreEqual(ResourceType.Ore, reported.Outcome.Source);
             Assert.AreEqual(ResourceType.Ingot, reported.Outcome.Result);
@@ -192,7 +218,7 @@ namespace Game.Tests.EditMode
             MergeReport reported = default;
             merges.Merged += report => reported = report;
 
-            merges.TryMerge(ResourceType.Wood);
+            merges.TryMerge(0);
 
             Assert.AreEqual(new[] { 0, 1, 2, 3, 4 }, reported.ConsumedCells);
             Assert.AreEqual(new[] { 0, 1 }, reported.ResultCells);
@@ -207,10 +233,10 @@ namespace Game.Tests.EditMode
             MergeReport reported = default;
             merges.Merged += report => reported = report;
 
-            merges.TryMerge(ResourceType.Wood);
+            merges.TryMerge(1);
 
             Assert.AreEqual(new[] { 1, 2, 3 }, reported.ConsumedCells, "списываются клетки слева направо");
-            Assert.AreEqual(new[] { 1 }, reported.ResultCells, "крафт ложится в первую освободившуюся");
+            Assert.AreEqual(new[] { 1 }, reported.ResultCells, "крафт ложится в нажатую клетку");
         }
     
         [Test]
@@ -299,7 +325,7 @@ namespace Game.Tests.EditMode
         {
             Fill(ResourceType.Wood, 5);
 
-            merges.TryMerge(ResourceType.Wood);
+            merges.TryMerge(0);
             Assert.AreEqual(0.05f, multiplier.Heat, 1e-5f, "мерж — действие склада");
 
             merges.TryConvert(0);
@@ -321,7 +347,7 @@ namespace Game.Tests.EditMode
         public void OverflowingTheStorage_BurnsTheWholeHeat()
         {
             Fill(ResourceType.Wood, 5);
-            merges.TryMerge(ResourceType.Wood);
+            merges.TryMerge(0);
             Assert.Greater(multiplier.Heat, 0f);
 
             Fill(ResourceType.Ore, storage.Capacity);

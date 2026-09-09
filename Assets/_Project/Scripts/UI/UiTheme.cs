@@ -175,10 +175,15 @@ namespace Game.UI
         /// </summary>
         public UiPanelStyle RoundButton(float diameter) => Button(secondaryTop, secondaryBottom, diameter * 0.5f);
 
-        /// <summary>Плашка рекорда: стекло карточки с золотой кромкой.</summary>
+        /// <summary>
+        /// Плашка рекорда: та же карточка, что и весь интерфейс, но с золотой кромкой. Раньше
+        /// у неё не было ни свечения, ни полной фаски, и рядом с кнопками финального экрана она
+        /// читалась не карточкой, а плоской лентой того же примитива — то есть кнопкой, которая
+        /// почему-то не нажимается.
+        /// </summary>
         public UiPanelStyle Accent => new(
-            accentTop, accentBottom, accentEdge, Color.clear, 22f, 2.5f, 0f, 0f, highlight, highlightSpread,
-            sheen * 0.6f, darken * 0.6f, backLight, spec, lightDirection);
+            accentTop, accentBottom, accentEdge, glow, radius, edgeWidth, glowSize, glowOffset, highlight,
+            highlightSpread, sheen, darken, backLight, spec, lightDirection);
 
         /// <summary>
         /// Вспышка поверх карточки: сплошная заливка без кромки, объёма и свечения, того же

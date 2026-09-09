@@ -13,11 +13,13 @@ namespace Game.UI
     public sealed class UiButton
     {
         readonly UiPanelGraphic card;
+        readonly TextMeshProUGUI caption;
         readonly Action clicked;
 
-        UiButton(UiPanelGraphic card, Action clicked)
+        UiButton(UiPanelGraphic card, TextMeshProUGUI caption, Action clicked)
         {
             this.card = card;
+            this.caption = caption;
             this.clicked = clicked;
         }
 
@@ -29,11 +31,26 @@ namespace Game.UI
         {
             var card = UiPanel.Create(name, parent, theme, style);
 
-            UiText.Bold("Caption", card.rectTransform, theme, fontSize, theme.Text, TextAlignmentOptions.Center)
-                .Stretch(16f, 16f, 8f, 8f)
-                .text = caption;
+            var label = UiText.Bold(
+                "Caption", card.rectTransform, theme, fontSize, theme.Text, TextAlignmentOptions.Center)
+                .Stretch(16f, 16f, 8f, 8f);
+            label.text = caption;
 
-            return new UiButton(card, clicked);
+            return new UiButton(card, label, clicked);
+        }
+
+        /// <summary>Кнопка на экране или её нет вовсе: спрятанная не ловит ни нажатий, ни кликов.</summary>
+        public bool Visible
+        {
+            get => card.gameObject.activeSelf;
+            set => card.gameObject.SetActive(value);
+        }
+
+        /// <summary>Сменить цвет и подпись на ходу: одна и та же кнопка говорит разное.</summary>
+        public void Restyle(UiTheme theme, in UiPanelStyle style, string text)
+        {
+            card.Apply(theme.PanelShader, style);
+            caption.text = text;
         }
 
         /// <summary>
@@ -42,7 +59,7 @@ namespace Game.UI
         /// </summary>
         public bool TryPress(Vector2 screenPosition)
         {
-            if (!Contains(screenPosition))
+            if (!Visible || !Contains(screenPosition))
                 return false;
 
             PressPulse.HoldCard(card);
@@ -55,7 +72,7 @@ namespace Game.UI
         /// <summary>Клик попал в кнопку: она нажата, и дальше его разбирать не надо.</summary>
         public bool TryClick(Vector2 screenPosition)
         {
-            if (!Contains(screenPosition))
+            if (!Visible || !Contains(screenPosition))
                 return false;
 
             clicked();

@@ -88,15 +88,17 @@ namespace Game.Core
         }
 
         /// <summary>
-        /// Поле пройдено насквозь: ничего не едет, а каждая достижимая плитка открыта и
-        /// выработана. Взять на поле больше нечего и нечем — что бы игрок ни сделал со складом.
-        /// Остаток склада в этом состоянии не решение, а доклик, и партия доигрывает его сама:
-        /// искать глазами забытый слиток игрок не должен.
+        /// На поле не осталось хода: ничего не едет, ни одна подключённая плитка не производит,
+        /// открыть не на что и построить некуда. Всё, что ещё стоит очков, лежит на складе.
         ///
-        /// Тупик сюда намеренно не попадает: пока на поле есть неоткрытая плитка, щебень со
-        /// склада ещё может стать дорогой к ней, и распоряжаться им игрок должен сам.
+        /// Это одно состояние, а не два. Пройденное поле — его частный случай: когда каждая
+        /// достижимая плитка открыта и выработана, производить нечему и открывать нечего.
+        /// Тупик — второй: поле осталось, но ни очков на открытие, ни щебня на дорогу больше
+        /// не будет, потому что взяться им неоткуда. Раньше в коде жил только первый, и кнопка
+        /// продажи не пришла бы туда, где доклик раздражает сильнее всего.
         /// </summary>
-        public bool FieldPassed => deliveries.Active.Count == 0 && IsFieldExhausted();
+        public bool NothingLeftOnField =>
+            deliveries.Active.Count == 0 && !CanOpenTile() && !CanStillReachReserve();
 
         /// <summary>
         /// Ещё есть действие, способное дать очки. Отдельного вопроса «а хватит ли на дорогу или
@@ -107,23 +109,8 @@ namespace Game.Core
         bool CanStillEarn() =>
             deliveries.Active.Count > 0 || HasCashableResource() || HasProducingTile();
 
-        /// <summary>Каждая достижимая плитка открыта и выработана: поле отдало всё.</summary>
-        bool IsFieldExhausted()
-        {
-            foreach (var tile in reachable)
-            {
-                if (tile.IsMetropolis)
-                    continue;
-
-                if (tile.State != TileState.Revealed || !tile.IsExhausted)
-                    return false;
-            }
-
-            return true;
-        }
-
         /// <summary>Крафт на складе меняется на очки сразу, базовый — после слияния.</summary>
-        bool HasCashableResource()
+        public bool HasCashableResource()
         {
             for (var index = 0; index < state.Storage.Capacity; index++)
             {
@@ -140,6 +127,53 @@ namespace Game.Core
 
             return false;
         }
+
+        /// <summary>Очков хватает на открытие, и есть что открывать.</summary>
+        bool CanOpenTile()
+        {
+            if (state.Wallet.Points < state.NextTileCost)
+                return false;
+
+            foreach (var tile in state.Map.Tiles.Values)
+                if (tile.State == TileState.Available && tile.IsPassable)
+                    return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Запас на поле, до которого ещё можно дотянуться. Подключённая плитка с остатком везёт
+        /// сама; к неподключённой нужна дорога, а на дорогу — щебень, который либо лежит на
+        /// складе, либо получится из камня. Ни того ни другого — и плитка с запасом всё равно
+        /// что выработана: пути к ней больше нет.
+        ///
+        /// Цена дороги здесь не считается по шагам намеренно: путь к плитке ищется заново после
+        /// каждой постройки, и точный ответ «хватит ли до конца» стоил бы обхода на каждый кадр.
+        /// Ошибаться этот ответ будет в одну сторону — «ход ещё есть», — а это лишь отложит
+        /// подсказку до следующего прихода кнопки по таймеру, а не оборвёт партию раньше времени.
+        /// </summary>
+        bool CanStillReachReserve()
+        {
+            var waiting = false;
+
+            foreach (var tile in reachable)
+            {
+                if (tile.State != TileState.Revealed || tile.IsExhausted)
+                    continue;
+
+                if (state.Roads.IsConnected(tile.Coord))
+                    return true;
+
+                waiting = true;
+            }
+
+            return waiting && CanStillGetGravel();
+        }
+
+        /// <summary>Щебень есть или получится: камня на складе хватает на слияние.</summary>
+        bool CanStillGetGravel() =>
+            state.Storage.CountOf(ResourceType.Gravel) > 0
+            || state.Storage.CountOf(ResourceType.Stone) >= rules.SmallCount;
 
         /// <summary>Подключённая открытая плитка с остатком запаса: ресурс поедет сам.</summary>
         bool HasProducingTile()
