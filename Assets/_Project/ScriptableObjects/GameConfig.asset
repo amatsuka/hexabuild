@@ -30,7 +30,8 @@ MonoBehaviour:
   tileOpenCost: 20
   openCostGrowth: 1.04
   roadCost: 1
-  bridgeCost: 2
+  bridgeGravel: 2
+  bridgeBoards: 2
   multiplierStep: 0.05
   streakStep: 0.25
   streakMax: 2
@@ -40,6 +41,7 @@ MonoBehaviour:
   heatDrainSeconds: 2
   startingPoints: 40
   startingGravel: 3
+  startingBoards: 3
   contractGoal: 3
   contractSeconds: 45
   contractReward: 160

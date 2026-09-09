@@ -217,6 +217,11 @@ namespace Game.Core.Balance
             for (var i = 0; i < config.StartingGravel; i++)
                 storage.TryStore(ResourceType.Gravel);
 
+            // Доски на первый мост: без них переправа зависит от того, лёг ли лес на берегу,
+            // а это не выбор игрока, а жребий генератора.
+            for (var i = 0; i < config.StartingBoards; i++)
+                storage.TryStore(ResourceType.Board);
+
             contracts.Issue();
             dirty = true;
         }
@@ -287,22 +292,45 @@ namespace Game.Core.Balance
         void Exchange()
         {
             var holdGravel = GravelIsUseful();
+            var keepBoards = BoardsReserve();
 
             if (contracts.IsActive)
-                ConvertAll(contracts.Type, holdGravel);
+                ConvertAll(contracts.Type, holdGravel, keepBoards);
 
             foreach (var type in craftedTypes)
-                ConvertAll(type, holdGravel);
+                ConvertAll(type, holdGravel, keepBoards);
         }
+
+        /// <summary>
+        /// Сколько досок не менять на очки. Доски с M33 — вторая половина цены моста, и бот,
+        /// продающий их подчистую, приходил бы к реке без переправы и вставал в тупик по
+        /// причине, к игроку отношения не имеющей. Резерв — ровно цена одного моста.
+        ///
+        /// Придержать их по тому же флагу, что и щебень, не выходит, и это стоило половины
+        /// стадии: `GravelIsUseful` мигает в ноль на любой минутной нехватке щебня — щебень
+        /// вернётся с ближайшим камнем, и политике это ничего не стоит. Доски на карте без леса
+        /// на берегу не вернутся никогда, поэтому одного такого мигания хватало, чтобы стартовые
+        /// доски ушли в очки на второй секунде партии, а поле за рекой осталось закрытым
+        /// (седьмой уровень кампании: 63 339 против 1 078).
+        ///
+        /// Условие — то же самое, по которому кнопка «Продать всё» снимает свой резерв досок:
+        /// на поле не осталось хода. Собранное из мгновенных величин («есть цель», «хватает
+        /// очков») мигает так же, как флаг щебня, а `NothingLeftOnField` держит паузы между
+        /// добычей и не зависит от того, лежат ли доски на складе, — значит круга «держу доски,
+        /// поэтому партия не кончается» не возникает.
+        /// </summary>
+        int BoardsReserve() => end.NothingLeftOnField ? 0 : config.Prices.Bridge.Boards;
 
         bool GravelIsUseful()
         {
             if (!TryNextRoadStep(out var step, out var towardStone))
                 return CanAffordOpening();
 
+            if (!state.Map.TryGetTile(step, out var tile))
+                return true;
+
             var gravel = state.Storage.CountOf(ResourceType.Gravel);
-            var price = state.Map.TryGetTile(step, out var tile) ? state.RoadPrice(tile) : int.MaxValue;
-            return gravel >= price + GravelReserve(towardStone) || GravelCanStillCome();
+            return gravel >= state.RoadPrice(tile).Gravel + GravelReserve(towardStone) || GravelCanStillCome();
         }
 
         /// <summary>Очков хватает на следующую плитку и есть что открыть.</summary>
@@ -318,16 +346,19 @@ namespace Game.Core.Balance
             return false;
         }
 
-        void ConvertAll(ResourceType type, bool holdGravel)
+        void ConvertAll(ResourceType type, bool holdGravel, int keepBoards)
         {
             if (type == ResourceType.Gravel && holdGravel)
                 return;
 
+            // Резерв досок считается на каждой единице, а не один раз на тип: так под мост
+            // остаётся ровно его цена, а лишнее уходит в очки.
+            var reserve = type == ResourceType.Board ? keepBoards : 0;
             var storage = state.Storage;
             for (var cell = 0; cell < storage.Capacity; cell++)
                 if (storage[cell] == type)
                 {
-                    if (!TrySpend())
+                    if (storage.CountOf(type) <= reserve || !TrySpend())
                         return;
 
                     merges.TryConvert(cell);
@@ -335,14 +366,34 @@ namespace Game.Core.Balance
         }
 
         /// <summary>Щебень ещё придёт: работает подключённая плитка, ресурс в пути или камень на складе.</summary>
-        bool GravelCanStillCome()
+        bool GravelCanStillCome() => CanStillCome(ResourceType.Gravel);
+
+        /// <summary>
+        /// Мост по карману сейчас или будет чем заплатить потом. Ответ «нет» — это и есть
+        /// предохранитель от вечной партии: речные плитки перестают быть целями, целей не
+        /// остаётся, щебень уходит в очки и `GameEndSystem` объявляет конец.
+        /// </summary>
+        bool CanPayBridges()
+        {
+            var need = config.Prices.Bridge.Boards;
+            return need <= 0
+                || state.Storage.CountOf(ResourceType.Board) >= need
+                || CanStillCome(ResourceType.Board);
+        }
+
+        /// <summary>
+        /// Крафт этого типа ещё может появиться: что-то едет, что-то добывается или база на
+        /// складе уже мержится в него. Оптимистично — работающая плитка с камнем считается и за
+        /// доски, — но оптимизм ограничен: добыча кончается, и тогда ответ становится честным.
+        /// </summary>
+        bool CanStillCome(ResourceType crafted)
         {
             if (deliveries.Active.Count > 0 || HasProducingTile())
                 return true;
 
             foreach (var type in baseTypes)
                 if (rules.TryResolve(type, state.Storage.CountOf(type), out var outcome)
-                    && outcome.Result == ResourceType.Gravel)
+                    && outcome.Result == crafted)
                     return true;
 
             return false;
@@ -378,7 +429,8 @@ namespace Game.Core.Balance
                     var fill = storage.Count / (float)storage.Capacity;
                     var needed = fill > MergeFillThreshold
                         || (contracts.IsActive && contracts.Type == outcome.Result)
-                        || (outcome.Result == ResourceType.Gravel && GravelIsShortForRoad());
+                        || (outcome.Result == ResourceType.Gravel && GravelIsShortForRoad())
+                        || (outcome.Result == ResourceType.Board && BoardsAreShortForBridge());
 
                     if (!large && !needed)
                         break;
@@ -392,7 +444,13 @@ namespace Game.Core.Balance
         bool GravelIsShortForRoad() =>
             TryNextRoadStep(out var coord, out var towardStone)
             && state.Map.TryGetTile(coord, out var tile)
-            && state.Storage.CountOf(ResourceType.Gravel) < state.RoadPrice(tile) + GravelReserve(towardStone);
+            && state.Storage.CountOf(ResourceType.Gravel) < state.RoadPrice(tile).Gravel + GravelReserve(towardStone);
+
+        /// <summary>Следующий шаг — мост, а досок на него не хватает: тройка дороже ожидания пятёрки.</summary>
+        bool BoardsAreShortForBridge() =>
+            TryNextRoadStep(out var coord)
+            && state.Map.TryGetTile(coord, out var tile)
+            && state.Storage.CountOf(ResourceType.Board) < state.RoadPrice(tile).Boards;
 
         // --- 3. Дорога ---
 
@@ -401,8 +459,12 @@ namespace Game.Core.Balance
         {
             while (TryNextRoadStep(out var coord, out var towardStone))
             {
-                if (!state.Map.TryGetTile(coord, out var tile)
-                    || state.Storage.CountOf(ResourceType.Gravel) < state.RoadPrice(tile) + GravelReserve(towardStone)
+                if (!state.Map.TryGetTile(coord, out var tile))
+                    break;
+
+                var price = state.RoadPrice(tile);
+                if (state.Storage.CountOf(ResourceType.Gravel) < price.Gravel + GravelReserve(towardStone)
+                    || state.Storage.CountOf(ResourceType.Board) < price.Boards
                     || !TrySpend()
                     || !state.TryBuildRoad(coord))
                     break;
@@ -418,7 +480,7 @@ namespace Game.Core.Balance
         /// против 75 на 200 сидах, пройденных полей 119 против 125 — придержанный щебень
         /// тормозит сеть сильнее, чем спасает.
         /// </summary>
-        int GravelReserve(bool towardStone) => towardStone || NetworkHasStone() ? 0 : config.Prices.Road;
+        int GravelReserve(bool towardStone) => towardStone || NetworkHasStone() ? 0 : config.Prices.Road.Gravel;
 
         /// <summary>Открытая плитка с остатком запаса, до которой дорога ещё не дошла.</summary>
         bool HasUnconnectedReserveTile()
@@ -493,6 +555,9 @@ namespace Game.Core.Balance
             if (!HasUnconnectedReserveTile())
                 return false;
 
+            // Ответ на весь обход, а не на плитку: `CanStillCome` перебирает дороги и склад,
+            // а речных плиток на пути десятки.
+            var bridges = CanPayBridges();
             var stoneFirst = StoneComesFirst();
             SeedFromNetwork();
 
@@ -507,6 +572,12 @@ namespace Game.Core.Balance
                         continue;
 
                     if (!IsOpened(tile) || !tile.IsPassable || state.Roads.HasRoad(next))
+                        continue;
+
+                    // Река без досок — такая же стена, как гора: бот обходит её, а не встаёт
+                    // перед ней, сбрасывая щебень. Стеной она остаётся, пока досок нет и взяться
+                    // им неоткуда; как только лес подключён, обход снова идёт напрямик.
+                    if (tile.HasRiver && !bridges)
                         continue;
 
                     parents[next] = current;

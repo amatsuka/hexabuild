@@ -16,7 +16,7 @@ namespace Game.Tests.EditMode
         const int FieldBonus = 500;
         const int DepositBonus = 500;
 
-        static readonly PriceSettings Prices = new(20, 1.04f, 1, 2);
+        static readonly PriceSettings Prices = new(20, 1.04f, 1, 2, 2);
 
         MergeRules rules;
         DeliverySystem deliveries;

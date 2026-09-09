@@ -144,24 +144,51 @@ namespace Game.Core
             }
 
             var price = RoadPrice(tile);
-            if (!Storage.TryRemove(ResourceType.Gravel, price))
+            var missingGravel = price.Gravel - Storage.CountOf(ResourceType.Gravel);
+            var missingBoards = price.Boards - Storage.CountOf(ResourceType.Board);
+            if (missingGravel > 0 || missingBoards > 0)
             {
-                ActionRefused?.Invoke(price > prices.Road
-                    ? $"Нужен мост: {price} щебня"
-                    : $"Не хватает щебня: нужно {price}");
+                ActionRefused?.Invoke(RoadRefusal(price, missingGravel, missingBoards));
                 return false;
             }
+
+            // Списание идёт после общей проверки, а не двумя `TryRemove` подряд: мост стоит
+            // сразу двух ресурсов, и отката у склада нет — первый ушедший щебень при нехватке
+            // досок пропал бы молча.
+            Storage.TryRemove(ResourceType.Gravel, price.Gravel);
+            if (price.Boards > 0)
+                Storage.TryRemove(ResourceType.Board, price.Boards);
 
             Roads.Build(coord);
             return true;
         }
 
         /// <summary>
-        /// Цена дороги: обычная плюс надбавка за мост на плитке с рекой. Русло идёт через центр
+        /// Цена дороги: обычная на суше, мостовая на плитке с рекой. Русло идёт через центр
         /// плитки, лента дороги — тоже, обойти реку внутри гекса нельзя, поэтому цена локальна
         /// и родителя спрашивать не нужно.
         /// </summary>
-        public int RoadPrice(TileData tile) => tile.HasRiver ? prices.Road + prices.Bridge : prices.Road;
+        public RoadCost RoadPrice(TileData tile) => prices.For(tile.HasRiver);
+
+        /// <summary>
+        /// Отказ называет, чего именно не хватает: мост просит два разных ресурса, и «нужен
+        /// мост: 2 и 2» игроку с полным складом досок ничего не объясняет.
+        /// </summary>
+        static string RoadRefusal(RoadCost price, int gravel, int boards)
+        {
+            if (price.Boards == 0)
+                return $"Не хватает щебня: нужно {price.Gravel}";
+
+            if (boards <= 0)
+                return $"Нужен мост: не хватает {gravel} щебня";
+
+            if (gravel <= 0)
+                return $"Нужен мост: не хватает {Boards(boards)}";
+
+            return $"Нужен мост: не хватает {gravel} щебня и {Boards(boards)}";
+        }
+
+        static string Boards(int count) => count == 1 ? "1 доски" : $"{count} досок";
 
         void MakeNeighborsAvailable(TileData tile)
         {

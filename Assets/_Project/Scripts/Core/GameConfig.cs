@@ -42,8 +42,10 @@ namespace Game.Core
         [Tooltip("Во сколько раз дорожает открытие с каждой открытой плиткой")]
         [SerializeField] float openCostGrowth = 1.04f;
         [SerializeField] int roadCost = 1;
-        [Tooltip("Надбавка к дороге за мост: через реку и по воде. Полная цена — roadCost + bridgeCost")]
-        [SerializeField] int bridgeCost = 2;
+        [Tooltip("Полная цена дороги на плитке с рекой: щебень")]
+        [SerializeField] int bridgeGravel = 2;
+        [Tooltip("Та же цена моста: доски. Единственное, за что доски платят помимо обмена на очки")]
+        [SerializeField] int bridgeBoards = 2;
 
         [Header("Множитель очков")]
         [Tooltip("Сколько прибавляет к множителю каждая открытая плитка")]
@@ -64,6 +66,8 @@ namespace Game.Core
         [Header("Старт партии")]
         [SerializeField] int startingPoints = 40;
         [SerializeField] int startingGravel = 3;
+        [Tooltip("Стартовые доски: на первый мост, пока лес ещё не подключён")]
+        [SerializeField] int startingBoards = 3;
 
         [Header("Контракты")]
         [Tooltip("Сколько крафтовых ресурсов одного типа просит контракт")]
@@ -119,6 +123,8 @@ namespace Game.Core
 
         public int StartingGravel => startingGravel;
 
+        public int StartingBoards => startingBoards;
+
         public int ContractGoal => contractGoal;
 
         public float ContractSeconds => contractSeconds;
@@ -157,7 +163,7 @@ namespace Game.Core
 
         public float HeatDrainSeconds => heatDrainSeconds;
 
-        public PriceSettings Prices => new(tileOpenCost, openCostGrowth, roadCost, bridgeCost);
+        public PriceSettings Prices => new(tileOpenCost, openCostGrowth, roadCost, bridgeGravel, bridgeBoards);
 
         /// <summary>Сколько щебня приносит пройденная веха.</summary>
         public int MilestoneGravel => milestoneGravel;

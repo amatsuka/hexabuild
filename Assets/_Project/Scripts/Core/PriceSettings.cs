@@ -2,18 +2,18 @@ namespace Game.Core
 {
     /// <summary>
     /// Цены партии, снятые с `GameConfig`: правила остаются чистым C#. Отдельная структура,
-    /// потому что четыре голых числа в конструкторе `GameState` уже не разобрать на месте вызова.
+    /// потому что голые числа в конструкторе `GameState` уже не разобрать на месте вызова.
     /// </summary>
     public readonly struct PriceSettings
     {
-        public PriceSettings(int tileOpen, float openGrowth, int road, int bridge)
+        public PriceSettings(int tileOpen, float openGrowth, int road, int bridgeGravel, int bridgeBoards)
         {
             TileOpen = tileOpen;
             // Рост ниже единицы делал бы каждую следующую плитку дешевле, ноль — бесплатной:
             // считаем единицей, то есть постоянной ценой.
             OpenGrowth = openGrowth < 1f ? 1f : openGrowth;
-            Road = road;
-            Bridge = bridge;
+            Road = new RoadCost(road, 0);
+            Bridge = new RoadCost(bridgeGravel, bridgeBoards);
         }
 
         /// <summary>Цена первой открытой плитки. Дальше растёт по <see cref="OpenGrowth"/>.</summary>
@@ -25,9 +25,15 @@ namespace Game.Core
         /// </summary>
         public float OpenGrowth { get; }
 
-        public int Road { get; }
+        /// <summary>Обычная дорога: только щебень.</summary>
+        public RoadCost Road { get; }
 
-        /// <summary>Надбавка к дороге за мост: через реку и по воде.</summary>
-        public int Bridge { get; }
+        /// <summary>
+        /// Дорога на плитке с рекой. Полная цена, а не надбавка: с M33 у крафта появилось
+        /// назначение помимо обмена на очки, и мост — единственное, что просит доски.
+        /// </summary>
+        public RoadCost Bridge { get; }
+
+        public RoadCost For(bool hasRiver) => hasRiver ? Bridge : Road;
     }
 }

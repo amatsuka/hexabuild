@@ -17,18 +17,23 @@ namespace Game.Core.Balance
         public static int Of(HexMap map, MergeRules rules, PriceSettings prices)
         {
             var units = 0;
-            var gravel = 0;
+            var spent = 0;
 
             foreach (var tile in map.ReachableFromMetropolis())
             {
                 foreach (var deposit in tile.Deposits)
                     units += deposit.Reserve;
 
-                if (!tile.IsMetropolis)
-                    gravel += tile.HasRiver ? prices.Road + prices.Bridge : prices.Road;
+                if (tile.IsMetropolis)
+                    continue;
+
+                // Мост платится щебнем и досками, и обе стопки — это крафт, который не пойдёт
+                // в очки: из запаса вычитаются они вместе.
+                var price = prices.For(tile.HasRiver);
+                spent += price.Gravel + price.Boards;
             }
 
-            return (int)((units - gravel) * PointsPerUnit(rules));
+            return (int)((units - spent) * PointsPerUnit(rules));
         }
 
         /// <summary>Очков за единицу базового ресурса при слиянии пятёрками.</summary>

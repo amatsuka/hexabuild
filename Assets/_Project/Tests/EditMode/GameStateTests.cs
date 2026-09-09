@@ -11,10 +11,11 @@ namespace Game.Tests.EditMode
     {
         const int OpenCost = 20;
         const float OpenGrowth = 1.5f;
-        const int RoadCost = 1;
-        const int BridgeCost = 2;
+        const int RoadGravel = 1;
+        const int BridgeGravel = 2;
+        const int BridgeBoards = 2;
 
-        static readonly PriceSettings Prices = new(OpenCost, OpenGrowth, RoadCost, BridgeCost);
+        static readonly PriceSettings Prices = new(OpenCost, OpenGrowth, RoadGravel, BridgeGravel, BridgeBoards);
 
         /// <summary>Нейтральный множитель: правила открытия проверяются без него.</summary>
         static ScoreMultiplier Flat() => new(0f, 0f, 0f, 0f, 0f, 0f, 1f);
@@ -42,11 +43,14 @@ namespace Game.Tests.EditMode
             return new HexMap(rows, tiles);
         }
 
-        static GameState NewGame(int points = 40, int gravel = 3, HexMap map = null)
+        static GameState NewGame(int points = 40, int gravel = 3, HexMap map = null, int boards = 2)
         {
             var storage = new StorageGrid(25);
             for (var i = 0; i < gravel; i++)
                 storage.TryStore(ResourceType.Gravel);
+
+            for (var i = 0; i < boards; i++)
+                storage.TryStore(ResourceType.Board);
 
             return new GameState(map ?? FlatMap(), new Wallet(points), storage, Prices, Flat());
         }
@@ -293,7 +297,7 @@ namespace Game.Tests.EditMode
         public void NextTileCost_SurvivesFloatingPoint_OnTheCourseNumbers()
         {
             var state = new GameState(FlatMap(rows: 8), new Wallet(100000), new StorageGrid(25),
-                new PriceSettings(20, 1.04f, RoadCost, BridgeCost), Flat());
+                new PriceSettings(20, 1.04f, RoadGravel, BridgeGravel, BridgeBoards), Flat());
             state.Begin();
 
             for (var opened = 0; opened < 20; opened++)
@@ -307,9 +311,9 @@ namespace Game.Tests.EditMode
         [Test]
         public void PriceSettings_TreatGrowthBelowOne_AsConstantPrice()
         {
-            Assert.AreEqual(1f, new PriceSettings(20, 0f, 1, 2).OpenGrowth);
-            Assert.AreEqual(1f, new PriceSettings(20, 0.9f, 1, 2).OpenGrowth);
-            Assert.AreEqual(1.04f, new PriceSettings(20, 1.04f, 1, 2).OpenGrowth);
+            Assert.AreEqual(1f, new PriceSettings(20, 0f, 1, 2, 2).OpenGrowth);
+            Assert.AreEqual(1f, new PriceSettings(20, 0.9f, 1, 2, 2).OpenGrowth);
+            Assert.AreEqual(1.04f, new PriceSettings(20, 1.04f, 1, 2, 2).OpenGrowth);
         }
 
         [Test]
@@ -459,19 +463,41 @@ namespace Game.Tests.EditMode
 
         /// <summary>
         /// Река идёт по поверхности плитки: любая дорога на ней пересекает русло, потому что
-        /// лента дороги тоже проходит через центр гекса. Значит мост, значит три щебня.
+        /// лента дороги тоже проходит через центр гекса. Значит мост, значит щебень и доски.
         /// </summary>
         [Test]
-        public void RoadOnARiverTile_CostsTheBridgeSurcharge()
+        public void RoadOnARiverTile_CostsGravelAndBoards()
         {
             var state = NewGame(map: FlatMap(rivers: c => c == new HexCoord(0, 1) ? (1 << 2) | (1 << 5) : 0));
             state.Begin();
             state.TryRevealTile(new HexCoord(0, 1));
             state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
 
-            Assert.AreEqual(RoadCost + BridgeCost, state.RoadPrice(tile));
+            Assert.AreEqual(BridgeGravel, state.RoadPrice(tile).Gravel);
+            Assert.AreEqual(BridgeBoards, state.RoadPrice(tile).Boards);
             Assert.IsTrue(state.TryBuildRoad(new HexCoord(0, 1)));
-            Assert.AreEqual(0, state.Storage.CountOf(ResourceType.Gravel), "три щебня ушли целиком");
+            Assert.AreEqual(1, state.Storage.CountOf(ResourceType.Gravel), "два щебня из трёх ушли в мост");
+            Assert.AreEqual(0, state.Storage.CountOf(ResourceType.Board), "обе доски ушли в мост");
+        }
+
+        /// <summary>
+        /// Мост платится двумя ресурсами, а отката у склада нет: щебень, списанный до проверки
+        /// досок, пропал бы молча. Проверка идёт целиком до списания.
+        /// </summary>
+        [Test]
+        public void BridgeWithoutBoards_ChargesNothing_AndNamesTheBoards()
+        {
+            var state = NewGame(boards: 1, map: FlatMap(rivers: c => c == new HexCoord(0, 1) ? 1 << 2 : 0));
+            state.Begin();
+            state.TryRevealTile(new HexCoord(0, 1));
+            var refusals = new List<string>();
+            state.ActionRefused += refusals.Add;
+
+            Assert.IsFalse(state.TryBuildRoad(new HexCoord(0, 1)));
+
+            Assert.AreEqual(3, state.Storage.CountOf(ResourceType.Gravel), "щебень за неудавшийся мост не списан");
+            Assert.AreEqual(1, state.Storage.CountOf(ResourceType.Board));
+            CollectionAssert.Contains(refusals, "Нужен мост: не хватает 1 доски");
         }
 
         [Test]
@@ -483,13 +509,15 @@ namespace Game.Tests.EditMode
             state.TryRevealTile(new HexCoord(0, 1));
             state.Map.TryGetTile(new HexCoord(0, 1), out var tile);
 
-            Assert.AreEqual(RoadCost, state.RoadPrice(tile), "река у соседа моста не требует");
+            Assert.AreEqual(RoadGravel, state.RoadPrice(tile).Gravel, "река у соседа моста не требует");
+            Assert.AreEqual(0, state.RoadPrice(tile).Boards, "река у соседа моста не требует");
         }
 
+        /// <summary>Отказ называет обе нехватки: «нужен мост» без чисел игроку ничего не говорит.</summary>
         [Test]
-        public void BridgeRefusal_NamesTheFullPrice()
+        public void BridgeRefusal_NamesWhatIsMissing()
         {
-            var state = NewGame(gravel: 2, map: FlatMap(rivers: c => c == new HexCoord(0, 1) ? 1 << 2 : 0));
+            var state = NewGame(gravel: 1, boards: 0, map: FlatMap(rivers: c => c == new HexCoord(0, 1) ? 1 << 2 : 0));
             state.Begin();
             state.TryRevealTile(new HexCoord(0, 1));
             var refusals = new List<string>();
@@ -497,8 +525,8 @@ namespace Game.Tests.EditMode
 
             Assert.IsFalse(state.TryBuildRoad(new HexCoord(0, 1)));
 
-            Assert.AreEqual(2, state.Storage.CountOf(ResourceType.Gravel));
-            CollectionAssert.Contains(refusals, $"Нужен мост: {RoadCost + BridgeCost} щебня");
+            Assert.AreEqual(1, state.Storage.CountOf(ResourceType.Gravel));
+            CollectionAssert.Contains(refusals, "Нужен мост: не хватает 1 щебня и 2 досок");
         }
 
         [Test]

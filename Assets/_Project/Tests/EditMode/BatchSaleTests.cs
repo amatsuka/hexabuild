@@ -17,7 +17,7 @@ namespace Game.Tests.EditMode
         const int GravelReserve = 4;
         const int BoardReserve = 4;
 
-        static readonly PriceSettings Prices = new(20, 1.04f, 1, 2);
+        static readonly PriceSettings Prices = new(20, 1.04f, 1, 2, 2);
 
         MergeRules rules;
         StorageGrid storage;

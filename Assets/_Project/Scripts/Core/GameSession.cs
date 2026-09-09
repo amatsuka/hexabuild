@@ -290,6 +290,11 @@ namespace Game.Core
             for (var i = 0; i < config.StartingGravel; i++)
                 state.Storage.TryStore(ResourceType.Gravel);
 
+            // Доски на первый мост: без них переправа зависит от того, лёг ли лес на берегу,
+            // а это не выбор игрока, а жребий генератора.
+            for (var i = 0; i < config.StartingBoards; i++)
+                state.Storage.TryStore(ResourceType.Board);
+
             // Бар рисуется нулём до первого обмена: карточка стоит на месте с самого начала,
             // иначе верх экрана перекладывался бы на глазах у первой же прибавки.
             RefreshProgress();
