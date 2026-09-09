@@ -98,6 +98,22 @@ namespace Game.UI
 
         readonly TextMeshProUGUI[] stripCounts = new TextMeshProUGUI[StripTypes.Length];
 
+        /// <summary>Ширина канваса, на которой верх раскладывался в последний раз.</summary>
+        float appliedCanvasWidth = -1f;
+
+        /// <summary>Полоса ресурсов: её кладут в строку вместе с очками и контрактом.</summary>
+        RectTransform resourceStrip;
+
+        /// <summary>Ширина полосы ресурсов: она считается из числа островков, а не из константы.</summary>
+        static float StripWidth =>
+            StripTypes.Length * IslandWidth + (StripTypes.Length - 1) * IslandSpacing + StripPadding * 2f;
+
+        /// <summary>Ширина строки из трёх карточек, поставленных встык через <see cref="Margin"/>.</summary>
+        static float RowWidth => PointsWidth + Margin + StripWidth + Margin + CardWidth;
+
+        /// <summary>Верх по центру: якорь строки. Пивот там же, поэтому позиция — это верх карточки.</summary>
+        static readonly Vector2 TopCenter = new(0.5f, 1f);
+
         TextMeshProUGUI pointsValue;
         RectTransform pointsCard;
         RectTransform ceilingCard;
@@ -160,6 +176,7 @@ namespace Game.UI
             BuildCeilingCard();
             BuildResourceStrip();
             BuildContractCard();
+            LayoutTop();
 
             // Слой попапов заводится последним ребёнком: попап встаёт над объектом и должен
             // идти поверх карточек HUD, а порядок рисования в канвасе — это порядок иерархии.
@@ -292,10 +309,80 @@ namespace Game.UI
 
         void Update()
         {
+            // Окно браузера тянут, телефон поворачивают — верх раскладывается заново. Проверка
+            // на собранность обязательна: вью лежит в сцене и живёт с её загрузки, а собирается
+            // только в `Bind` — до первой партии трогать здесь нечего.
+            if (pointsCard != null)
+                LayoutTop();
+
             // Обратный отсчёт перерисовывается только на смене целой секунды: строка каждый кадр
             // ничего не добавляет глазу, зато мусорит строками в куче.
             if (contracts != null && contracts.IsActive && Mathf.CeilToInt(contracts.SecondsLeft) != shownSeconds)
                 RefreshContract();
+        }
+
+        /// <summary>
+        /// Раскладывает верх HUD. Считает по ширине родителя, а не по `Screen.width`: родитель —
+        /// это уже безопасная зона в пикселях канваса, то есть тот же счёт, в котором заданы
+        /// отступы карточек.
+        /// </summary>
+        void LayoutTop()
+        {
+            var width = ((RectTransform)transform).rect.width;
+            if (width <= 0f || Mathf.Approximately(width, appliedCanvasWidth))
+                return;
+
+            appliedCanvasWidth = width;
+            if (width >= RowWidth)
+                LayoutRow();
+            else
+                LayoutCorners();
+        }
+
+        /// <summary>
+        /// Широкий кадр: очки, ресурсы и контракт стоят одной строкой по центру, верхними
+        /// кромками на одном уровне. Решение человека 09.09.2026: по углам канваса, который
+        /// втрое шире эталона, они разбегались, и глаз ходил от угла к углу.
+        /// </summary>
+        void LayoutRow()
+        {
+            var left = -RowWidth * 0.5f;
+
+            var pointsX = left + PointsWidth * 0.5f;
+            Move(pointsCard, TopCenter, new Vector2(pointsX, -Margin));
+            Move(ceilingCard, TopCenter, new Vector2(pointsX, -(Margin + TopHeight + CeilingCardGap)));
+            Move(resourceStrip, TopCenter, new Vector2(left + PointsWidth + Margin + StripWidth * 0.5f, -Margin));
+            Move(contractCard, TopCenter, new Vector2(-left - CardWidth * 0.5f, -Margin));
+        }
+
+        /// <summary>
+        /// Узкий кадр — портрет телефона: строка в него не влезает (эталон 1080, строке нужно
+        /// около 1200), и карточки остаются по углам, как задумывались. Карточка контракта
+        /// висит под полосой ресурсов, а не рядом с ней.
+        /// </summary>
+        void LayoutCorners()
+        {
+            var left = new Vector2(0f, 1f);
+            var right = new Vector2(1f, 1f);
+
+            Move(pointsCard, left, new Vector2(Margin, -Margin));
+            Move(ceilingCard, left, new Vector2(Margin, -(Margin + TopHeight + CeilingCardGap)));
+            Move(resourceStrip, right, new Vector2(-Margin, -Margin));
+            Move(contractCard, right, new Vector2(-Margin, -(Margin + TopHeight + CardTopGap)));
+        }
+
+        /// <summary>
+        /// Переставляет карточку, не трогая её размер: размеры заданы при сборке, и строка
+        /// с углами отличаются только тем, где карточка стоит. Ноль пропускается — карточки
+        /// потолка нет, когда потолка нет.
+        /// </summary>
+        static void Move(RectTransform rect, Vector2 anchor, Vector2 position)
+        {
+            if (rect == null)
+                return;
+
+            rect.anchorMin = rect.anchorMax = rect.pivot = anchor;
+            rect.anchoredPosition = position;
         }
 
         void Refresh()
@@ -598,9 +685,8 @@ namespace Game.UI
 
         void BuildResourceStrip()
         {
-            var width = StripTypes.Length * IslandWidth + (StripTypes.Length - 1) * IslandSpacing
-                        + StripPadding * 2f;
-            var strip = UiPanel.Create("Resources", transform, theme).rectTransform;
+            var width = StripWidth;
+            var strip = resourceStrip = UiPanel.Create("Resources", transform, theme).rectTransform;
             Place(strip, new Vector2(1f, 1f), new Vector2(-Margin, -Margin), new Vector2(width, TopHeight));
 
             for (var i = 0; i < StripTypes.Length; i++)

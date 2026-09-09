@@ -153,6 +153,13 @@ namespace Game.UI
             Place(exitButton.Rect, new Vector2(0.5f, 0.5f), new Vector2(0f, y), new Vector2(ButtonWidth, ButtonHeight));
         }
 
+        /// <summary>
+        /// Пауза не по кнопке: игрок ушёл из окна, и партия ждёт его тем же экраном, что и по
+        /// шестерёнке. Открытая карточка съедает клики мимо себя, поэтому возвращающий фокус
+        /// клик не уходит на поле и ничего не открывает.
+        /// </summary>
+        public void Open() => SetOpen(true);
+
         void SetOpen(bool open) => cardRoot.SetActive(open);
 
         void Close() => SetOpen(false);

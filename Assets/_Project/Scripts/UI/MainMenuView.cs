@@ -61,6 +61,12 @@ namespace Game.UI
         GameObject keypadRoot;
         GameObject levelsRoot;
         TextMeshProUGUI digitsDisplay;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        /// <summary>Закрыть вкладку. Реализация — в `Assets/Plugins/WebGL/HexColony.jslib`.</summary>
+        [System.Runtime.InteropServices.DllImport("__Internal")]
+        static extern void HexColonyCloseTab();
+#endif
+
         UiButton[] mainButtons;
         UiButton[] keypadButtons;
         UiButton[] levelButtons;
@@ -219,14 +225,12 @@ namespace Game.UI
             buttons.Add(seed);
             y -= ButtonHeight + ButtonGap;
 
-            // WebGL-сборка публикуется на gh-pages: `Application.Quit()` там не делает ничего,
-            // и молчаливо бездействующая кнопка хуже её отсутствия. В редакторе и на десктопе
-            // кнопка остаётся — там она работает.
-#if !UNITY_WEBGL || UNITY_EDITOR
+            // Кнопка есть везде, включая веб: решение человека 09.09.2026. До 09.09.2026 в
+            // WebGL её не собирали — `Application.Quit()` там вкладку не закрывает, и кнопка
+            // молчала бы. Теперь выход идёт через браузер, см. `Quit`.
             var quit = UiButton.Create("Quit", root, theme, theme.ButtonSecondary, "Выход", 40f, Quit);
             Place(quit.Rect, new Vector2(0.5f, 0.5f), new Vector2(0f, y), new Vector2(ButtonWidth, ButtonHeight));
             buttons.Add(quit);
-#endif
 
             mainButtons = buttons.ToArray();
             return root.gameObject;
@@ -425,11 +429,21 @@ namespace Game.UI
             gameRoot.SetActive(true);
         }
 
+        /// <summary>
+        /// Выход. В вебе это закрытие вкладки через `Assets/Plugins/WebGL/HexColony.jslib`:
+        /// из C# браузер иначе не позвать, а `Application.Quit()` вкладку не трогает. Браузер
+        /// закрывает только то окно, которое открыл сам скрипт, поэтому на обычной вкладке
+        /// закрытие не сработает — `Application.Quit()` после него останавливает партию,
+        /// чтобы нажатие не осталось совсем без ответа.
+        /// </summary>
         void Quit()
         {
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else
+#if UNITY_WEBGL
+            HexColonyCloseTab();
+#endif
             Application.Quit();
 #endif
         }
