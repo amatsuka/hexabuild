@@ -106,6 +106,12 @@ namespace Game.Core.Balance
         public GameState State => state;
 
         /// <summary>
+        /// Сколько действий бот потратил за партию. Делённое на <see cref="BalanceRun.Seconds"/>,
+        /// это «кликов в секунду» — темп, который стадия M34 держит в человеческой полосе.
+        /// </summary>
+        public int Actions { get; private set; }
+
+        /// <summary>
         /// Сколько раз правила отказали боту. Бот проверяет всё до действия, поэтому любой отказ —
         /// его дефект, а не ход партии.
         /// </summary>
@@ -276,6 +282,7 @@ namespace Game.Core.Balance
             }
 
             actions -= 1f;
+            Actions++;
             return true;
         }
 

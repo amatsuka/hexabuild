@@ -12,15 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bea9258f736034ca9bf8fe1c6bf07077, type: 3}
   m_Name: Level 04
   m_EditorClassIdentifier: Game.Runtime::Game.Core.LevelConfig
-  seed: 46
-  fieldRows: 15
+  seed: 184
+  fieldRows: 12
   waterCeiling: 0.18
-  rocksCeiling: 0.7
-  reserveScale: 1.4
-  contractGoal: 3
-  contractSeconds: 55
-  extractionInterval: 1.35
-  botCeiling: 77933
+  rocksCeiling: 0.73
+  reserveScale: 1.3
+  contractGoal: 4
+  contractSeconds: 48
+  extractionInterval: 1.38
+  botCeiling: 37229
   oneStarShare: 0.5
   twoStarShare: 0.75
   threeStarShare: 1
