@@ -56,20 +56,22 @@ namespace Game.UI
         [SerializeField] Color slotEmptyBottom = new(0.03f, 0.12f, 0.22f, 0.30f);
         [SerializeField] Color slotFilledTop = new(0.44f, 0.72f, 0.92f, 0.34f);
         [SerializeField] Color slotFilledBottom = new(0.10f, 0.32f, 0.52f, 0.42f);
-        [SerializeField] Color slotEdge = new(0.72f, 0.90f, 1f, 0.55f);
-        [SerializeField] float slotRadius = 18f;
-
-        [Header("Кнопка")]
-        [Tooltip("Главная кнопка финального экрана: тёплая и непрозрачная, в отличие от стекла HUD")]
-        [SerializeField] Color primaryTop = new(1f, 0.78f, 0.30f, 1f);
-        [SerializeField] Color primaryBottom = new(0.93f, 0.47f, 0.07f, 1f);
         [Header("Подсказка обучения")]
         [Tooltip("Заливка карточки подсказки. Непрозрачная намеренно: сквозь неё ничего не просвечивает")]
         [SerializeField] Color hintTop = new(0.13f, 0.26f, 0.38f, 1f);
         [SerializeField] Color hintBottom = new(0.05f, 0.12f, 0.22f, 1f);
 
-        [SerializeField] Color secondaryTop = new(0.36f, 0.72f, 1f, 1f);
-        [SerializeField] Color secondaryBottom = new(0.10f, 0.38f, 0.82f, 1f);
+        [SerializeField] Color slotEdge = new(0.72f, 0.90f, 1f, 0.55f);
+        [SerializeField] float slotRadius = 18f;
+
+        [Header("Кнопка")]
+        [Tooltip("Главная кнопка: тёплая, но такое же стекло, как весь интерфейс — решение " +
+                 "человека 10.09.2026. Плотной и яркой она была только на экранах, и в партии " +
+                 "читалась чужеродной наклейкой поверх кадра")]
+        [SerializeField] Color primaryTop = new(1f, 0.78f, 0.30f, 0.22f);
+        [SerializeField] Color primaryBottom = new(0.93f, 0.47f, 0.07f, 0.36f);
+        [SerializeField] Color secondaryTop = new(0.36f, 0.72f, 1f, 0.10f);
+        [SerializeField] Color secondaryBottom = new(0.10f, 0.38f, 0.82f, 0.18f);
         [Tooltip("Кнопка подтверждения на попапе. Зелёная и плотная: галочка на стекле тонет " +
                  "в карте, которая сквозь попап видна")]
         [SerializeField] Color confirmTop = new(0.48f, 0.88f, 0.44f, 1f);
@@ -179,6 +181,15 @@ namespace Game.UI
         /// становится кругом.
         /// </summary>
         public UiPanelStyle RoundButton(float diameter) => Button(secondaryTop, secondaryBottom, diameter * 0.5f);
+
+        /// <summary>
+        /// Кнопка без карточки: подпись и прямоугольник, который ловит тап. Крестик «пропустить
+        /// шаг» стоит на самой подсказке, и вторая карточка поверх карточки читалась бы вложенной
+        /// панелью, а не значком.
+        /// </summary>
+        public UiPanelStyle Ghost => new(
+            Color.clear, Color.clear, Color.clear, Color.clear, radius, 0f, 0f, 0f, 0f,
+            highlightSpread, 0f, 0f, 0f, 0f, lightDirection);
 
         /// <summary>
         /// Карточка подсказки обучения: та же карточка, но **непрозрачная**. Стеклом она быть

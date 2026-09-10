@@ -225,6 +225,12 @@ namespace Game.Storage
         /// <summary>Прямоугольник кнопки: над ним встаёт подсказка обучения про резерв.</summary>
         public RectTransform SellRect => sellButton?.Rect;
 
+        /// <summary>
+        /// Палитра склада: по ней обучение красит свою кнопку «Пропустить». Она стоит над
+        /// складом и обязана выглядеть его частью, а не гостьей с чужого экрана.
+        /// </summary>
+        public UiTheme Theme => theme;
+
         /// <summary>Панель склада целиком: над ней встают подсказки обучения про склад.</summary>
         public RectTransform PanelRect => panel != null ? panel.rectTransform : (RectTransform)transform;
 

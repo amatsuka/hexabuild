@@ -109,6 +109,9 @@ namespace Game.Core
         /// <summary>Обучение этой партии. Пусто — оно уже пройдено или партия не первая в кампании.</summary>
         TutorialSystem tutorial;
 
+        /// <summary>Лицо обучения: у него своя кнопка «Пропустить» над складом, и тап ей отдаёт партия.</summary>
+        TutorialView tutorialView;
+
         void Awake()
         {
             // Уровень кампании выбран в меню и лежит статикой: он переопределяет рычаги
@@ -181,7 +184,7 @@ namespace Game.Core
                 return;
 
             tutorial = new TutorialSystem(map, storage, state.Roads, mergeRules);
-            TutorialView.Create(tutorial, hudView, storageView, views);
+            tutorialView = TutorialView.Create(tutorial, hudView, storageView, views);
 
             // Цель шага ездит по складу вместе с ресурсами: подсветка обязана ходить за ней.
             storage.Changed += tutorial.Refresh;
@@ -349,9 +352,13 @@ namespace Game.Core
 
             // Кнопка продажи опрашивается и на паузе, и после конца партии: там она обязана
             // пропасть с экрана, а не остаться висеть под карточкой.
+            var playing = !end.HasEnded && !pauseView.IsOpen;
             storageView.ShowSellButton(
-                !end.HasEnded && !pauseView.IsOpen && selling == null && sale.CanSell && !SaleHeld,
-                sale.Everything);
+                playing && selling == null && sale.CanSell && !SaleHeld, sale.Everything);
+
+            // «Пропустить» стоит над кнопкой продажи и пропадает там же, где она: на паузе
+            // и после конца партии над складом не должно висеть ничего.
+            tutorialView?.ShowSkip(playing);
 
             if (end.HasEnded || pauseView.IsOpen)
                 return;
@@ -501,7 +508,12 @@ namespace Game.Core
             if (pauseView.HandlePress(screenPosition))
                 return;
 
-            if (hudView.Popups.TrySkipPress(screenPosition))
+            // Крестик на подсказке пропускает шаг, кнопка над складом — всё обучение. Обе
+            // разбираются до склада: они стоят над его панелью, как и кнопка продажи.
+            if (hudView.Popups.TryHintPress(screenPosition))
+                return;
+
+            if (tutorialView != null && tutorialView.TrySkipPress(screenPosition))
                 return;
 
             if (storageView.TrySellPress(screenPosition))
@@ -537,7 +549,8 @@ namespace Game.Core
         {
             gameOverView.ReleasePress();
             pauseView.ReleasePress();
-            hudView.Popups.ReleaseSkipPress();
+            hudView.Popups.ReleaseHintPress();
+            tutorialView?.ReleaseSkipPress();
             storageView.ReleaseSellPress();
 
             if (pressedCell >= 0)
@@ -571,9 +584,13 @@ namespace Game.Core
             if (pauseView.HandleClick(screenPosition))
                 return;
 
-            // «Пропустить» на подсказке обучения: единственное место обучения, ловящее тап.
-            // Ценнику открытия клик достаётся только после неё — кнопка лежит поверх поля.
-            if (hudView.Popups.TrySkipClick(screenPosition))
+            // Два места обучения, ловящие тап: крестик на подсказке пропускает шаг, кнопка
+            // над складом снимает обучение целиком. Ценнику открытия клик достаётся только
+            // после них — обе лежат поверх поля.
+            if (hudView.Popups.TryHintClick(screenPosition))
+                return;
+
+            if (tutorialView != null && tutorialView.TrySkipClick(screenPosition))
                 return;
 
             // Пока висит ценник открытия, клик принадлежит ему. Согласие — второй тап по той

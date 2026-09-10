@@ -56,14 +56,15 @@ namespace Game.UI
         const float SweepWidth = 260f;
 
         /// <summary>
-        /// Подсказка обучения: две строки текста и, на первой подсказке, кнопка «Пропустить».
-        /// Ширина — потолок; высота считается по самому тексту, как у отказа.
+        /// Подсказка обучения: две строки текста и крестик «пропустить шаг» в правом верхнем
+        /// углу. Ширина — потолок; высота считается по самому тексту, как у отказа.
         /// </summary>
         const float HintWidth = 520f;
         const float HintFontSize = 26f;
-        const float SkipWidth = 230f;
-        const float SkipHeight = 54f;
-        const float SkipFontSize = 24f;
+
+        /// <summary>Крестик на самой карточке: он пропускает шаг, а не всё обучение.</summary>
+        const float CrossSize = 44f;
+        const float CrossFontSize = 30f;
 
         /// <summary>Сколько живёт попап, который никто не закрывает: прибавка, награда, отказ.</summary>
         const float ShowSeconds = 2f;
@@ -102,8 +103,8 @@ namespace Game.UI
         /// </summary>
         Popup hint;
 
-        /// <summary>«Пропустить» на первой подсказке: единственное место обучения, ловящее тап.</summary>
-        UiButton skip;
+        /// <summary>Крестик на подсказке: единственное место самой карточки, ловящее тап.</summary>
+        UiButton cross;
 
         /// <summary>
         /// Висит ли сейчас ценник: пока висит, клик принадлежит ему, а разбирает клик
@@ -318,7 +319,8 @@ namespace Game.UI
         /// Подсказка обучения: та же карточка над той же целью, но без срока жизни — она ждёт,
         /// пока игрок сделает шаг. Своего слоя обучению не нужно: попап и есть «сообщение,
         /// привязанное к объекту», а два одинаковых на вид слоя разошлись бы на первой же правке.
-        /// <paramref name="skipped"/> заводит на карточке «Пропустить»; пусто — кнопки нет.
+        /// <paramref name="skipped"/> вешает в угол карточки крестик, пропускающий **шаг**;
+        /// всё обучение снимает своя кнопка над складом, а не эта.
         /// </summary>
         public void ShowHint(string text, in Anchor anchor, Action skipped, float lift, bool below)
         {
@@ -330,7 +332,9 @@ namespace Game.UI
             var popup = NewCard(anchor, HintWidth, theme.Hint);
             popup.Lift = lift;
             popup.Below = below;
-            var textWidth = HintWidth - Padding * 2f;
+
+            // Место под крестик отнимается у текста: строка во всю ширину иначе уходит под него.
+            var textWidth = HintWidth - Padding * 2f - CrossSize;
 
             var label = UiText.Label("Text", popup.Rect, theme, HintFontSize, theme.Text, TextAlignmentOptions.Center);
             Place(label.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -Padding * 0.7f),
@@ -342,15 +346,16 @@ namespace Game.UI
             var textHeight = label.preferredHeight;
             label.rectTransform.sizeDelta = new Vector2(textWidth, textHeight);
 
-            var height = textHeight + Padding * 1.4f + (skipped != null ? SkipHeight + Padding * 0.5f : 0f);
-            popup.Rect.sizeDelta = new Vector2(HintWidth, Mathf.Max(MinHeight, height));
+            popup.Rect.sizeDelta = new Vector2(HintWidth, Mathf.Max(MinHeight, textHeight + Padding * 1.4f));
 
             if (skipped != null)
             {
-                skip = UiButton.Create(
-                    "Skip", popup.Rect, theme, theme.ButtonSecondary, "Пропустить", SkipFontSize, skipped);
-                Place(skip.Rect, new Vector2(0.5f, 0f), new Vector2(0f, Padding * 0.5f),
-                    new Vector2(SkipWidth, SkipHeight));
+                // Крестик — подпись без карточки: вторая панель поверх панели читалась бы
+                // вложенным блоком, а не значком.
+                cross = UiButton.Create(
+                    "Cross", popup.Rect, theme, theme.Ghost, "×", CrossFontSize, skipped);
+                Place(cross.Rect, new Vector2(1f, 1f), new Vector2(-Padding * 0.3f, -Padding * 0.3f),
+                    new Vector2(CrossSize, CrossSize));
             }
 
             hint = popup;
@@ -363,7 +368,7 @@ namespace Game.UI
             if (hint == null)
                 return;
 
-            skip = null;
+            cross = null;
 
             if (hint.Rect != null)
                 Destroy(hint.Rect.gameObject);
@@ -371,14 +376,14 @@ namespace Game.UI
             hint = null;
         }
 
-        /// <summary>Палец лёг на «Пропустить»: дальше нажатие разбирать не надо.</summary>
-        public bool TrySkipPress(Vector2 screenPosition) => skip != null && skip.TryPress(screenPosition);
+        /// <summary>Палец лёг на крестик подсказки: дальше нажатие разбирать не надо.</summary>
+        public bool TryHintPress(Vector2 screenPosition) => cross != null && cross.TryPress(screenPosition);
 
         /// <summary>Палец снят. Ненажатая кнопка молчит, поэтому звать можно всегда.</summary>
-        public void ReleaseSkipPress() => skip?.Release();
+        public void ReleaseHintPress() => cross?.Release();
 
-        /// <summary>Клик попал в «Пропустить»: обучение снимается им же.</summary>
-        public bool TrySkipClick(Vector2 screenPosition) => skip != null && skip.TryClick(screenPosition);
+        /// <summary>Клик попал в крестик: шаг обучения пропускается.</summary>
+        public bool TryHintClick(Vector2 screenPosition) => cross != null && cross.TryClick(screenPosition);
 
         /// <summary>Партия кончилась: над полем не остаётся ничего, финальный экран сам по себе.</summary>
         public void Clear()

@@ -81,9 +81,6 @@ namespace Game.Tutorial
         /// <summary>Клетки склада под подсветкой, если шаг указывает на склад.</summary>
         public IReadOnlyList<int> TargetCells => cells;
 
-        /// <summary>Кнопку «Пропустить» несёт только первая подсказка.</summary>
-        public bool Skippable => Step == TutorialStep.OpenStone;
-
         /// <summary>
         /// Кнопка «Продать всё» до своего шага не приходит: жребий 10–20 с выдал бы её посреди
         /// первых уроков. Это одна из двух вещей, которые обучение выдаёт событием сценария,
@@ -119,7 +116,17 @@ namespace Game.Tutorial
                 Advance();
         }
 
-        /// <summary>Игрок снял обучение сам: флаг ставится тот же, что и на последнем шаге.</summary>
+        /// <summary>
+        /// Игрок пропустил шаг крестиком на подсказке: следующий встаёт на его место. Это не то
+        /// же, что <see cref="Skip"/>, — обучение продолжается, просто без этого урока.
+        /// </summary>
+        public void SkipStep()
+        {
+            if (IsRunning)
+                Advance();
+        }
+
+        /// <summary>Игрок снял обучение целиком: флаг ставится тот же, что и на последнем шаге.</summary>
         public void Skip()
         {
             if (!IsRunning)

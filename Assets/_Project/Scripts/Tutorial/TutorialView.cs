@@ -36,10 +36,22 @@ namespace Game.Tutorial
 
         /// <summary>
         /// Насколько выше обычного встаёт подсказка про склад. Над панелью склада живут число
-        /// множителя (70 px) и кнопка продажи, оба с зазором 10 px: подсказка обязана пройти
-        /// над ними, иначе она садится ровно на накал, о котором сама и говорит.
+        /// множителя (70 px), кнопка продажи и кнопка «Пропустить» над ней: подсказка обязана
+        /// пройти над всеми тремя, иначе она садится ровно на накал, о котором сама и говорит.
+        /// Замер кадра: полоса кончается на 460, подсказка с этим числом встаёт на 472.
         /// </summary>
-        const float StorageLift = 92f;
+        const float StorageLift = 110f;
+
+        /// <summary>
+        /// Кнопка «Пропустить» над складом: она снимает всё обучение целиком, в отличие от
+        /// крестика на самой подсказке, который пропускает один шаг. Стоит справа над складом,
+        /// **над** кнопкой продажи: место у правого края уже занято ею, и делить его нельзя —
+        /// с девятого шага обе на экране одновременно.
+        /// </summary>
+        const float SkipWidth = 200f;
+        const float SkipHeight = 50f;
+        const float SkipGap = 10f;
+        const float SkipFontSize = 26f;
 
         static readonly int[] NoCells = Array.Empty<int>();
 
@@ -49,6 +61,7 @@ namespace Game.Tutorial
         IReadOnlyDictionary<HexCoord, TileView> tiles;
         StorageView storage;
         HudView hud;
+        UiButton skip;
 
         /// <summary>Шаг, чья карточка сейчас на экране.</summary>
         TutorialStep shown;
@@ -72,9 +85,54 @@ namespace Game.Tutorial
             view.storage = storageView;
             view.tiles = tileViews;
 
+            view.BuildSkip();
             system.Changed += view.Redraw;
             view.Redraw();
             return view;
+        }
+
+        /// <summary>
+        /// Кнопка на экране: обучение идёт, а партия не встала. На паузе и после конца партии
+        /// её быть не должно — там же пропадает и кнопка продажи, под которой она стоит.
+        /// </summary>
+        public void ShowSkip(bool allowed)
+        {
+            if (skip == null)
+                return;
+
+            var visible = allowed && tutorial.IsRunning;
+            if (skip.Visible != visible)
+                skip.Visible = visible;
+        }
+
+        /// <summary>Палец лёг на «Пропустить»: дальше нажатие разбирать не надо.</summary>
+        public bool TrySkipPress(Vector2 screenPosition) => skip != null && skip.TryPress(screenPosition);
+
+        /// <summary>Палец снят. Ненажатая кнопка молчит, поэтому звать можно всегда.</summary>
+        public void ReleaseSkipPress() => skip?.Release();
+
+        /// <summary>Клик попал в «Пропустить»: обучение снимается целиком.</summary>
+        public bool TrySkipClick(Vector2 screenPosition) => skip != null && skip.TryClick(screenPosition);
+
+        /// <summary>
+        /// Кнопка живёт на складе, а не на этом слое: она встаёт над кнопкой продажи и обязана
+        /// ездить вместе со складом, как ездят число множителя и полоса утечки.
+        /// </summary>
+        void BuildSkip()
+        {
+            var sell = storage.SellRect;
+            if (sell == null)
+                return;
+
+            skip = UiButton.Create(
+                "SkipTutorial", sell.parent, storage.Theme, storage.Theme.ButtonSecondary,
+                "Пропустить", SkipFontSize, tutorial.Skip);
+
+            var rect = skip.Rect;
+            rect.anchorMin = rect.anchorMax = sell.anchorMin;
+            rect.pivot = sell.pivot;
+            rect.sizeDelta = new Vector2(SkipWidth, SkipHeight);
+            rect.anchoredPosition = sell.anchoredPosition + new Vector2(0f, sell.sizeDelta.y + SkipGap);
         }
 
         void OnDestroy()
@@ -140,8 +198,7 @@ namespace Game.Tutorial
 
             shown = tutorial.Step;
             cardUp = true;
-            hud.Popups.ShowHint(
-                TextOf(shown), Anchor(), tutorial.Skippable ? tutorial.Skip : null, Lift(), Below());
+            hud.Popups.ShowHint(TextOf(shown), Anchor(), tutorial.SkipStep, Lift(), Below());
         }
 
         void HideCard()

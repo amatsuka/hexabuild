@@ -245,7 +245,6 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(TutorialAim.Tiles, tutorial.Aim);
             CollectionAssert.AreEqual(new[] { TutorialSystem.StoneTile }, tutorial.TargetTiles);
-            Assert.IsTrue(tutorial.Skippable, "«Пропустить» живёт на первой подсказке");
         }
 
         /// <summary>Шаг слияния подсвечивает клетки того типа, которого набралось на тройку.</summary>
@@ -262,7 +261,31 @@ namespace Game.Tests.EditMode
 
             Assert.AreEqual(TutorialAim.Cells, tutorial.Aim);
             Assert.AreEqual(rules.SmallCount, tutorial.TargetCells.Count);
-            Assert.IsFalse(tutorial.Skippable, "«Пропустить» дальше первой подсказки не живёт");
+        }
+
+        /// <summary>
+        /// Крестик на подсказке пропускает шаг, а не обучение: следующий встаёт на его место,
+        /// и последний доводит обучение до конца — как если бы игрок прошёл его сам.
+        /// </summary>
+        [Test]
+        public void SkipStep_MovesToTheNextStep_AndTheLastOneEndsTheTutorial()
+        {
+            var tutorial = NewTutorial();
+            var finished = 0;
+            tutorial.Finished += () => finished++;
+
+            tutorial.SkipStep();
+            Assert.AreEqual(TutorialStep.BuildRoad, tutorial.Step);
+            Assert.AreEqual(0, finished, "пропуск шага не снимает обучение");
+
+            for (var i = 0; i < Scenario.Length; i++)
+                tutorial.SkipStep();
+
+            Assert.AreEqual(TutorialStep.Done, tutorial.Step);
+            Assert.AreEqual(1, finished, "последний пропущенный шаг доводит обучение до конца");
+
+            tutorial.SkipStep();
+            Assert.AreEqual(1, finished, "пройденное обучение второй раз не заканчивается");
         }
 
         TutorialSystem NewTutorial() => new(map, storage, roads, rules);
