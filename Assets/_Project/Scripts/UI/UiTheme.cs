@@ -63,6 +63,11 @@ namespace Game.UI
         [Tooltip("Главная кнопка финального экрана: тёплая и непрозрачная, в отличие от стекла HUD")]
         [SerializeField] Color primaryTop = new(1f, 0.78f, 0.30f, 1f);
         [SerializeField] Color primaryBottom = new(0.93f, 0.47f, 0.07f, 1f);
+        [Header("Подсказка обучения")]
+        [Tooltip("Заливка карточки подсказки. Непрозрачная намеренно: сквозь неё ничего не просвечивает")]
+        [SerializeField] Color hintTop = new(0.13f, 0.26f, 0.38f, 1f);
+        [SerializeField] Color hintBottom = new(0.05f, 0.12f, 0.22f, 1f);
+
         [SerializeField] Color secondaryTop = new(0.36f, 0.72f, 1f, 1f);
         [SerializeField] Color secondaryBottom = new(0.10f, 0.38f, 0.82f, 1f);
         [Tooltip("Кнопка подтверждения на попапе. Зелёная и плотная: галочка на стекле тонет " +
@@ -174,6 +179,16 @@ namespace Game.UI
         /// становится кругом.
         /// </summary>
         public UiPanelStyle RoundButton(float diameter) => Button(secondaryTop, secondaryBottom, diameter * 0.5f);
+
+        /// <summary>
+        /// Карточка подсказки обучения: та же карточка, но **непрозрачная**. Стеклом она быть
+        /// не может — подсказка висит дольше любого другого попапа и стоит вплотную к тому, о чём
+        /// говорит: сквозь стекло в ней просвечивали то число накала, то прибавка за проданное,
+        /// то само поле, и три полупрозрачных слоя смешивались в кашу.
+        /// </summary>
+        public UiPanelStyle Hint => new(
+            hintTop, hintBottom, edge, glow, radius, edgeWidth, glowSize, glowOffset, highlight,
+            highlightSpread, sheen, darken, backLight, spec, lightDirection);
 
         /// <summary>
         /// Плашка рекорда: та же карточка, что и весь интерфейс, но с золотой кромкой. Раньше

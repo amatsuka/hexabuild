@@ -320,14 +320,16 @@ namespace Game.UI
         /// привязанное к объекту», а два одинаковых на вид слоя разошлись бы на первой же правке.
         /// <paramref name="skipped"/> заводит на карточке «Пропустить»; пусто — кнопки нет.
         /// </summary>
-        public void ShowHint(string text, in Anchor anchor, Action skipped)
+        public void ShowHint(string text, in Anchor anchor, Action skipped, float lift, bool below)
         {
             HideHint();
 
             if (!anchor.Exists)
                 return;
 
-            var popup = NewCard(anchor, HintWidth);
+            var popup = NewCard(anchor, HintWidth, theme.Hint);
+            popup.Lift = lift;
+            popup.Below = below;
             var textWidth = HintWidth - Padding * 2f;
 
             var label = UiText.Label("Text", popup.Rect, theme, HintFontSize, theme.Text, TextAlignmentOptions.Center);
@@ -406,12 +408,15 @@ namespace Game.UI
             if (rect == null)
                 return;
 
-            rect.position = popup.Where.TopEdge(FieldCamera);
+            rect.position = popup.Below
+                ? popup.Where.BottomEdge(FieldCamera)
+                : popup.Where.TopEdge(FieldCamera);
 
-            // Сдвиг вверх — в единицах канваса, а не в пикселях экрана: `position` их уже
-            // развёл масштабом канваса, и складывать одно с другим нельзя.
+            // Сдвиг — в единицах канваса, а не в пикселях экрана: `position` их уже развёл
+            // масштабом канваса, и складывать одно с другим нельзя.
             var half = rect.rect.size * 0.5f;
-            var raised = rect.anchoredPosition + new Vector2(0f, half.y + AnchorGap);
+            var step = new Vector2(0f, half.y + AnchorGap + popup.Lift);
+            var raised = popup.Below ? rect.anchoredPosition - step : rect.anchoredPosition + step;
 
             // Попап не уходит за кромку кадра: над плиткой у верхнего края экрана он иначе
             // наполовину срезается.
@@ -442,9 +447,11 @@ namespace Game.UI
         /// Пустая карточка на месте объекта. Списком живых она не учитывается: подсказка
         /// обучения не гаснет по сроку и не должна вытесняться прибавками и отказами.
         /// </summary>
-        Popup NewCard(in Anchor anchor, float width)
+        Popup NewCard(in Anchor anchor, float width) => NewCard(anchor, width, theme.Card);
+
+        Popup NewCard(in Anchor anchor, float width, in UiPanelStyle style)
         {
-            var card = UiPanel.Create("Popup", transform, theme).rectTransform;
+            var card = UiPanel.Create("Popup", transform, theme, style).rectTransform;
             card.anchorMin = card.anchorMax = card.pivot = new Vector2(0.5f, 0.5f);
             card.sizeDelta = new Vector2(width, MinHeight);
 
@@ -583,6 +590,21 @@ namespace Game.UI
                 return screenPoint;
             }
 
+            /// <summary>
+            /// Нижняя кромка объекта в пикселях экрана: под ней встают подсказки, которым нельзя
+            /// вставать над целью, — карточки HUD прижаты к верху кадра, и попап над ними кламп
+            /// кадра всё равно опустил бы им на голову. У точки поля кромки нет: она и есть точка,
+            /// и место над плиткой задаёт сам вызывающий, сдвигая точку в мировых координатах.
+            /// </summary>
+            public Vector3 BottomEdge(Camera fieldCamera)
+            {
+                if (onField)
+                    return TopEdge(fieldCamera);
+
+                card.GetWorldCorners(Corners);
+                return (Corners[0] + Corners[3]) * 0.5f;
+            }
+
             /// <summary>Тот же объект: попап на нём заменяется, а не копится стопкой.</summary>
             public bool SameAs(in Anchor other) =>
                 onField == other.onField && card == other.card
@@ -595,6 +617,12 @@ namespace Game.UI
             public RectTransform Rect;
             public CanvasGroup Fade;
             public Anchor Where;
+
+            /// <summary>Насколько выше обычного стоит попап: подсказке нужно обойти саму цель.</summary>
+            public float Lift;
+
+            /// <summary>Попап стоит под целью, а не над ней.</summary>
+            public bool Below;
         }
     }
 }

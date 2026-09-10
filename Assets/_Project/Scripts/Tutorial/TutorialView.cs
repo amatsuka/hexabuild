@@ -26,6 +26,21 @@ namespace Game.Tutorial
         /// </summary>
         static readonly Color HighlightColor = new(1f, 0.84f, 0.30f);
 
+        /// <summary>
+        /// Куда подсказке смотреть над плиткой: дальний угол крышки плюс небольшая высота под
+        /// модельки месторождений, которые на ней стоят. Сдвиг задан в мире, а не в пикселях,
+        /// намеренно — экранный размер гекса меняется зумом, и постоянный отступ в пикселях
+        /// ложился бы плашкой на плитку, как только игрок приблизит камеру.
+        /// </summary>
+        static readonly Vector3 TileHintOffset = new(0f, 0.3f, HexCoord.Size);
+
+        /// <summary>
+        /// Насколько выше обычного встаёт подсказка про склад. Над панелью склада живут число
+        /// множителя (70 px) и кнопка продажи, оба с зазором 10 px: подсказка обязана пройти
+        /// над ними, иначе она садится ровно на накал, о котором сама и говорит.
+        /// </summary>
+        const float StorageLift = 92f;
+
         static readonly int[] NoCells = Array.Empty<int>();
 
         readonly List<HexCoord> highlighted = new();
@@ -35,8 +50,11 @@ namespace Game.Tutorial
         StorageView storage;
         HudView hud;
 
-        /// <summary>Какой шаг сейчас на экране: карточка пересобирается только на смене шага.</summary>
-        TutorialStep shown = TutorialStep.Done;
+        /// <summary>Шаг, чья карточка сейчас на экране.</summary>
+        TutorialStep shown;
+
+        /// <summary>Есть ли карточка на экране. Шаг может идти и без неё — пока цели негде встать.</summary>
+        bool cardUp;
 
         /// <summary>
         /// Слой обучения заводится кодом, как и весь интерфейс проекта: префабов под панели
@@ -65,8 +83,19 @@ namespace Game.Tutorial
                 tutorial.Changed -= Redraw;
         }
 
-        /// <summary>Ободок цели дышит: он то разгорается, то притухает.</summary>
         void Update()
+        {
+            Pulse();
+
+            // Цель шага может прийти позже самого шага: кнопка «Продать всё» приходит, когда
+            // на складе набралось сверх резерва, а карточка контракта выезжает анимацией.
+            // Подсказка ждёт свою цель и встаёт вместе с ней — висеть над пустым местом ей нечего.
+            if (tutorial.IsRunning && !cardUp)
+                TryShowCard();
+        }
+
+        /// <summary>Ободок цели дышит: он то разгорается, то притухает.</summary>
+        void Pulse()
         {
             if (highlighted.Count == 0)
                 return;
@@ -87,8 +116,7 @@ namespace Game.Tutorial
             if (!tutorial.IsRunning)
             {
                 storage.Highlight(NoCells);
-                hud.Popups.HideHint();
-                shown = TutorialStep.Done;
+                HideCard();
                 return;
             }
 
@@ -99,12 +127,49 @@ namespace Game.Tutorial
 
             // Цель шага может ездить по складу, а сама карточка стоит на месте: пересобирать её
             // на каждое изменение склада значило бы пересчитывать всплытие по десять раз за шаг.
-            if (shown == tutorial.Step)
+            if (cardUp && shown != tutorial.Step)
+                HideCard();
+
+            TryShowCard();
+        }
+
+        void TryShowCard()
+        {
+            if (cardUp || !AimIsOnScreen())
                 return;
 
             shown = tutorial.Step;
-            hud.Popups.ShowHint(TextOf(shown), Anchor(), tutorial.Skippable ? tutorial.Skip : null);
+            cardUp = true;
+            hud.Popups.ShowHint(
+                TextOf(shown), Anchor(), tutorial.Skippable ? tutorial.Skip : null, Lift(), Below());
         }
+
+        void HideCard()
+        {
+            hud.Popups.HideHint();
+            cardUp = false;
+        }
+
+        /// <summary>Цель шага уже на экране: подсказке есть над чем встать.</summary>
+        bool AimIsOnScreen() => tutorial.Aim switch
+        {
+            TutorialAim.SellButton => IsShown(storage.SellRect),
+            TutorialAim.Contract => IsShown(hud.ContractCard),
+            TutorialAim.Ceiling => IsShown(hud.CeilingCard),
+            TutorialAim.Tiles => tutorial.TargetTiles.Count > 0 && tiles.ContainsKey(tutorial.TargetTiles[0]),
+            _ => true
+        };
+
+        static bool IsShown(RectTransform rect) => rect != null && rect.gameObject.activeInHierarchy;
+
+        /// <summary>Насколько подсказка поднимается над целью сверх обычного зазора попапа.</summary>
+        float Lift() => tutorial.Aim is TutorialAim.Cells or TutorialAim.Storage ? StorageLift : 0f;
+
+        /// <summary>
+        /// Карточки бара и контракта прижаты к верху кадра, и подсказка над ними всё равно легла
+        /// бы им на голову — кламп кадра опустил бы её обратно. Под ними места сколько угодно.
+        /// </summary>
+        bool Below() => tutorial.Aim is TutorialAim.Ceiling or TutorialAim.Contract;
 
         void ClearTiles()
         {
@@ -135,7 +200,7 @@ namespace Game.Tutorial
                 default:
                     return tutorial.TargetTiles.Count > 0
                            && tiles.TryGetValue(tutorial.TargetTiles[0], out var view)
-                        ? PopupView.Anchor.OnField(view.transform.position)
+                        ? PopupView.Anchor.OnField(view.transform.position + TileHintOffset)
                         : PopupView.Anchor.On(storage.PanelRect);
             }
         }
