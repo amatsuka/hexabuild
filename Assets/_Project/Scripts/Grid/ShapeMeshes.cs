@@ -11,9 +11,17 @@ namespace Game.Grid
     /// </summary>
     public static class ShapeMeshes
     {
-        /// <summary>Толщина ободка гекса в долях его радиуса.</summary>
+        /// <summary>
+        /// Внутренний и внешний радиус ободка подсветки в долях радиуса гекса. Внешний держится
+        /// внутри ужатой крышки: `HexCoord.Size - HexMeshBuilder.BevelInset` — это 0.84 радиуса,
+        /// и всё, что шире, съезжает на фаску борта.
+        /// </summary>
+        const float RingInner = 0.66f;
+
+        const float RingOuter = 0.80f;
 
         static Mesh triangle;
+        static Mesh hexRing;
 
         static readonly Dictionary<(ResourceType Type, bool Exhausted, bool Accent), Mesh> deposits = new();
         static readonly Dictionary<DecorShape, Mesh> decor = new();
@@ -22,6 +30,46 @@ namespace Game.Grid
         public static Mesh Triangle => triangle != null
             ? triangle
             : triangle = new FlatMesh().Triangle(Vector2.zero, 1f, 1f).Bake("Triangle");
+
+        /// <summary>
+        /// Ободок по краю крышки гекса — подсветка цели обучения. Лежит внутри крышки, а не
+        /// поверх её края: увеличенный гекс позади плитки соседи закрывают целиком, а вынесенный
+        /// наружу ободок загородил бы сосед повыше.
+        /// </summary>
+        public static Mesh HexRing => hexRing != null ? hexRing : hexRing = BuildHexRing();
+
+        static Mesh BuildHexRing()
+        {
+            var vertices = new Vector3[12];
+            for (var i = 0; i < 6; i++)
+            {
+                var angle = Mathf.Deg2Rad * (60f * i - 30f);
+                var direction = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                vertices[i] = direction * (HexCoord.Size * RingInner);
+                vertices[i + 6] = direction * (HexCoord.Size * RingOuter);
+            }
+
+            // Обход против углового порядка, как у крышки в `HexMeshBuilder`: тогда нормаль
+            // смотрит в +Y и backface culling ободок не срезает.
+            var triangles = new int[36];
+            for (var i = 0; i < 6; i++)
+            {
+                var next = (i + 1) % 6;
+                triangles[i * 6] = i + 6;
+                triangles[i * 6 + 1] = i;
+                triangles[i * 6 + 2] = next;
+                triangles[i * 6 + 3] = i + 6;
+                triangles[i * 6 + 4] = next;
+                triangles[i * 6 + 5] = next + 6;
+            }
+
+            var mesh = new Mesh { name = "HexRing" };
+            mesh.SetVertices(vertices);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
 
         /// <summary>
         /// Моделька месторождения в квадрате 1×1: дерево, кучка валунов или кристаллы.

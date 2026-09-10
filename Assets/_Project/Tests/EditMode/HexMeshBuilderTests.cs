@@ -53,6 +53,31 @@ namespace Game.Tests.EditMode
         public void GroundMeshes_FaceUp()
         {
             AssertFacesUp(HexMeshBuilder.Shared);
+            AssertFacesUp(ShapeMeshes.HexRing);
+        }
+
+        /// <summary>
+        /// Ободок подсветки обучения лежит на крышке и не вылезает за её край: вынесенный
+        /// наружу, он попадал бы под соседнюю плитку, а увеличенный гекс позади соседи
+        /// закрывают целиком.
+        /// </summary>
+        [Test]
+        public void HexRing_LiesInsideTheTileCap()
+        {
+            var vertices = ShapeMeshes.HexRing.vertices;
+
+            Assert.AreEqual(12, vertices.Length);
+
+            for (var i = 0; i < 6; i++)
+            {
+                var inner = Plane(vertices[i]).magnitude;
+                var outer = Plane(vertices[i + 6]).magnitude;
+
+                Assert.Greater(outer, inner, "у ободка нет толщины");
+                Assert.Less(outer, HexCoord.Size - HexMeshBuilder.BevelInset,
+                    "ободок вылез на фаску: он обязан лежать на крышке");
+                Assert.AreEqual(0f, vertices[i].y, 1e-4f, "ободок плоский, поднимает его сама плитка");
+            }
         }
 
         /// <summary>

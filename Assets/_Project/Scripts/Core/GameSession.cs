@@ -5,6 +5,7 @@ using Game.Grid;
 using Game.Merge;
 using Game.Roads;
 using Game.Storage;
+using Game.Tutorial;
 using Game.UI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -105,6 +106,9 @@ namespace Game.Core
         ContractSystem contracts;
         GameEndSystem end;
 
+        /// <summary>Обучение этой партии. Пусто — оно уже пройдено или партия не первая в кампании.</summary>
+        TutorialSystem tutorial;
+
         void Awake()
         {
             // Уровень кампании выбран в меню и лежит статикой: он переопределяет рычаги
@@ -162,6 +166,27 @@ namespace Game.Core
             hudView.Bind(state, contracts, storageView, ceiling, StarShares());
             gameOverView.Bind(storageView, production, contracts);
             pauseView.Bind(storageView);
+
+            BuildTutorial(map, storage);
+        }
+
+        /// <summary>
+        /// Обучение поднимается только на первом уровне кампании и только пока не пройдено.
+        /// Подписки у него без отписки — по той же причине, что и у сгорания накала: оно живёт
+        /// ровно партию и уходит вместе с ней.
+        /// </summary>
+        void BuildTutorial(HexMap map, StorageGrid storage)
+        {
+            if (!TutorialSystem.ShouldRun)
+                return;
+
+            tutorial = new TutorialSystem(map, storage, state.Roads, mergeRules);
+            TutorialView.Create(tutorial, hudView, storageView, views);
+
+            // Цель шага ездит по складу вместе с ресурсами: подсветка обязана ходить за ней.
+            storage.Changed += tutorial.Refresh;
+            contracts.Completed += _ => tutorial.Notify(TutorialTrigger.ContractClosed);
+            tutorial.Finished += CampaignProgress.CompleteTutorial;
         }
 
         /// <summary>
@@ -300,8 +325,10 @@ namespace Game.Core
             RefreshProgress();
 
             // Первый контракт партии идёт без паузы (3.8). Дальше система выдаёт их сама,
-            // отмолчав между ними случайную паузу.
-            contracts.Issue();
+            // отмолчав между ними случайную паузу. В обучении первый контракт придерживается
+            // до своего шага и выдаётся на доски: три доски лежат на складе со старта.
+            if (tutorial == null)
+                contracts.Issue();
 
             // Шестерёнка появляется только когда партия реально началась — не на экране меню,
             // где `pauseView.Bind` уже отработал, но ей ещё нечего показывать.
@@ -323,7 +350,8 @@ namespace Game.Core
             // Кнопка продажи опрашивается и на паузе, и после конца партии: там она обязана
             // пропасть с экрана, а не остаться висеть под карточкой.
             storageView.ShowSellButton(
-                !end.HasEnded && !pauseView.IsOpen && selling == null && sale.CanSell, sale.Everything);
+                !end.HasEnded && !pauseView.IsOpen && selling == null && sale.CanSell && !SaleHeld,
+                sale.Everything);
 
             if (end.HasEnded || pauseView.IsOpen)
                 return;
@@ -334,6 +362,27 @@ namespace Game.Core
             state.Multiplier.Tick(Time.deltaTime);
             sale.Tick(Time.deltaTime);
             end.Tick();
+
+            if (tutorial != null)
+                TickTutorial();
+        }
+
+        /// <summary>Обучение придерживает кнопку продажи до своего шага про неё.</summary>
+        bool SaleHeld => tutorial != null && tutorial.HoldsSale;
+
+        /// <summary>
+        /// Обучение ждёт двух вещей, которых партия событием не рассылает. Контракт на доски
+        /// оно заказывает само — и заказывает заново, если игрок дал ему истечь; утечку накала
+        /// событием не сообщает никто, её и опрашиваем, но только на том шаге, который её ждёт.
+        /// </summary>
+        void TickTutorial()
+        {
+            tutorial.Tick(Time.deltaTime);
+
+            if (tutorial.Waits(TutorialTrigger.ContractClosed) && !contracts.IsActive)
+                contracts.Issue(ResourceType.Board);
+            else if (tutorial.Waits(TutorialTrigger.HeatLeaked) && state.Multiplier.HeatLeaking)
+                tutorial.Notify(TutorialTrigger.HeatLeaked);
         }
 
         /// <summary>
@@ -452,6 +501,9 @@ namespace Game.Core
             if (pauseView.HandlePress(screenPosition))
                 return;
 
+            if (hudView.Popups.TrySkipPress(screenPosition))
+                return;
+
             if (storageView.TrySellPress(screenPosition))
                 return;
 
@@ -485,6 +537,7 @@ namespace Game.Core
         {
             gameOverView.ReleasePress();
             pauseView.ReleasePress();
+            hudView.Popups.ReleaseSkipPress();
             storageView.ReleaseSellPress();
 
             if (pressedCell >= 0)
@@ -503,7 +556,7 @@ namespace Game.Core
         /// <summary>
         /// Клик разбирается по слоям: финальный экран, попап подтверждения, склад, поле под ним.
         /// После конца партии поле не принимает ничего, а кнопки экрана принимают — это и есть
-        /// правило 3.10.
+        /// правило 3.11.
         /// </summary>
         void OnClicked(Vector2 screenPosition)
         {
@@ -516,6 +569,11 @@ namespace Game.Core
             // Шестерёнка и, пока открыта, карточка паузы разбирают клик сами — полю и попапам
             // он не достаётся, партия стоит.
             if (pauseView.HandleClick(screenPosition))
+                return;
+
+            // «Пропустить» на подсказке обучения: единственное место обучения, ловящее тап.
+            // Ценнику открытия клик достаётся только после неё — кнопка лежит поверх поля.
+            if (hudView.Popups.TrySkipClick(screenPosition))
                 return;
 
             // Пока висит ценник открытия, клик принадлежит ему. Согласие — второй тап по той
@@ -687,6 +745,15 @@ namespace Game.Core
         {
             if (views.TryGetValue(tile.Coord, out var view))
                 view.Apply(tile);
+
+            // Открытая плитка закрывает шаг обучения, любая другая правка поля — только двигает цель.
+            if (tutorial == null)
+                return;
+
+            if (tile.State == TileState.Revealed && !tile.IsMetropolis)
+                tutorial.Notify(TutorialTrigger.TileRevealed);
+            else
+                tutorial.Refresh();
         }
 
         /// <summary>
@@ -703,6 +770,7 @@ namespace Game.Core
             }
 
             roadView.Show(state.Roads, GroundAt);
+            tutorial?.Notify(TutorialTrigger.RoadBuilt);
         }
 
         /// <summary>
@@ -747,6 +815,8 @@ namespace Game.Core
             // секунд и из удара превратился бы в тик метронома.
             if (hitstop != null && report.Outcome.Consumed >= mergeRules.LargeCount)
                 hitstop.Play();
+
+            tutorial?.Notify(TutorialTrigger.Merged);
         }
 
         /// <summary>
@@ -779,6 +849,7 @@ namespace Game.Core
                 hudView.PlayContractDelivery(storageView.CellPoint(cell), type);
 
             contracts.Count(type);
+            tutorial?.Notify(TutorialTrigger.Converted);
         }
 
         /// <summary>
@@ -815,6 +886,7 @@ namespace Game.Core
                 return;
 
             sale.Begin();
+            tutorial?.Notify(TutorialTrigger.Sold);
             selling = StartCoroutine(SellWave());
         }
 
@@ -852,7 +924,11 @@ namespace Game.Core
             mover.HopTo(storageView.CellWorldPoint(cell, Camera.main), () => OnResourceLanded(cell));
         }
 
-        /// <summary>Кружок долетел: клетка склада проявляется.</summary>
-        void OnResourceLanded(int cell) => storageView.ReleaseCell(cell);
+        /// <summary>Кружок долетел: клетка склада проявляется, обучение засчитывает доставку.</summary>
+        void OnResourceLanded(int cell)
+        {
+            storageView.ReleaseCell(cell);
+            tutorial?.Notify(TutorialTrigger.ResourceLanded);
+        }
     }
 }

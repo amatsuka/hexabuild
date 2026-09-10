@@ -55,6 +55,16 @@ namespace Game.UI
         /// <summary>Плашка премии за чистый склад: те же две строки, но без иконки — иконки у неё нет.</summary>
         const float SweepWidth = 260f;
 
+        /// <summary>
+        /// Подсказка обучения: две строки текста и, на первой подсказке, кнопка «Пропустить».
+        /// Ширина — потолок; высота считается по самому тексту, как у отказа.
+        /// </summary>
+        const float HintWidth = 520f;
+        const float HintFontSize = 26f;
+        const float SkipWidth = 230f;
+        const float SkipHeight = 54f;
+        const float SkipFontSize = 24f;
+
         /// <summary>Сколько живёт попап, который никто не закрывает: прибавка, награда, отказ.</summary>
         const float ShowSeconds = 2f;
 
@@ -85,6 +95,15 @@ namespace Game.UI
         Popup asking;
 
         Action confirmed;
+
+        /// <summary>
+        /// Подсказка обучения: она тоже одна и тоже не гаснет сама, но живёт вне списка живых —
+        /// прибавки и отказы не должны вытеснять её ни числом, ни общей привязкой.
+        /// </summary>
+        Popup hint;
+
+        /// <summary>«Пропустить» на первой подсказке: единственное место обучения, ловящее тап.</summary>
+        UiButton skip;
 
         /// <summary>
         /// Висит ли сейчас ценник: пока висит, клик принадлежит ему, а разбирает клик
@@ -295,11 +314,77 @@ namespace Game.UI
                 Remove(asking);
         }
 
+        /// <summary>
+        /// Подсказка обучения: та же карточка над той же целью, но без срока жизни — она ждёт,
+        /// пока игрок сделает шаг. Своего слоя обучению не нужно: попап и есть «сообщение,
+        /// привязанное к объекту», а два одинаковых на вид слоя разошлись бы на первой же правке.
+        /// <paramref name="skipped"/> заводит на карточке «Пропустить»; пусто — кнопки нет.
+        /// </summary>
+        public void ShowHint(string text, in Anchor anchor, Action skipped)
+        {
+            HideHint();
+
+            if (!anchor.Exists)
+                return;
+
+            var popup = NewCard(anchor, HintWidth);
+            var textWidth = HintWidth - Padding * 2f;
+
+            var label = UiText.Label("Text", popup.Rect, theme, HintFontSize, theme.Text, TextAlignmentOptions.Center);
+            Place(label.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -Padding * 0.7f),
+                new Vector2(textWidth, MinHeight));
+            label.text = text;
+
+            // Высота — по тексту, как у отказа: подсказки бывают и в строку, и в три.
+            label.ForceMeshUpdate();
+            var textHeight = label.preferredHeight;
+            label.rectTransform.sizeDelta = new Vector2(textWidth, textHeight);
+
+            var height = textHeight + Padding * 1.4f + (skipped != null ? SkipHeight + Padding * 0.5f : 0f);
+            popup.Rect.sizeDelta = new Vector2(HintWidth, Mathf.Max(MinHeight, height));
+
+            if (skipped != null)
+            {
+                skip = UiButton.Create(
+                    "Skip", popup.Rect, theme, theme.ButtonSecondary, "Пропустить", SkipFontSize, skipped);
+                Place(skip.Rect, new Vector2(0.5f, 0f), new Vector2(0f, Padding * 0.5f),
+                    new Vector2(SkipWidth, SkipHeight));
+            }
+
+            hint = popup;
+            Show(popup, false);
+        }
+
+        /// <summary>Подсказки больше нет: шаг закрылся, обучение кончилось или партия встала.</summary>
+        public void HideHint()
+        {
+            if (hint == null)
+                return;
+
+            skip = null;
+
+            if (hint.Rect != null)
+                Destroy(hint.Rect.gameObject);
+
+            hint = null;
+        }
+
+        /// <summary>Палец лёг на «Пропустить»: дальше нажатие разбирать не надо.</summary>
+        public bool TrySkipPress(Vector2 screenPosition) => skip != null && skip.TryPress(screenPosition);
+
+        /// <summary>Палец снят. Ненажатая кнопка молчит, поэтому звать можно всегда.</summary>
+        public void ReleaseSkipPress() => skip?.Release();
+
+        /// <summary>Клик попал в «Пропустить»: обучение снимается им же.</summary>
+        public bool TrySkipClick(Vector2 screenPosition) => skip != null && skip.TryClick(screenPosition);
+
         /// <summary>Партия кончилась: над полем не остаётся ничего, финальный экран сам по себе.</summary>
         public void Clear()
         {
             for (var i = live.Count - 1; i >= 0; i--)
                 Remove(live[i]);
+
+            HideHint();
         }
 
         /// <summary>
@@ -310,6 +395,9 @@ namespace Game.UI
         {
             for (var i = 0; i < live.Count; i++)
                 Place(live[i]);
+
+            if (hint != null)
+                Place(hint);
         }
 
         void Place(Popup popup)
@@ -345,6 +433,17 @@ namespace Game.UI
             while (live.Count >= MaxPopups)
                 Remove(live[0]);
 
+            var popup = NewCard(anchor, width);
+            live.Add(popup);
+            return popup;
+        }
+
+        /// <summary>
+        /// Пустая карточка на месте объекта. Списком живых она не учитывается: подсказка
+        /// обучения не гаснет по сроку и не должна вытесняться прибавками и отказами.
+        /// </summary>
+        Popup NewCard(in Anchor anchor, float width)
+        {
             var card = UiPanel.Create("Popup", transform, theme).rectTransform;
             card.anchorMin = card.anchorMax = card.pivot = new Vector2(0.5f, 0.5f);
             card.sizeDelta = new Vector2(width, MinHeight);
@@ -356,7 +455,6 @@ namespace Game.UI
                 Where = anchor,
             };
 
-            live.Add(popup);
             return popup;
         }
 

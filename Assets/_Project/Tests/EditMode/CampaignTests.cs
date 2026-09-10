@@ -206,7 +206,13 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(2, CampaignProgress.StarsAt(0));
             Assert.AreEqual(500, CampaignProgress.BestAt(0));
 
+            // Обучение живёт в тех же ключах и ставится один раз на всю кампанию.
+            Assert.IsFalse(CampaignProgress.TutorialDone, "обучение не должно считаться пройденным до партии");
+            CampaignProgress.CompleteTutorial();
+            Assert.IsTrue(CampaignProgress.TutorialDone);
+
             CampaignProgress.Clear(levels);
+            Assert.IsFalse(CampaignProgress.TutorialDone, "сброс кампании возвращает и обучение");
         }
 
         [Test]

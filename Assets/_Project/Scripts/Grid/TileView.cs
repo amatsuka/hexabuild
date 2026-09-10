@@ -74,6 +74,9 @@ namespace Game.Grid
         /// <summary>Огранка стоит перед телом модельки. Моделька плоская, поэтому это её локальный z.</summary>
         const float AccentDepth = -0.005f;
 
+        /// <summary>Насколько ободок подсветки поднят над крышкой: он лежит на ней, а не в ней.</summary>
+        const float HighlightLift = 0.02f;
+
         const int DecorCountSalt = 11;
 
         /// <summary>Доля подскока, которую месторождения пережидают, прежде чем выйти.</summary>
@@ -208,6 +211,7 @@ namespace Game.Grid
         MeshRenderer metropolis;
         MeshRenderer meshRenderer;
         MeshRenderer spark;
+        MeshRenderer highlight;
         MaterialPropertyBlock propertyBlock;
         float surfaceHeight;
 
@@ -366,6 +370,27 @@ namespace Game.Grid
 
         /// <summary>Отказ: плитка коротко дрожит поперёк. Текст попапа сам по себе не отклик.</summary>
         public void Refuse() => PressPulse.ShakeSideways(this, refusalShake);
+
+        /// <summary>
+        /// Ободок подсветки цели обучения. Прозрачный цвет прячет его; дышит подсветка
+        /// яркостью, а не альфой — материал поля непрозрачный, и альфа в нём ничего не значит.
+        /// </summary>
+        public void SetHighlight(Color color)
+        {
+            if (color.a <= 0f)
+            {
+                if (highlight != null)
+                    highlight.gameObject.SetActive(false);
+
+                return;
+            }
+
+            highlight ??= CreatePart(
+                transform, "Highlight", ShapeMeshes.HexRing, new Vector3(0f, HighlightLift, 0f), Vector3.one);
+
+            highlight.gameObject.SetActive(true);
+            SetColor(highlight, color);
+        }
 
         /// <summary>
         /// Плитка только что открылась: она подскакивает и садится обратно, месторождения
