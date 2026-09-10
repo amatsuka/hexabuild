@@ -117,6 +117,8 @@ namespace Game.Storage
         [Tooltip("Насколько ободок цели притухает между вспышками")]
         [SerializeField, Range(0f, 1f)] float highlightFloor = 0.25f;
         [SerializeField] float highlightSpeed = 3.2f;
+        [Tooltip("Плёнка поверх клетки, закрытой обучением: тап по ней не проходит")]
+        [SerializeField] Color blockedVeil = new(0.02f, 0.04f, 0.08f, 0.62f);
 
         [Header("Анимация слияния")]
         [SerializeField] float flySeconds = 0.28f;
@@ -142,6 +144,7 @@ namespace Game.Storage
         RectTransform[] cells;
         UiPanelGraphic[] cellPanels;
         UiPanelGraphic[] cellRings;
+        UiPanelGraphic[] cellVeils;
         ResourceIcon[] icons;
         StorageGrid grid;
         ScoreMultiplier multiplier;
@@ -251,6 +254,49 @@ namespace Game.Storage
 
             foreach (var index in highlightedCells)
                 Ring(index).gameObject.SetActive(true);
+        }
+
+        /// <summary>
+        /// Обучение закрыло часть склада: недоступные клетки гасятся плёнкой поверх. Цветом самой
+        /// клетки этого не сказать — её цвет уже ведут тревога, волна премии и нажатие.
+        /// </summary>
+        public void Restrict(IReadOnlyList<int> allowedCells, bool active)
+        {
+            if (cellVeils == null)
+                return;
+
+            for (var index = 0; index < cellVeils.Length; index++)
+            {
+                var blocked = active && !Holds(allowedCells, index);
+
+                if (blocked)
+                    Veil(index).gameObject.SetActive(true);
+                else if (cellVeils[index] != null)
+                    cellVeils[index].gameObject.SetActive(false);
+            }
+        }
+
+        static bool Holds(IReadOnlyList<int> cells, int index)
+        {
+            if (cells == null)
+                return false;
+
+            for (var i = 0; i < cells.Count; i++)
+                if (cells[i] == index)
+                    return true;
+
+            return false;
+        }
+
+        UiPanelGraphic Veil(int index)
+        {
+            if (cellVeils[index] != null)
+                return cellVeils[index];
+
+            var veil = UiPanel.Create($"Veil {index}", cells[index], theme, theme.Flash);
+            veil.rectTransform.Stretch();
+            veil.color = blockedVeil;
+            return cellVeils[index] = veil;
         }
 
         /// <summary>
@@ -938,6 +984,7 @@ namespace Game.Storage
             cells = new RectTransform[grid.Capacity];
             cellPanels = new UiPanelGraphic[grid.Capacity];
             cellRings = new UiPanelGraphic[grid.Capacity];
+            cellVeils = new UiPanelGraphic[grid.Capacity];
             icons = new ResourceIcon[grid.Capacity];
             for (var i = 0; i < cells.Length; i++)
             {

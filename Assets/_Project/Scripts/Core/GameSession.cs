@@ -378,6 +378,14 @@ namespace Game.Core
         bool SaleHeld => tutorial != null && tutorial.HoldsSale;
 
         /// <summary>
+        /// Пока идёт обучение, игрок делает только то, чем закрывается его шаг: остальное поле
+        /// и склад затенены и тапа не принимают. Вне обучения открыто всё, как и было.
+        /// </summary>
+        bool AllowsTile(HexCoord coord) => tutorial == null || !tutorial.IsRunning || tutorial.AllowsTile(coord);
+
+        bool AllowsCell(int cell) => tutorial == null || !tutorial.IsRunning || tutorial.AllowsCell(cell);
+
+        /// <summary>
         /// Обучение ждёт двух вещей, которых партия событием не рассылает. Контракт на доски
         /// оно заказывает само — и заказывает заново, если игрок дал ему истечь; утечку накала
         /// событием не сообщает никто, её и опрашиваем, но только на том шаге, который её ждёт.
@@ -521,8 +529,9 @@ namespace Game.Core
 
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
-                // Пустая клетка не отзывается: по ней и клик ничего не делает.
-                if (!state.Storage[cell].HasValue)
+                // Пустая клетка не отзывается: по ней и клик ничего не делает. Закрытая
+                // обучением — тоже: прижиматься тому, что всё равно не сработает, незачем.
+                if (!state.Storage[cell].HasValue || !AllowsCell(cell))
                     return;
 
                 pressedCell = cell;
@@ -533,7 +542,8 @@ namespace Game.Core
             if (storageView.ContainsScreenPoint(screenPosition))
                 return;
 
-            if (views.TryGetValue(TileUnderPointer(screenPosition), out var view))
+            var pressedCoord = TileUnderPointer(screenPosition);
+            if (AllowsTile(pressedCoord) && views.TryGetValue(pressedCoord, out var view))
             {
                 pressedTile = view;
                 view.Press();
@@ -618,7 +628,7 @@ namespace Game.Core
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
                 var content = state.Storage[cell];
-                if (!content.HasValue)
+                if (!content.HasValue || !AllowsCell(cell))
                     return;
 
                 refusalAnchor = PopupView.Anchor.On(storageView.CellRect(cell));
@@ -649,7 +659,7 @@ namespace Game.Core
         /// </summary>
         void OnFieldClicked(HexCoord coord)
         {
-            if (!state.Map.TryGetTile(coord, out var tile))
+            if (!state.Map.TryGetTile(coord, out var tile) || !AllowsTile(coord))
                 return;
 
             refusalAnchor = TileAnchor(coord);

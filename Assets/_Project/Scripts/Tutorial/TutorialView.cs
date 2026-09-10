@@ -8,10 +8,11 @@ using UnityEngine;
 namespace Game.Tutorial
 {
     /// <summary>
-    /// Лицо обучения: подсказка над целью и подсветка самой цели. Подсказка — та же карточка
+    /// Лицо обучения: подсказка над целью, подсветка самой цели и затенение всего, что на этом
+    /// шаге закрыто. Подсказка — та же карточка
     /// `UiPanel`, что и попап подтверждения, и живёт в том же слое попапов: она не гаснет
-    /// по таймеру, а ждёт, пока игрок сделает шаг. Тапы ловит только «Пропустить» на первой
-    /// подсказке — за карточкой кликается поле, ввод обучение не блокирует.
+    /// по таймеру, а ждёт, пока игрок сделает шаг. Тапы на самой карточке ловит только крестик
+    /// в её углу; всё, что шаг закрыл, гасится затенением и тапа не принимает.
     /// </summary>
     public sealed class TutorialView : MonoBehaviour
     {
@@ -174,6 +175,7 @@ namespace Game.Tutorial
             if (!tutorial.IsRunning)
             {
                 storage.Highlight(NoCells);
+                Restrict();
                 HideCard();
                 return;
             }
@@ -182,6 +184,7 @@ namespace Game.Tutorial
                 highlighted.AddRange(tutorial.TargetTiles);
 
             storage.Highlight(tutorial.Aim == TutorialAim.Cells ? tutorial.TargetCells : NoCells);
+            Restrict();
 
             // Цель шага может ездить по складу, а сама карточка стоит на месте: пересобирать её
             // на каждое изменение склада значило бы пересчитывать всплытие по десять раз за шаг.
@@ -227,6 +230,20 @@ namespace Game.Tutorial
         /// бы им на голову — кламп кадра опустил бы её обратно. Под ними места сколько угодно.
         /// </summary>
         bool Below() => tutorial.Aim is TutorialAim.Ceiling or TutorialAim.Contract;
+
+        /// <summary>
+        /// Затенить всё, что шаг закрыл. Плитку гасит её собственный шейдер состояния, клетку
+        /// склада — плёнка поверх: обучение не заводит ни своего слоя, ни своего затемнения кадра.
+        /// </summary>
+        void Restrict()
+        {
+            var running = tutorial.IsRunning;
+
+            foreach (var pair in tiles)
+                pair.Value.SetDimmed(running && !tutorial.AllowsTile(pair.Key));
+
+            storage.Restrict(tutorial.AllowedCells, running);
+        }
 
         void ClearTiles()
         {

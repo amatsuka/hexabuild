@@ -288,6 +288,87 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(1, finished, "пройденное обучение второй раз не заканчивается");
         }
 
+        /// <summary>
+        /// Первые шаги открывают ровно свою плитку: игрок не может уйти с маршрута обучения.
+        /// </summary>
+        [Test]
+        public void EarlySteps_OpenOnlyTheirOwnTile()
+        {
+            var tutorial = NewTutorial();
+
+            Assert.IsTrue(tutorial.AllowsTile(TutorialSystem.StoneTile));
+            Assert.IsFalse(tutorial.AllowsTile(TutorialSystem.WoodTile), "лес открыт раньше своего шага");
+            Assert.IsFalse(tutorial.AllowsTile(TutorialSystem.RiverTile));
+
+            Walk(tutorial, TutorialStep.CraftBoard);
+            Assert.IsTrue(tutorial.AllowsTile(TutorialSystem.WoodTile));
+            Assert.IsFalse(tutorial.AllowsTile(TutorialSystem.StoneTile), "камень остался открытым на чужом шаге");
+        }
+
+        /// <summary>
+        /// Шаг про обход гряды открывает поле целиком: дорогу к реке игрок ищет сам, а гора
+        /// откажет ему сама — в этом и урок.
+        /// </summary>
+        [Test]
+        public void Wall_OpensTheWholeField()
+        {
+            var tutorial = NewTutorial();
+            Walk(tutorial, TutorialStep.Wall);
+
+            foreach (var tile in map.Tiles.Values)
+                Assert.IsTrue(tutorial.AllowsTile(tile.Coord), $"плитка {tile.Coord} закрыта на шаге обхода");
+        }
+
+        /// <summary>
+        /// Шаг про очки не пускает к доскам: они лежат под контракт седьмого шага, и обменянные
+        /// здесь оставили бы его без цели, а мост — без оплаты.
+        /// </summary>
+        [Test]
+        public void Convert_KeepsTheBoardsTheContractWillAskFor()
+        {
+            var tutorial = NewTutorial();
+            Walk(tutorial, TutorialStep.Convert);
+
+            storage.TryStore(ResourceType.Gravel);
+            storage.TryStore(ResourceType.Board);
+            tutorial.Refresh();
+
+            var gravel = storage.IndexOf(ResourceType.Gravel);
+            var board = storage.IndexOf(ResourceType.Board);
+
+            Assert.IsTrue(tutorial.AllowsCell(gravel), "щебень обменять нельзя, а шаг ровно про это");
+            Assert.IsFalse(tutorial.AllowsCell(board), "доска открыта раньше контракта");
+        }
+
+        /// <summary>
+        /// С шага про кнопку склад открыт целиком. Иначе шаг встал бы намертво: кнопка приходит
+        /// только с запасом сверх резерва, а набрать его можно одними слияниями.
+        /// </summary>
+        [Test]
+        public void SellStep_OpensTheWholeStorage()
+        {
+            var tutorial = NewTutorial();
+            Walk(tutorial, TutorialStep.SellButton);
+
+            storage.TryStore(ResourceType.Stone);
+            storage.TryStore(ResourceType.Gravel);
+            tutorial.Refresh();
+
+            Assert.IsTrue(tutorial.AllowsCell(storage.IndexOf(ResourceType.Stone)));
+            Assert.IsTrue(tutorial.AllowsCell(storage.IndexOf(ResourceType.Gravel)));
+        }
+
+        /// <summary>Пройденное обучение не держит ни поля, ни склада.</summary>
+        [Test]
+        public void FinishedTutorial_HoldsNothing()
+        {
+            var tutorial = NewTutorial();
+            tutorial.Skip();
+
+            foreach (var tile in map.Tiles.Values)
+                Assert.IsTrue(tutorial.AllowsTile(tile.Coord));
+        }
+
         TutorialSystem NewTutorial() => new(map, storage, roads, rules);
 
         /// <summary>Провести обучение до нужного шага, выполняя по дороге всё, чего шаги ждут.</summary>

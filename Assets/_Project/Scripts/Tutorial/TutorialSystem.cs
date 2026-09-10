@@ -12,7 +12,13 @@ namespace Game.Tutorial
     /// <summary>
     /// Обучение первой партии кампании: тринадцать шагов поверх обычной игры. Система ничего
     /// не делает за игрока и не трогает экономику — она слушает те же события, что и визуалы,
-    /// и говорит, что подсветить. Ввод не блокируется: сделал не то — подсказка ждёт.
+    /// и говорит, что подсветить и что разрешить.
+    ///
+    /// **Ввод блокируется** (решение человека 10.09.2026, прежнее «ввод не блокируется» снято):
+    /// на каждом шаге доступно только то, чем он закрывается, остальное поле и склад затенены.
+    /// Разрешённое — не всегда сама цель: шаг про бар закрывается следующим слиянием, шаг про
+    /// доски — обменом трёх досок, а шаг про обход гряды вообще открывает всё поле, потому что
+    /// дорогу к реке игрок ищет сам. Где разрешение шире цели, там оно и написано отдельно.
     ///
     /// Карта первого уровня зафиксирована сидом 284 (M35), поэтому цели шагов — её координаты,
     /// а не результат поиска по полю: камень, дерево, стена и переправа лежат в трёх шагах
@@ -41,6 +47,9 @@ namespace Game.Tutorial
         readonly MergeRules rules;
         readonly List<HexCoord> tiles = new();
         readonly List<int> cells = new();
+
+        /// <summary>Клетки склада, по которым на этом шаге проходит тап.</summary>
+        readonly List<int> allowed = new();
 
         float remaining = LastStepSeconds;
 
@@ -80,6 +89,30 @@ namespace Game.Tutorial
 
         /// <summary>Клетки склада под подсветкой, если шаг указывает на склад.</summary>
         public IReadOnlyList<int> TargetCells => cells;
+
+        /// <summary>
+        /// Клетки склада, доступные на этом шаге. Остальные затенены и тапа не принимают;
+        /// пустой список значит, что склад закрыт целиком.
+        /// </summary>
+        public IReadOnlyList<int> AllowedCells => allowed;
+
+        /// <summary>Проходит ли тап по клетке склада.</summary>
+        public bool AllowsCell(int index) => allowed.Contains(index);
+
+        /// <summary>
+        /// Проходит ли тап по плитке поля. Шаг про обход гряды открывает поле целиком: дорогу
+        /// к реке игрок ищет сам, и подсказать её, ничего не открыв, нельзя — а гора откажет
+        /// сама, в этом и урок.
+        /// </summary>
+        public bool AllowsTile(HexCoord coord) => Step switch
+        {
+            TutorialStep.OpenStone or TutorialStep.BuildRoad or TutorialStep.WatchDelivery =>
+                coord == StoneTile,
+            TutorialStep.CraftBoard => coord == WoodTile,
+            TutorialStep.Bridge => coord == RiverTile,
+            TutorialStep.Wall or TutorialStep.Sweep or TutorialStep.Done => true,
+            _ => false
+        };
 
         /// <summary>
         /// Кнопка «Продать всё» до своего шага не приходит: жребий 10–20 с выдал бы её посреди
@@ -141,6 +174,7 @@ namespace Game.Tutorial
         {
             tiles.Clear();
             cells.Clear();
+            allowed.Clear();
 
             switch (Step)
             {
@@ -150,10 +184,10 @@ namespace Game.Tutorial
                     AimAt(StoneTile);
                     break;
                 case TutorialStep.Merge:
-                    CollectMergeable();
+                    CollectMergeable(cells);
                     break;
                 case TutorialStep.Convert:
-                    CollectCrafted();
+                    CollectCrafted(cells);
                     break;
                 case TutorialStep.CraftBoard:
                     AimAt(WoodTile);
@@ -168,7 +202,47 @@ namespace Game.Tutorial
                     break;
             }
 
+            CollectAllowed();
             Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// Что открыто на этом шаге. Часть шагов открывает ровно свою цель, часть — больше:
+        /// склад целиком открыт там, где шаг иначе встал бы намертво. С девятого шага кнопка
+        /// продажи ждёт запаса сверх резерва, а набрать его можно только слияниями; после него
+        /// накал, обход гряды и мост тоже требуют свободных рук на складе.
+        /// </summary>
+        void CollectAllowed()
+        {
+            switch (Step)
+            {
+                case TutorialStep.Merge:
+                case TutorialStep.Convert:
+                    allowed.AddRange(cells);
+                    break;
+                case TutorialStep.Goal:
+                case TutorialStep.CraftBoard:
+                    CollectMergeable(allowed);
+                    break;
+                case TutorialStep.Contract:
+                    CollectCells(ResourceType.Board, allowed);
+                    break;
+                case TutorialStep.SellButton:
+                case TutorialStep.Heat:
+                case TutorialStep.Wall:
+                case TutorialStep.Bridge:
+                case TutorialStep.Sweep:
+                case TutorialStep.Done:
+                    CollectOccupied();
+                    break;
+            }
+        }
+
+        void CollectOccupied()
+        {
+            for (var index = 0; index < storage.Capacity; index++)
+                if (storage[index].HasValue)
+                    allowed.Add(index);
         }
 
         void Advance()
@@ -228,7 +302,7 @@ namespace Game.Tutorial
         }
 
         /// <summary>Первый базовый тип, которого набралось на слияние: его клетки и подсвечиваем.</summary>
-        void CollectMergeable()
+        void CollectMergeable(List<int> into)
         {
             for (var index = 0; index < storage.Capacity; index++)
             {
@@ -239,27 +313,31 @@ namespace Game.Tutorial
                 if (storage.CountOf(content.Value) < rules.SmallCount)
                     continue;
 
-                CollectCells(content.Value);
+                CollectCells(content.Value, into);
                 return;
             }
         }
 
-        /// <summary>Крафтовые ресурсы: любой из них по тапу превращается в очки.</summary>
-        void CollectCrafted()
+        /// <summary>
+        /// Крафт, который шаг про очки разрешает обменять. Доски в него не входят: они лежат
+        /// на складе под контракт седьмого шага, и обменянные здесь оставили бы его без цели —
+        /// а мост потом без оплаты.
+        /// </summary>
+        void CollectCrafted(List<int> into)
         {
             for (var index = 0; index < storage.Capacity; index++)
             {
                 var content = storage[index];
-                if (content.HasValue && !rules.CanMerge(content.Value))
-                    cells.Add(index);
+                if (content.HasValue && !rules.CanMerge(content.Value) && content.Value != ResourceType.Board)
+                    into.Add(index);
             }
         }
 
-        void CollectCells(ResourceType type)
+        void CollectCells(ResourceType type, List<int> into)
         {
             for (var index = 0; index < storage.Capacity; index++)
                 if (storage[index] == type)
-                    cells.Add(index);
+                    into.Add(index);
         }
 
         static TutorialTrigger TriggerOf(TutorialStep step) => step switch

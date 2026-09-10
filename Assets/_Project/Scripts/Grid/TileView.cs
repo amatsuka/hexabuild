@@ -77,6 +77,10 @@ namespace Game.Grid
         /// <summary>Насколько ободок подсветки поднят над крышкой: он лежит на ней, а не в ней.</summary>
         const float HighlightLift = 0.02f;
 
+        /// <summary>Дымка и обесцвечивание плитки, закрытой обучением. Берутся поверх её собственных.</summary>
+        const float BlockedFog = 0.55f;
+        const float BlockedFade = 0.5f;
+
         const int DecorCountSalt = 11;
 
         /// <summary>Доля подскока, которую месторождения пережидают, прежде чем выйти.</summary>
@@ -213,6 +217,12 @@ namespace Game.Grid
         MeshRenderer spark;
         MeshRenderer highlight;
         MaterialPropertyBlock propertyBlock;
+
+        /// <summary>Чем плитка нарисована в последний раз: по нему её перекрашивает затенение.</summary>
+        TileData shown;
+
+        /// <summary>Плитка вне шага обучения: она затенена и тапа не принимает.</summary>
+        bool dimmed;
         float surfaceHeight;
 
         /// <summary>Сколько секунд идёт цикл добычи на этой плитке: по нему накаляется стек.</summary>
@@ -266,7 +276,8 @@ namespace Game.Grid
         {
             // Гора не прячется туманом: она не секрет, а стена, и игрок должен видеть её сразу,
             // иначе он раз за разом тратит клики на плитку, которая всё равно не откроется.
-            var state = tile.IsPassable ? StateOf(tile.State) : Vector2.zero;
+            var state = Dimmed(tile.IsPassable ? StateOf(tile.State) : Vector2.zero);
+            shown = tile;
 
             var opened = shownState.HasValue && shownState.Value != TileState.Revealed
                 && tile.State == TileState.Revealed;
@@ -370,6 +381,26 @@ namespace Game.Grid
 
         /// <summary>Отказ: плитка коротко дрожит поперёк. Текст попапа сам по себе не отклик.</summary>
         public void Refuse() => PressPulse.ShakeSideways(this, refusalShake);
+
+        /// <summary>
+        /// Плитка вне текущего шага обучения гасится дымкой: тапа она не принимает, и по кадру
+        /// должно быть видно, что не принимает. Поверх собственного состояния, а не вместо него —
+        /// скрытая плитка и так в дымке, и затенение не должно её высветлять.
+        /// </summary>
+        public void SetDimmed(bool value)
+        {
+            if (dimmed == value)
+                return;
+
+            dimmed = value;
+
+            if (shown != null)
+                Apply(shown);
+        }
+
+        Vector2 Dimmed(Vector2 state) => dimmed
+            ? new Vector2(Mathf.Max(state.x, BlockedFog), Mathf.Max(state.y, BlockedFade))
+            : state;
 
         /// <summary>
         /// Ободок подсветки цели обучения. Прозрачный цвет прячет его; дышит подсветка
