@@ -92,8 +92,8 @@ namespace Game.Tutorial
             TutorialStep.OpenStone or TutorialStep.BuildRoad or TutorialStep.WatchDelivery =>
                 coord == TutorialMap.StoneTile,
             TutorialStep.OpenWood => coord == TutorialMap.WoodTile,
-            // Обход идёт двумя плитками: вокруг лагуны и сквозь проход в гряде. Открыты обе —
-            // другого пути всё равно нет, а дробить это на два шага значит повторить один урок.
+            // Подход к реке идёт двумя плитками. Открыты обе: дробить это на два шага значит
+            // повторить один и тот же урок про открытие и дорогу.
             TutorialStep.Bypass => coord == TutorialMap.BypassTile || coord == TutorialMap.PassTile,
             TutorialStep.Bridge => coord == TutorialMap.RiverTile,
             // Хвост обучения уже отпускает: мост построен, дальше игрок открывает поле сам.
@@ -169,18 +169,17 @@ namespace Game.Tutorial
                 case TutorialStep.OpenWood:
                     AimAt(TutorialMap.WoodTile);
                     break;
+                // Именно брёвна, а не «первое, чего набралось»: камня на складе всегда больше,
+                // и подсветка оставалась на нём, пока шаг просил доски.
                 case TutorialStep.CraftBoard:
-                    CollectMergeable(cells);
+                    CollectReady(ResourceType.Wood, cells);
                     break;
                 // Шаг про стену ничего не требует и потому подсвечивает саму стену; тапать
                 // по ней не надо — по ней и нельзя, гряда не открывается никогда.
-                // Шаг про стены подсвечивает обе: и гряду, и лагуну. Тапать по ним не надо —
-                // по ним и нельзя, ни гора, ни вода не открываются.
+                // Шаг про стену подсвечивает две горы, стоящие у самого маршрута. Тапать по ним
+                // не надо — по ним и нельзя, гора не открывается никогда.
                 case TutorialStep.Wall:
                     foreach (var coord in TutorialMap.Ridge)
-                        AimAt(coord);
-
-                    foreach (var coord in TutorialMap.Lagoon)
                         AimAt(coord);
 
                     break;
@@ -267,7 +266,7 @@ namespace Game.Tutorial
         bool IsSatisfied(TutorialStep step) => step switch
         {
             TutorialStep.CraftBoard => storage.CountOf(ResourceType.Board) > 0,
-            // Обход закрыт не первой дорогой, а той, что дошла до прохода в гряде.
+            // Подход закрыт не первой дорогой, а той, что дошла до берега реки.
             TutorialStep.Bypass => roads.HasRoad(TutorialMap.PassTile),
             TutorialStep.Bridge => HasBridge(),
             _ => true
@@ -281,6 +280,13 @@ namespace Game.Tutorial
                     return true;
 
             return false;
+        }
+
+        /// <summary>Клетки одного типа, и только когда его набралось на слияние.</summary>
+        void CollectReady(ResourceType type, List<int> into)
+        {
+            if (storage.CountOf(type) >= rules.SmallCount)
+                CollectCells(type, into);
         }
 
         /// <summary>Первый базовый тип, которого набралось на слияние: его клетки и подсвечиваем.</summary>

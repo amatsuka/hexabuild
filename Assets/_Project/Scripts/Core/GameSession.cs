@@ -363,7 +363,11 @@ namespace Game.Core
             if (end.HasEnded || pauseView.IsOpen)
                 return;
 
-            production.Tick(Time.deltaTime);
+            // Во время обучения добыча ждёт места на складе. Шаги, которые ничего на складе
+            // не разрешают, иначе засыпают его доверху за полминуты, и ресурсы начинают
+            // сыпаться мимо — игрок видит поток потерь, ничего не сделав не так.
+            if (!StorageIsTight)
+                production.Tick(Time.deltaTime);
             deliveries.Tick(Time.deltaTime);
             contracts.Tick(Time.deltaTime);
             state.Multiplier.Tick(Time.deltaTime);
@@ -376,6 +380,17 @@ namespace Game.Core
 
         /// <summary>Обучение придерживает кнопку продажи до своего шага про неё.</summary>
         bool SaleHeld => tutorial != null && tutorial.HoldsSale;
+
+        /// <summary>
+        /// Сколько клеток склада обучение держит свободными. Одной мало: доставка уже в пути
+        /// займёт её раньше, чем игрок дочитает подсказку.
+        /// </summary>
+        const int TutorialHeadroom = 4;
+
+        /// <summary>Склад почти полон, и партию ведёт обучение: добыче пора подождать.</summary>
+        bool StorageIsTight =>
+            tutorial != null && tutorial.IsRunning
+            && state.Storage.Count >= state.Storage.Capacity - TutorialHeadroom;
 
         /// <summary>
         /// Пока идёт обучение, игрок делает только то, чем закрывается его шаг: остальное поле

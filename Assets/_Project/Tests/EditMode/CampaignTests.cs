@@ -90,10 +90,10 @@ namespace Game.Tests.EditMode
         /// Первый уровень — учебный, и контракт на нём самый длинный: игрок только знакомится
         /// с заказом Метрополии.
         ///
-        /// Требование «воды на первом уровне нет» снято решением человека 11.09.2026 вместе
-        /// со стадией M36. Оно шло с M25, где первый уровень заменял вырезанное обучение и не
-        /// должен был показывать вторую стену сразу; теперь обучение вернулось и показывает
-        /// обе стены намеренно — лагуна второго ряда и есть то, что заворачивает игрока к обходу.
+        /// Требование «воды на первом уровне нет» (M25) стадию M36 пережило, но смысл потеряло:
+        /// уровень стал учебным и рукотворным, а стену ему показывают горы и река. Проверяем
+        /// теперь то, на чём стоит сценарий, — горы, по которым учат обходу, и русло, на котором
+        /// учат мосту.
         /// </summary>
         [Test]
         public void FirstLevel_IsHandMade_AndKeepsTheLongestContract()
@@ -102,16 +102,16 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(first.HandMadeMap, "учебный уровень обязан идти по рукотворной карте");
 
             var map = MapGenerator.Generate(config.MapGenerationSettingsFor(first.Seed, first));
-            var water = 0;
+            var rivers = 0;
             var mountains = 0;
             foreach (var tile in map.Tiles.Values)
             {
-                if (tile.Biome == BiomeType.Water) water++;
+                if (tile.HasRiver) rivers++;
                 if (tile.Biome == BiomeType.Mountains) mountains++;
             }
 
-            Assert.Greater(water, 0, "на учебной карте нет воды: показывать вторую стену нечем");
-            Assert.Greater(mountains, 0, "на учебной карте нет гор: показывать первую стену нечем");
+            Assert.Greater(rivers, 0, "на учебной карте нет русла: учить мосту негде");
+            Assert.Greater(mountains, 0, "на учебной карте нет гор: показывать стену нечем");
 
             for (var i = 1; i < campaign.Count; i++)
                 Assert.GreaterOrEqual(config.ContractSecondsFor(first), config.ContractSecondsFor(campaign[i]),

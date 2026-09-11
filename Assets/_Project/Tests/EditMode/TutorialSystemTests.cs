@@ -99,33 +99,31 @@ namespace Game.Tests.EditMode
             Assert.IsTrue(map.TryGetTile(TutorialMap.PassTile, out var pass));
             Assert.IsTrue(pass.IsPassable, "прохода сквозь гряду нет");
 
-            foreach (var coord in TutorialMap.Lagoon)
-            {
-                Assert.IsTrue(map.TryGetTile(coord, out var water));
-                Assert.IsFalse(water.IsPassable, $"лагуна {coord} проходима: она вторая стена игры");
-            }
+            Assert.IsTrue(map.TryGetTile(TutorialMap.RiverTile, out var ford));
+            Assert.IsTrue(ford.HasRiver && ford.IsPassable, "брод не брод");
 
             Assert.IsTrue(map.TryGetTile(TutorialMap.RiverTile, out var river));
             Assert.IsTrue(river.HasRiver && river.IsPassable, "переправа не переправа");
         }
 
         /// <summary>
-        /// Обход у гряды ровно один. Будь их два, подсветка указывала бы на одну плитку, а игрок
-        /// с равным правом открывал бы другую — и шаг закрывался бы мимо подсказки.
+        /// Русла спускаются с верхней гряды, а у показательных гор внизу рек нет: мост игрок
+        /// строит на реке, пришедшей сверху, — этого и просил плейтест.
         /// </summary>
         [Test]
-        public void Ridge_HasExactlyOneWayThrough()
+        public void Rivers_DescendFromTheUpperPeaks()
         {
-            // Каждый ряд коридора пропускает ровно одну плитку: обход вдоль лагуны, проход
-            // в гряде и брод через реку. Два пути где угодно — и подсветка теряет смысл.
-            foreach (var row in new[] { 2, 3, 4 })
-            {
-                var ways = 0;
-                foreach (var tile in map.Tiles.Values)
-                    if (tile.Coord.R == row && tile.IsPassable)
-                        ways++;
+            // Реки спускаются сверху вниз: у каждой первая плитка выше последней. Русло,
+            // начатое внизу, читается обрубком — ровно то, на что жаловался плейтест.
+            foreach (var tile in map.Tiles.Values)
+                if (tile.HasRiver)
+                    Assert.GreaterOrEqual(tile.Coord.R, 3, $"русло спустилось слишком низко: {tile.Coord}");
 
-                Assert.AreEqual(1, ways, $"в ряду {row} проходима не одна плитка");
+            // У гор в нижней части реки нет намеренно: мост ставится на русле с верхней гряды.
+            foreach (var coord in TutorialMap.Ridge)
+            {
+                Assert.IsTrue(map.TryGetTile(coord, out var low));
+                Assert.IsFalse(low.HasRiver, $"с показательной горы {coord} спускается река");
             }
         }
 
@@ -220,8 +218,8 @@ namespace Game.Tests.EditMode
             var tutorial = NewTutorial();
             Walk(tutorial, TutorialStep.Wall);
 
-            Assert.AreEqual(TutorialMap.Ridge.Length + TutorialMap.Lagoon.Length, tutorial.TargetTiles.Count,
-                "шаг про стены обязан назвать обе: и гряду, и лагуну");
+            Assert.AreEqual(TutorialMap.Ridge.Length, tutorial.TargetTiles.Count,
+                "шаг про стену обязан подсветить обе горы, стоящие у маршрута");
 
             foreach (var tile in map.Tiles.Values)
                 Assert.IsFalse(tutorial.AllowsTile(tile.Coord), $"плитка {tile.Coord} открыта на шаге-читалке");

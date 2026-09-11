@@ -22,35 +22,45 @@ namespace Game.Grid
         /// <summary>Сосед Метрополии с камнем: с него начинается партия.</summary>
         public static readonly HexCoord StoneTile = new(-1, 1);
 
-        /// <summary>Второй сосед, с лесом: из него доски на первый мост.</summary>
+        /// <summary>Второй сосед, с лесом: из него доски на мост.</summary>
         public static readonly HexCoord WoodTile = new(0, 1);
 
         /// <summary>
-        /// Обход. Лагуна второго ряда заворачивает игрока влево, гряда третьего оставляет один
-        /// проход — обе плитки открываются одним шагом, другого пути всё равно нет.
+        /// Подход к реке: две плитки, которые обучение открывает одним шагом. Стен между ними
+        /// нет — дорогу держит само обучение, а горы внизу стоят рядом, чтобы их было видно.
         /// </summary>
-        public static readonly HexCoord BypassTile = new(-2, 2);
+        public static readonly HexCoord BypassTile = new(0, 2);
 
-        public static readonly HexCoord PassTile = new(-2, 3);
-
-        /// <summary>Брод через реку четвёртого ряда. Скала, значит мост будет каменной аркой.</summary>
-        public static readonly HexCoord RiverTile = new(-2, 4);
-
-        /// <summary>Гряда третьего ряда: стена по обе стороны от прохода.</summary>
-        public static readonly HexCoord[] Ridge = { new(-3, 3), new(-1, 3) };
-
-        /// <summary>Лагуна второго ряда: вторая стена игры и устье притока.</summary>
-        public static readonly HexCoord[] Lagoon = { new(-1, 2), new(0, 2) };
+        public static readonly HexCoord PassTile = new(-1, 3);
 
         /// <summary>
-        /// Река. Главное русло идёт поперёк четвёртого ряда, приток сворачивает вниз и впадает
-        /// в лагуну у самой Метрополии: одна полоска поперёк поля читалась обрубком, а вилка
-        /// делает из неё водную систему.
+        /// Брод посреди карты, на реке, спускающейся с верхних гор. Здесь игрок и строит мост.
         /// </summary>
-        static readonly HexCoord[] MainStream =
-            { new(-4, 4), new(-3, 4), new(-2, 4), new(-1, 4), new(0, 4) };
+        public static readonly HexCoord RiverTile = new(-1, 4);
 
-        static readonly HexCoord[] Tributary = { new(0, 4), new(0, 3), new(0, 2), new(-1, 2) };
+        /// <summary>
+        /// Две горы в нижней части — показать игроку стену вблизи. Рек с них не спускается
+        /// намеренно: русла идут с верхней гряды, и мост ставится на них, а не под носом.
+        /// </summary>
+        public static readonly HexCoord[] Ridge = { new(-1, 2), new(-2, 3) };
+
+        /// <summary>Верхняя гряда: она и есть исток всех рек карты.</summary>
+        static readonly HexCoord[] Peaks =
+        {
+            new(-5, 7), new(-4, 7), new(-2, 7), new(-1, 7), new(-5, 6), new(-2, 6)
+        };
+
+        /// <summary>
+        /// Русла. Левое течёт с `(-5,7)`, к нему у `(-3,3)` сходится приток с `(-2,6)` — это
+        /// и есть развилка; правое спускается с `(-1,7)` через брод `(-1,4)` к краю поля.
+        /// Все три идут сверху вниз: река, начатая в нижнем ряду, читалась обрубком.
+        /// </summary>
+        static readonly HexCoord[][] Streams =
+        {
+            new[] { new HexCoord(-5, 7), new(-5, 6), new(-5, 5), new(-4, 4), new(-3, 3) },
+            new[] { new HexCoord(-2, 6), new(-2, 5), new(-2, 4), new(-3, 4), new(-3, 3) },
+            new[] { new HexCoord(-1, 7), new(-1, 6), new(-1, 5), new(-1, 4), new(0, 3) }
+        };
 
         /// <summary>
         /// Запас камня и дерева у Метрополии. Эти два месторождения — топливо всего обучения,
@@ -124,27 +134,18 @@ namespace Game.Grid
             if (coord == StoneTile || coord == WoodTile)
                 return BiomeType.Forest;
 
-            if (coord == BypassTile)
-                return BiomeType.Meadow;
+            if (Holds(Ridge, coord) || Holds(Peaks, coord))
+                return BiomeType.Mountains;
 
-            // Проход сквозь гряду и брод через реку — скалы: обе плитки проходимы, но видно,
-            // что идут они между стен.
-            if (coord == PassTile || coord == RiverTile)
+            // Брод — скала: видно, что переходят реку по камню, а не вброд по траве.
+            if (coord == RiverTile)
                 return BiomeType.Rocks;
 
-            if (Holds(Lagoon, coord) || Holds(MainStream, coord) || Holds(Tributary, coord))
-                return BiomeType.Water;
-
-            if (Holds(Ridge, coord))
-                return BiomeType.Mountains;
-
-            // За рекой — свободное поле: лес с луговыми проплешинами и редкой горой, чтобы
-            // карта не выглядела ровным ковром.
             var roll = coord.Hash01(DepositSalt);
-            if (roll < 0.12f)
-                return BiomeType.Mountains;
+            if (roll < 0.32f)
+                return BiomeType.Meadow;
 
-            return roll < 0.4f ? BiomeType.Meadow : BiomeType.Forest;
+            return roll < 0.88f ? BiomeType.Forest : BiomeType.Rocks;
         }
 
         static bool Holds(HexCoord[] coords, HexCoord coord)
@@ -170,10 +171,12 @@ namespace Game.Grid
             if (coord == WoodTile)
                 return new[] { new Deposit(ResourceType.Wood, NeighborReserve) };
 
-            if (coord == HexCoord.Zero || hasRiver || !TileData.IsPassableBiome(biome) || coord.R < 5)
+            // Русло идёт по поверхности плитки, как дорога: месторождению на ней уже не место.
+            // Плитки, по которым обучение ведёт игрока, тоже пустые — они транзит, а не добыча.
+            if (coord == HexCoord.Zero || hasRiver || !TileData.IsPassableBiome(biome)
+                || coord == BypassTile || coord == PassTile)
                 return null;
 
-            // За рекой — обычное поле: тип по хэшу координаты, то есть карта та же при каждом запуске.
             var roll = coord.Hash01(DepositSalt + coord.R);
             if (roll > DepositChance)
                 return null;
@@ -208,8 +211,8 @@ namespace Game.Grid
             var down = new Dictionary<HexCoord, int>();
             var flow = new Dictionary<HexCoord, int>();
 
-            Carve(biomes, MainStream, masks, down, flow);
-            Carve(biomes, Tributary, masks, down, flow);
+            foreach (var stream in Streams)
+                Carve(biomes, stream, masks, down, flow);
             return (masks, down, flow);
         }
 
