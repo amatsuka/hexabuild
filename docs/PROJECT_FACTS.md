@@ -229,7 +229,12 @@ GPU-инстансинг, снимать его без замера нельзя
 - `Assets/_Project/Models/` — KayKit Medieval Hexagon Pack 1.0, автор Kay Lousberg
   (kaylousberg.com), лицензия **CC0**, текст в `Models/License.txt`. Атрибуция не обязательна.
   Атлас `PaletteBuildings.png`, деревья `tree_single_A.fbx`, `tree_single_B.fbx`, камни
-  `rock_single_A…E.fbx`, замок Метрополии `building_castle_blue.fbx` (M21). Модели развёрнуты
+  `rock_single_A…E.fbx`, замок Метрополии `building_castle_blue.fbx` (M21) и девять моделей гор
+  `mountain_{A,B,C}{,_grass,_grass_trees}.fbx` вместе с оригинальным атласом пака
+  `hexagons_medieval.png` — человек положил их 11.09.2026, ставит их `TileView` на каждую горную
+  плитку (модель и разворот кратно 60° выбираются хэшем координаты). Модели гор сами гексовые,
+  как и замок: основание радиусом 1.035 ужимается `FootprintScale` до ширины гекса и садится
+  на крышку. Модели развёрнуты
   на атлас: цвет грани задаёт её UV, а не код, поэтому у них свой материал `Prefabs/Palette.mat`
   на том же шейдере `Game/TileState`. Что замок из этого пака, а не из чужого, видно по имени
   материала внутри FBX — `hexagons_medieval`, — и по тому, что его UV лежат в том же атласе.

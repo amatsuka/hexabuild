@@ -126,9 +126,9 @@ MonoBehaviour:
   depletedFog: 0.393
   depletedFade: 0.8
   riverColor: {r: 0.16, g: 0.5, b: 0.72, a: 1}
-  riverWidth: 0.22
+  riverWidthMultiplier: 1
   riverBankColor: {r: 0.7, g: 0.66, b: 0.53, a: 1}
-  riverBankWidth: 0.3
+  riverBankMargin: 0.07
   resources:
     wood: {r: 0.22, g: 0.6, b: 0.25, a: 1}
     stone: {r: 0.45, g: 0.45, b: 0.47, a: 1}
@@ -151,6 +151,12 @@ MonoBehaviour:
   extractionHop: 0.07
   sparkScale: 0.08
   sparkRise: 0.24
+  depositRimRest: 0.22
+  depositRimPeak: 0.85
+  pressSink: 0.05
+  refusalShake: 0.06
+  revealHop: 0.09
+  revealSeconds: 0.32
   paletteMaterial: {fileID: 2100000, guid: 59f27dbd63beb4dc6b699c43b242e09c, type: 2}
   treeModels:
   - {fileID: -3189140834629115801, guid: 973dc00d9188c4d6d885e6d499de66a1, type: 3}
@@ -164,6 +170,17 @@ MonoBehaviour:
   treeSize: 0.44
   rockSize: 0.24
   metropolisModel: {fileID: 2107252493709494298, guid: 5588228f122544a8ca5d31457cff29f3, type: 3}
+  mountainModels:
+  - {fileID: -4159589251850826491, guid: 24a96e72b81ff4dcf88854ee734c9b4a, type: 3}
+  - {fileID: 6426092700865849098, guid: aff34499043b1435baf198e37ccb6fb1, type: 3}
+  - {fileID: -130740795678917801, guid: d06bfe3a5af2a456ba5648cb632981dd, type: 3}
+  - {fileID: 7652135771421027118, guid: dc0d09fc9db724e129417a738d2fa94c, type: 3}
+  - {fileID: -1672005757634903334, guid: b0ef79f8926a746d3aefc99236171210, type: 3}
+  - {fileID: -3715665433176334715, guid: d07c3271811134d498f4182437ac13ce, type: 3}
+  - {fileID: 5376246073708763396, guid: a74a6cee4651b4d6f8fbed393bb91d8b, type: 3}
+  - {fileID: -7981704288670127001, guid: e509a5ffaf86543d2b048dbe8fd58ec7, type: 3}
+  - {fileID: -3330435120810368972, guid: 48488e4d3d2e644bdb5c16eb378c5169, type: 3}
+  mountainFootprint: 1
   metropolisFootprint: 0.65
   decorMin: 3
   decorMax: 6

@@ -49,10 +49,10 @@ namespace Game.Tutorial
         /// **над** кнопкой продажи: место у правого края уже занято ею, и делить его нельзя —
         /// с девятого шага обе на экране одновременно.
         /// </summary>
-        const float SkipWidth = 200f;
-        const float SkipHeight = 50f;
+        const float SkipWidth = 312f;
+        const float SkipHeight = 54f;
         const float SkipGap = 10f;
-        const float SkipFontSize = 26f;
+        const float SkipFontSize = 24f;
 
         static readonly int[] NoCells = Array.Empty<int>();
 

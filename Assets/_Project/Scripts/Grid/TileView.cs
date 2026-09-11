@@ -83,6 +83,10 @@ namespace Game.Grid
 
         const int DecorCountSalt = 11;
 
+        /// <summary>Соли выбора модели горы и её разворота: гряда не должна выглядеть штамповкой.</summary>
+        const int MountainModelSalt = 53;
+        const int MountainTurnSalt = 59;
+
         /// <summary>Доля подскока, которую месторождения пережидают, прежде чем выйти.</summary>
         const float RevealDepositDelay = 0.35f;
 
@@ -188,6 +192,10 @@ namespace Game.Grid
         [SerializeField, Range(0.05f, 0.6f)] float rockSize = 0.24f;
         [Tooltip("Здание Метрополии. Пусто — гекс остаётся голым песчаниковым, как до M21")]
         [SerializeField] Mesh metropolisModel;
+        [Tooltip("Модели гор из того же гексового пака. Пусто — гора остаётся голым рельефом")]
+        [SerializeField] Mesh[] mountainModels;
+        [Tooltip("До какой ширины ужимается модель горы. Она сама гексовая — единица накрывает плитку")]
+        [SerializeField, Range(0.2f, 1.2f)] float mountainFootprint = 1f;
         [Tooltip("След здания по земле в юнитах. Выше 0.669 угол основания уходит за плоский верх")]
         [SerializeField, Range(0.2f, 1f)] float metropolisFootprint = 0.65f;
 
@@ -213,6 +221,7 @@ namespace Game.Grid
         Mesh riverMesh;
         Mesh riverBankMesh;
         MeshRenderer metropolis;
+        MeshRenderer mountain;
         MeshRenderer meshRenderer;
         MeshRenderer spark;
         MeshRenderer highlight;
@@ -266,6 +275,7 @@ namespace Game.Grid
 
             CreateRiver(tile);
             CreateMetropolis(tile);
+            CreateMountain(tile);
             CreateDecor(tile);
             CreateDeposits(tile);
             Apply(tile);
@@ -292,6 +302,10 @@ namespace Game.Grid
 
             if (metropolis != null)
                 SetTile(metropolis, modelColor, state);
+
+            // Гора красится белым, как и замок: цвет её граней лежит в атласе, а не в коде.
+            if (mountain != null)
+                SetTile(mountain, modelColor, state);
 
             if (riverBank != null)
                 SetTile(riverBank, Shaded(riverBankColor, tile.Shade), state);
@@ -704,6 +718,40 @@ namespace Game.Grid
                 Vector3.zero,
                 Vector3.one * FootprintScale(metropolisModel, metropolisFootprint),
                 paletteMaterial);
+        }
+
+        /// <summary>
+        /// Моделька горы поверх горной плитки. Она сама гексовая — из того же пака, что и замок
+        /// Метрополии, — поэтому садится ровно на крышку и ужимается до ширины гекса. Модель
+        /// и разворот выбираются хэшем координаты: гряда из одинаковых гор читается штамповкой,
+        /// а карта обязана оставаться той же при каждом запуске.
+        /// </summary>
+        void CreateMountain(TileData tile)
+        {
+            if (tile.Biome != BiomeType.Mountains || paletteMaterial == null)
+                return;
+
+            if (mountainModels == null || mountainModels.Length == 0)
+                return;
+
+            var pick = Mathf.Min(
+                (int)(tile.Coord.Hash01(MountainModelSalt) * mountainModels.Length), mountainModels.Length - 1);
+            var model = mountainModels[pick];
+            if (model == null)
+                return;
+
+            mountain = CreatePart(
+                transform,
+                "Mountain",
+                model,
+                Vector3.zero,
+                Vector3.one * FootprintScale(model, mountainFootprint),
+                paletteMaterial);
+
+            // Разворот кратен шестидесяти градусам: гекс основания обязан остаться совмещённым
+            // с гексом плитки, а любой другой угол вывел бы его углы за её кромку.
+            mountain.transform.localRotation = Quaternion.Euler(
+                0f, 60f * Mathf.Min((int)(tile.Coord.Hash01(MountainTurnSalt) * 6f), 5), 0f);
         }
 
         /// <summary>

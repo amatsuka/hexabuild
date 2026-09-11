@@ -157,8 +157,12 @@ namespace Game.Tutorial
                     CollectMergeable(cells);
                     break;
                 case TutorialStep.Convert:
-                case TutorialStep.Contract:
                     CollectCrafted(cells);
+                    break;
+                // Контракт просит доски — их и открываем. Через `CollectCrafted` они не пройдут:
+                // тот список досок как раз исключает, чтобы шаг про очки их не проел.
+                case TutorialStep.Contract:
+                    CollectCells(ResourceType.Board, cells);
                     break;
                 case TutorialStep.OpenWood:
                     AimAt(TutorialMap.WoodTile);

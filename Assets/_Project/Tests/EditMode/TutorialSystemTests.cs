@@ -284,6 +284,27 @@ namespace Game.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// Контракт просит доски, значит доски на его шаге и открыты. Шаг про очки их, наоборот,
+        /// закрывает — и эти два списка легко перепутать: «крафт кроме досок» и «только доски».
+        /// </summary>
+        [Test]
+        public void Contract_OpensExactlyTheBoardsItAsksFor()
+        {
+            var tutorial = NewTutorial();
+            Walk(tutorial, TutorialStep.Contract);
+
+            storage.TryStore(ResourceType.Board);
+            storage.TryStore(ResourceType.Gravel);
+            tutorial.Refresh();
+
+            var board = storage.IndexOf(ResourceType.Board);
+            Assert.IsTrue(tutorial.AllowsCell(board), "доски закрыты на шаге, который их и просит");
+            CollectionAssert.Contains(tutorial.TargetCells, board, "доска не подсвечена");
+            Assert.IsFalse(tutorial.AllowsCell(storage.IndexOf(ResourceType.Gravel)),
+                "щебень открыт на шаге про контракт: контракт просит не его");
+        }
+
         /// <summary>Кнопка продажи не приходит до своего шага и не держится после обучения.</summary>
         [Test]
         public void Sale_IsHeldUntilItsOwnStep()
