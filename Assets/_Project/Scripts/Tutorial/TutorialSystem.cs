@@ -109,15 +109,18 @@ namespace Game.Tutorial
             TutorialStep.OpenStone or TutorialStep.BuildRoad or TutorialStep.WatchDelivery =>
                 coord == StoneTile,
             TutorialStep.CraftBoard => coord == WoodTile,
-            TutorialStep.Bridge => coord == RiverTile,
-            TutorialStep.Wall or TutorialStep.Sweep or TutorialStep.Done => true,
+            // С шага про гряду поле открыто целиком и больше не закрывается. Отбирать у игрока
+            // уже открытые плитки на следующем шаге нельзя: партия к этому моменту идёт своим
+            // ходом, и остальные уроки — про склад, а его кормит именно поле.
+            >= TutorialStep.Wall => true,
             _ => false
         };
 
         /// <summary>
         /// Кнопка «Продать всё» до своего шага не приходит: жребий 10–20 с выдал бы её посреди
         /// первых уроков. Это одна из двух вещей, которые обучение выдаёт событием сценария,
-        /// вторая — первый контракт.
+        /// вторая — первый контракт. Сам шаг стоит после моста: до него склад пуст, и кнопке
+        /// нечего продавать — резерв 4 щебня и 4 досок выше всего, что к тому моменту нажито.
         /// </summary>
         public bool HoldsSale => IsRunning && Step < TutorialStep.SellButton;
 
@@ -227,10 +230,10 @@ namespace Game.Tutorial
                 case TutorialStep.Contract:
                     CollectCells(ResourceType.Board, allowed);
                     break;
-                case TutorialStep.SellButton:
-                case TutorialStep.Heat:
                 case TutorialStep.Wall:
                 case TutorialStep.Bridge:
+                case TutorialStep.SellButton:
+                case TutorialStep.Heat:
                 case TutorialStep.Sweep:
                 case TutorialStep.Done:
                     CollectOccupied();
@@ -352,10 +355,10 @@ namespace Game.Tutorial
             TutorialStep.Goal => TutorialTrigger.Merged,
             TutorialStep.Contract => TutorialTrigger.ContractClosed,
             TutorialStep.CraftBoard => TutorialTrigger.Merged,
-            TutorialStep.SellButton => TutorialTrigger.Sold,
-            TutorialStep.Heat => TutorialTrigger.HeatLeaked,
             TutorialStep.Wall => TutorialTrigger.TileRevealed,
             TutorialStep.Bridge => TutorialTrigger.RoadBuilt,
+            TutorialStep.SellButton => TutorialTrigger.Sold,
+            TutorialStep.Heat => TutorialTrigger.HeatLeaked,
             _ => TutorialTrigger.None
         };
 

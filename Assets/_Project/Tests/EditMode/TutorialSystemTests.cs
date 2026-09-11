@@ -34,10 +34,10 @@ namespace Game.Tests.EditMode
             (TutorialStep.Goal, TutorialTrigger.Merged),
             (TutorialStep.Contract, TutorialTrigger.ContractClosed),
             (TutorialStep.CraftBoard, TutorialTrigger.Merged),
-            (TutorialStep.SellButton, TutorialTrigger.Sold),
-            (TutorialStep.Heat, TutorialTrigger.HeatLeaked),
             (TutorialStep.Wall, TutorialTrigger.TileRevealed),
             (TutorialStep.Bridge, TutorialTrigger.RoadBuilt),
+            (TutorialStep.SellButton, TutorialTrigger.Sold),
+            (TutorialStep.Heat, TutorialTrigger.HeatLeaked),
             (TutorialStep.Sweep, TutorialTrigger.None)
         };
 
@@ -145,6 +145,19 @@ namespace Game.Tests.EditMode
             Assert.AreEqual(TutorialStep.Bridge, tutorial.Step);
         }
 
+        /// <summary>
+        /// Урок про кнопку стоит после моста, и это не вкусовщина: до моста сценарий сам
+        /// проедает и стартовые доски (контракт), и щебень (две дороги), а кнопка приходит
+        /// только с запасом сверх резерва 4/4. На пустом складе ей нечего было бы продавать.
+        /// </summary>
+        [Test]
+        public void SellStep_ComesAfterTheBridge()
+        {
+            Assert.Greater((int)TutorialStep.SellButton, (int)TutorialStep.Bridge);
+            Assert.Greater((int)TutorialStep.Heat, (int)TutorialStep.SellButton,
+                "утечку накала показывает волна продажи: накал она и выносит к потолку");
+        }
+
         /// <summary>Мост — это дорога на речной плитке, а не любая дорога.</summary>
         [Test]
         public void Bridge_WaitsForARoadOnTheRiver()
@@ -158,7 +171,7 @@ namespace Game.Tests.EditMode
 
             roads.Build(TutorialSystem.RiverTile);
             tutorial.Notify(TutorialTrigger.RoadBuilt);
-            Assert.AreEqual(TutorialStep.Sweep, tutorial.Step);
+            Assert.AreEqual(TutorialStep.SellButton, tutorial.Step);
         }
 
         /// <summary>Шаг про доски закрывает не всякое слияние, а то, из которого вышла доска.</summary>
@@ -174,7 +187,7 @@ namespace Game.Tests.EditMode
 
             storage.TryStore(ResourceType.Board);
             tutorial.Notify(TutorialTrigger.Merged);
-            Assert.AreEqual(TutorialStep.SellButton, tutorial.Step);
+            Assert.AreEqual(TutorialStep.Wall, tutorial.Step);
         }
 
         [Test]
