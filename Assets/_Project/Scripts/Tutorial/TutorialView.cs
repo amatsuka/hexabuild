@@ -127,7 +127,7 @@ namespace Game.Tutorial
 
             skip = UiButton.Create(
                 "SkipTutorial", sell.parent, storage.Theme, storage.Theme.ButtonSecondary,
-                "Пропустить", SkipFontSize, tutorial.Skip);
+                "Пропустить обучение", SkipFontSize, tutorial.Skip);
 
             var rect = skip.Rect;
             rect.anchorMin = rect.anchorMax = sell.anchorMin;
@@ -201,7 +201,12 @@ namespace Game.Tutorial
 
             shown = tutorial.Step;
             cardUp = true;
-            hud.Popups.ShowHint(TextOf(shown), Anchor(), tutorial.SkipStep, Lift(), Below());
+            hud.Popups.ShowHint(
+                TextOf(shown),
+                Anchor(),
+                tutorial.Waits(TutorialTrigger.Next) ? tutorial.Next : null,
+                Lift(),
+                Below());
         }
 
         void HideCard()
@@ -213,7 +218,6 @@ namespace Game.Tutorial
         /// <summary>Цель шага уже на экране: подсказке есть над чем встать.</summary>
         bool AimIsOnScreen() => tutorial.Aim switch
         {
-            TutorialAim.SellButton => IsShown(storage.SellRect),
             TutorialAim.Contract => IsShown(hud.ContractCard),
             TutorialAim.Ceiling => IsShown(hud.CeilingCard),
             TutorialAim.Tiles => tutorial.TargetTiles.Count > 0 && tiles.ContainsKey(tutorial.TargetTiles[0]),
@@ -223,7 +227,10 @@ namespace Game.Tutorial
         static bool IsShown(RectTransform rect) => rect != null && rect.gameObject.activeInHierarchy;
 
         /// <summary>Насколько подсказка поднимается над целью сверх обычного зазора попапа.</summary>
-        float Lift() => tutorial.Aim is TutorialAim.Cells or TutorialAim.Storage ? StorageLift : 0f;
+        float Lift() =>
+            tutorial.Aim is TutorialAim.Cells or TutorialAim.Storage or TutorialAim.SellButton
+                ? StorageLift
+                : 0f;
 
         /// <summary>
         /// Карточки бара и контракта прижаты к верху кадра, и подсказка над ними всё равно легла
@@ -266,8 +273,10 @@ namespace Game.Tutorial
                     return PopupView.Anchor.On(hud.CeilingCard);
                 case TutorialAim.Contract:
                     return PopupView.Anchor.On(hud.ContractCard);
+                // Подсказка про кнопку висит над складом, а не над самой кнопкой: до её прихода
+                // игрок копит крафт, и всё это время ему надо что-то читать. Кнопка приходит
+                // туда же, прямо над складом.
                 case TutorialAim.SellButton:
-                    return PopupView.Anchor.On(storage.SellRect);
                 case TutorialAim.Cells:
                 case TutorialAim.Storage:
                     return PopupView.Anchor.On(storage.PanelRect);
@@ -290,28 +299,32 @@ namespace Game.Tutorial
             TutorialStep.BuildRoad =>
                 "Без дороги до Метрополии плитка молчит.\nТапни её ещё раз: щебень ляжет насыпью",
             TutorialStep.WatchDelivery =>
-                "Камень едет по дороге на склад.\nПлитка добывает, пока путь до Метрополии цел",
+                "Камень поехал по дороге на склад.\nПлитка добывает сама, пока путь до Метрополии цел",
             TutorialStep.Merge =>
                 "Три одинаковых — тап по любому из них.\nПятёрка даёт два: копить выгоднее",
             TutorialStep.Convert =>
-                "Крафт — единственный источник очков.\nТап по щебню меняет его на очки с множителем",
+                "Крафт — единственный источник очков.\nТапни щебень: он обменяется на очки с множителем",
             TutorialStep.Goal =>
                 "Бар наверху — цель партии: столько набрал бот.\nЗвёзды идут на 50, 75 и 100 %",
             TutorialStep.Contract =>
-                "Метрополия просит доски, три уже на складе.\nТапни каждую: награда идёт с множителем",
+                "Метрополия просит доски, три уже на складе.\nТапни каждую: награда идёт сверх обычной цены",
+            TutorialStep.OpenWood =>
+                "Доски кончились, а мост их попросит.\nОткрой лес и проведи к нему дорогу",
             TutorialStep.CraftBoard =>
-                "Доски кончились, а мост их просит.\nОткрой лес и слей три бревна в доску",
+                "Три бревна дают доску — тапни любое из них",
+            TutorialStep.Wall =>
+                "Впереди гряда. Горы не открываются никогда:\nих обходят, а не пробивают",
+            TutorialStep.Bypass =>
+                "Проход слева. Открой плитку и проведи дорогу",
+            TutorialStep.Bridge =>
+                "За проходом река. Мост стоит 2 щебня и 2 доски:\nоткрой речную плитку и тапни ещё раз",
             TutorialStep.SellButton =>
-                "Кнопка меняет весь крафт на очки разом.\nРезерв она не трогает: 4 щебня и 4 доски",
+                "Копи крафт — кнопка «Продать всё» придёт сама.\nОна обменяет всё разом, кроме 4 щебня и 4 досок",
             TutorialStep.Heat =>
                 "Накал — третье слагаемое множителя.\nДержится 2.5 с и утекает за 2: паузу он не прощает",
-            TutorialStep.Wall =>
-                "Горы не открываются никогда.\nОбходи гряду — за ней река",
-            TutorialStep.Bridge =>
-                "Река переходится мостом: 2 щебня и 2 доски.\nТапни речную плитку ещё раз",
             _ =>
                 "Разгребёшь склад до двух клеток на полном накале — заплатят премию.\n" +
-                "Кнопка до двух не дочищает: резерв доскребают руками"
+                "Дальше поле твоё: открывай, строй, меняй"
         };
     }
 }

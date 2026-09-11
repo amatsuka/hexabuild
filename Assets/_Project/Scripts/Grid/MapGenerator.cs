@@ -105,6 +105,11 @@ namespace Game.Grid
 
         public static HexMap Generate(MapGenerationSettings settings)
         {
+            // Рукотворная карта перехватывается здесь, а не у вызывающих: их двое — партия и бот, —
+            // и разойтись им нельзя, иначе потолок уровня снят не с той карты, на которой играют.
+            if (settings.HandMade)
+                return TutorialMap.Build(settings.Rows);
+
             var random = settings.Seed == 0 ? new System.Random() : new System.Random(settings.Seed);
 
             HexMap fallback = null;

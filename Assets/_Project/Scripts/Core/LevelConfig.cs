@@ -17,6 +17,9 @@ namespace Game.Core
     public sealed class LevelConfig : ScriptableObject
     {
         [Header("Карта")]
+        [Tooltip("Карта собрана руками, а не шумом. Так сделан первый уровень: обучение ведёт " +
+                 "по нему за руку, и сид с порогами биомов на такой карте ничего не значат")]
+        [SerializeField] bool handMadeMap;
         [Tooltip("Сид уровня. Ноль запрещён: кампания обязана быть воспроизводимой")]
         [SerializeField] int seed = 1;
         [Tooltip("Рядов поля. 0 — как в GameConfig")]
@@ -45,6 +48,9 @@ namespace Game.Core
         [SerializeField] float oneStarShare = 0.5f;
         [SerializeField] float twoStarShare = 0.75f;
         [SerializeField] float threeStarShare = 1f;
+
+        /// <summary>Карта уровня рукотворная: её собирает <c>TutorialMap</c>, а не генератор.</summary>
+        public bool HandMadeMap => handMadeMap;
 
         public int Seed => seed;
 

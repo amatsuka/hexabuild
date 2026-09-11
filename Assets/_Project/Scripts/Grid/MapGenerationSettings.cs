@@ -16,8 +16,10 @@ namespace Game.Grid
             float biomeNoiseScale = 0.18f,
             float reserveScale = 1f,
             float waterCeiling = MapGenerator.WaterCeiling,
-            float rocksCeiling = MapGenerator.RocksCeiling)
+            float rocksCeiling = MapGenerator.RocksCeiling,
+            bool handMade = false)
         {
+            HandMade = handMade;
             Rows = rows;
             Seed = seed;
             EmptyWeight = emptyWeight;
@@ -37,6 +39,12 @@ namespace Game.Grid
         }
 
         public int Rows { get; }
+
+        /// <summary>
+        /// Карта собрана руками, а не шумом: у первого уровня она рукотворная, и весь набор
+        /// чисел генерации ниже к ней не применяется — см. <see cref="TutorialMap"/>.
+        /// </summary>
+        public bool HandMade { get; }
 
         /// <summary>0 — случайная партия, иначе воспроизводимая.</summary>
         public int Seed { get; }

@@ -213,6 +213,7 @@ namespace Game.Core
             biomeNoiseScale,
             level != null ? level.ReserveScale : 1f,
             level != null ? level.WaterCeiling : MapGenerator.WaterCeiling,
-            level != null ? level.RocksCeiling : MapGenerator.RocksCeiling);
+            level != null ? level.RocksCeiling : MapGenerator.RocksCeiling,
+            level != null && level.HandMadeMap);
     }
 }

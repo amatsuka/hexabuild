@@ -62,9 +62,10 @@ namespace Game.UI
         const float HintWidth = 520f;
         const float HintFontSize = 26f;
 
-        /// <summary>Крестик на самой карточке: он пропускает шаг, а не всё обучение.</summary>
-        const float CrossSize = 44f;
-        const float CrossFontSize = 30f;
+        /// <summary>Кнопка «Дальше» на карточке: ею закрываются шаги, которым делать нечего.</summary>
+        const float NextWidth = 200f;
+        const float NextHeight = 52f;
+        const float NextFontSize = 26f;
 
         /// <summary>Сколько живёт попап, который никто не закрывает: прибавка, награда, отказ.</summary>
         const float ShowSeconds = 2f;
@@ -103,8 +104,15 @@ namespace Game.UI
         /// </summary>
         Popup hint;
 
-        /// <summary>Крестик на подсказке: единственное место самой карточки, ловящее тап.</summary>
-        UiButton cross;
+        /// <summary>«Дальше» на подсказке: единственное место самой карточки, ловящее тап.</summary>
+        UiButton next;
+
+        /// <summary>
+        /// Плашки прибавки, премии и вехи молчат. Ставится на время обучения: волна продажи
+        /// выбрасывает их пачкой, и вместо одной подсказки на экране каша. Отказы не глушатся —
+        /// они и есть ответ на действие, а не празднование.
+        /// </summary>
+        public bool Quiet { get; set; }
 
         /// <summary>
         /// Висит ли сейчас ценник: пока висит, клик принадлежит ему, а разбирает клик
@@ -164,7 +172,7 @@ namespace Game.UI
         /// </summary>
         public void ShowGain(int points, ResourceType source, in Anchor anchor)
         {
-            if (!anchor.Exists)
+            if (!anchor.Exists || Quiet)
                 return;
 
             var popup = Push(anchor, GainWidth);
@@ -204,7 +212,7 @@ namespace Game.UI
         /// </summary>
         public void ShowSweep(int points, in Anchor anchor)
         {
-            if (!anchor.Exists)
+            if (!anchor.Exists || Quiet)
                 return;
 
             var popup = Push(anchor, SweepWidth);
@@ -232,7 +240,7 @@ namespace Game.UI
         /// </summary>
         public void ShowMilestone(float share, int gravel, in Anchor anchor)
         {
-            if (!anchor.Exists)
+            if (!anchor.Exists || Quiet)
                 return;
 
             var popup = Push(anchor, MilestoneWidth);
@@ -319,10 +327,10 @@ namespace Game.UI
         /// Подсказка обучения: та же карточка над той же целью, но без срока жизни — она ждёт,
         /// пока игрок сделает шаг. Своего слоя обучению не нужно: попап и есть «сообщение,
         /// привязанное к объекту», а два одинаковых на вид слоя разошлись бы на первой же правке.
-        /// <paramref name="skipped"/> вешает в угол карточки крестик, пропускающий **шаг**;
-        /// всё обучение снимает своя кнопка над складом, а не эта.
+        /// <paramref name="proceed"/> вешает на карточку кнопку «Дальше» — ею закрываются шаги,
+        /// которым делать нечего. У шага с действием её нет: он ждёт самого действия.
         /// </summary>
-        public void ShowHint(string text, in Anchor anchor, Action skipped, float lift, bool below)
+        public void ShowHint(string text, in Anchor anchor, Action proceed, float lift, bool below)
         {
             HideHint();
 
@@ -333,8 +341,7 @@ namespace Game.UI
             popup.Lift = lift;
             popup.Below = below;
 
-            // Место под крестик отнимается у текста: строка во всю ширину иначе уходит под него.
-            var textWidth = HintWidth - Padding * 2f - CrossSize;
+            var textWidth = HintWidth - Padding * 2f;
 
             var label = UiText.Label("Text", popup.Rect, theme, HintFontSize, theme.Text, TextAlignmentOptions.Center);
             Place(label.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -Padding * 0.7f),
@@ -346,16 +353,15 @@ namespace Game.UI
             var textHeight = label.preferredHeight;
             label.rectTransform.sizeDelta = new Vector2(textWidth, textHeight);
 
-            popup.Rect.sizeDelta = new Vector2(HintWidth, Mathf.Max(MinHeight, textHeight + Padding * 1.4f));
+            var height = textHeight + Padding * 1.4f + (proceed != null ? NextHeight + Padding * 0.6f : 0f);
+            popup.Rect.sizeDelta = new Vector2(HintWidth, Mathf.Max(MinHeight, height));
 
-            if (skipped != null)
+            if (proceed != null)
             {
-                // Крестик — подпись без карточки: вторая панель поверх панели читалась бы
-                // вложенным блоком, а не значком.
-                cross = UiButton.Create(
-                    "Cross", popup.Rect, theme, theme.Ghost, "×", CrossFontSize, skipped);
-                Place(cross.Rect, new Vector2(1f, 1f), new Vector2(-Padding * 0.3f, -Padding * 0.3f),
-                    new Vector2(CrossSize, CrossSize));
+                next = UiButton.Create(
+                    "Next", popup.Rect, theme, theme.ButtonSecondary, "Дальше", NextFontSize, proceed);
+                Place(next.Rect, new Vector2(0.5f, 0f), new Vector2(0f, Padding * 0.5f),
+                    new Vector2(NextWidth, NextHeight));
             }
 
             hint = popup;
@@ -368,7 +374,7 @@ namespace Game.UI
             if (hint == null)
                 return;
 
-            cross = null;
+            next = null;
 
             if (hint.Rect != null)
                 Destroy(hint.Rect.gameObject);
@@ -376,14 +382,14 @@ namespace Game.UI
             hint = null;
         }
 
-        /// <summary>Палец лёг на крестик подсказки: дальше нажатие разбирать не надо.</summary>
-        public bool TryHintPress(Vector2 screenPosition) => cross != null && cross.TryPress(screenPosition);
+        /// <summary>Палец лёг на «Дальше»: дальше нажатие разбирать не надо.</summary>
+        public bool TryHintPress(Vector2 screenPosition) => next != null && next.TryPress(screenPosition);
 
         /// <summary>Палец снят. Ненажатая кнопка молчит, поэтому звать можно всегда.</summary>
-        public void ReleaseHintPress() => cross?.Release();
+        public void ReleaseHintPress() => next?.Release();
 
-        /// <summary>Клик попал в крестик: шаг обучения пропускается.</summary>
-        public bool TryHintClick(Vector2 screenPosition) => cross != null && cross.TryClick(screenPosition);
+        /// <summary>Клик попал в «Дальше»: шаг прочитан, обучение идёт к следующему.</summary>
+        public bool TryHintClick(Vector2 screenPosition) => next != null && next.TryClick(screenPosition);
 
         /// <summary>Партия кончилась: над полем не остаётся ничего, финальный экран сам по себе.</summary>
         public void Clear()

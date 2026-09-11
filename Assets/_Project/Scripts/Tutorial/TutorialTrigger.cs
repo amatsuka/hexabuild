@@ -1,22 +1,19 @@
 namespace Game.Tutorial
 {
     /// <summary>
-    /// События партии, которыми закрываются шаги обучения. Своих событий обучение не заводит:
-    /// всё это партия и так рассылает визуалам.
+    /// Чем закрывается шаг обучения. Всё, кроме <see cref="Next"/>, — события, которые партия
+    /// и так рассылает визуалам: своих событий обучение не заводит.
     /// </summary>
     public enum TutorialTrigger
     {
-        /// <summary>Шаг не ждёт ничего: он гаснет по времени.</summary>
-        None,
+        /// <summary>Шагу делать нечего: его закрывает кнопка «Дальше» на карточке.</summary>
+        Next,
         TileRevealed,
         RoadBuilt,
         ResourceLanded,
         Merged,
         Converted,
         ContractClosed,
-        Sold,
-
-        /// <summary>Накал пошёл на убыль. Событием партия об этом не сообщает — его опрашивают.</summary>
-        HeatLeaked
+        Sold
     }
 }

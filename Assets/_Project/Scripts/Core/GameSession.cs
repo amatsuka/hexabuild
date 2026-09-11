@@ -386,49 +386,20 @@ namespace Game.Core
         bool AllowsCell(int cell) => tutorial == null || !tutorial.IsRunning || tutorial.AllowsCell(cell);
 
         /// <summary>
-        /// Обучение ждёт двух вещей, которых партия событием не рассылает. Контракт на доски
-        /// оно заказывает само — и заказывает заново, если игрок дал ему истечь; утечку накала
-        /// событием не сообщает никто, её и опрашиваем, но только на том шаге, который её ждёт.
+        /// Что партия делает для обучения каждый кадр. Первое: плашки прибавки во время
+        /// обучения молчат — волна продажи выбрасывает их пачкой, и вместо одной подсказки
+        /// на экране каша. Молчат не все: шаг про обмен и шаг про контракт этими же плашками
+        /// и учат. Второе: контракт на доски обучение заказывает само и заказывает заново,
+        /// если игрок дал ему истечь, — иначе шаг повис бы навсегда.
         /// </summary>
         void TickTutorial()
         {
-            tutorial.Tick(Time.deltaTime);
+            hudView.Popups.Quiet = tutorial.IsRunning
+                && tutorial.Step != TutorialStep.Convert
+                && tutorial.Step != TutorialStep.Contract;
 
             if (tutorial.Waits(TutorialTrigger.ContractClosed) && !contracts.IsActive)
                 contracts.Issue(ResourceType.Board);
-            else if (tutorial.Waits(TutorialTrigger.HeatLeaked) && state.Multiplier.HeatLeaking)
-                tutorial.Notify(TutorialTrigger.HeatLeaked);
-        }
-
-        /// <summary>
-        /// Игрок ушёл из окна — партия встаёт. Скрытую вкладку браузер усыпляет сам: кадровый
-        /// цикл в ней не вызывается вовсе, и терять там нечего. Терять есть что в окне, которое
-        /// видно, но не в фокусе: кадры идут, добыча идёт, склад переполняется без единого
-        /// зрителя. Это и есть случай, который закрывает пауза.
-        /// </summary>
-        void OnApplicationFocus(bool focused)
-        {
-            if (!focused)
-                PauseForAbsence();
-        }
-
-        /// <summary>Тот же уход, каким его видит мобильный браузер: вкладку свернули.</summary>
-        void OnApplicationPause(bool paused)
-        {
-            if (paused)
-                PauseForAbsence();
-        }
-
-        /// <summary>
-        /// Пауза сама себя не навязывает: партии ещё нет (меню), партия уже кончилась или
-        /// игрок и так стоит на паузе — тогда делать нечего.
-        /// </summary>
-        void PauseForAbsence()
-        {
-            if (end.HasEnded || !pauseView.gameObject.activeSelf || pauseView.IsOpen)
-                return;
-
-            pauseView.Open();
         }
 
         void SpawnTiles(HexMap map)

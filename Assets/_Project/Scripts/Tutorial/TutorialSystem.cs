@@ -26,21 +26,6 @@ namespace Game.Tutorial
     /// </summary>
     public sealed class TutorialSystem
     {
-        /// <summary>Сосед Метрополии с камнем: одно месторождение, значит три камня подряд.</summary>
-        public static readonly HexCoord StoneTile = new(-1, 1);
-
-        /// <summary>Второй сосед, с лесом: из него доски на первый мост.</summary>
-        public static readonly HexCoord WoodTile = new(0, 1);
-
-        /// <summary>Речная скальная плитка: первый мост в игре — каменная арка.</summary>
-        public static readonly HexCoord RiverTile = new(-2, 3);
-
-        /// <summary>Гряда гор в третьем ряду: непроходимая стена прямо перед игроком.</summary>
-        static readonly HexCoord[] WallTiles = { new(-1, 3), new(0, 3) };
-
-        /// <summary>Сколько висит последний шаг: он ничего не ждёт, а называет и гаснет.</summary>
-        const float LastStepSeconds = 9f;
-
         readonly HexMap map;
         readonly StorageGrid storage;
         readonly RoadNetwork roads;
@@ -50,8 +35,6 @@ namespace Game.Tutorial
 
         /// <summary>Клетки склада, по которым на этом шаге проходит тап.</summary>
         readonly List<int> allowed = new();
-
-        float remaining = LastStepSeconds;
 
         public TutorialSystem(HexMap map, StorageGrid storage, RoadNetwork roads, MergeRules rules)
         {
@@ -107,12 +90,12 @@ namespace Game.Tutorial
         public bool AllowsTile(HexCoord coord) => Step switch
         {
             TutorialStep.OpenStone or TutorialStep.BuildRoad or TutorialStep.WatchDelivery =>
-                coord == StoneTile,
-            TutorialStep.CraftBoard => coord == WoodTile,
-            // С шага про гряду поле открыто целиком и больше не закрывается. Отбирать у игрока
-            // уже открытые плитки на следующем шаге нельзя: партия к этому моменту идёт своим
-            // ходом, и остальные уроки — про склад, а его кормит именно поле.
-            >= TutorialStep.Wall => true,
+                coord == TutorialMap.StoneTile,
+            TutorialStep.OpenWood => coord == TutorialMap.WoodTile,
+            TutorialStep.Bypass => coord == TutorialMap.BypassTile,
+            TutorialStep.Bridge => coord == TutorialMap.RiverTile,
+            // Хвост обучения уже отпускает: мост построен, дальше игрок открывает поле сам.
+            >= TutorialStep.SellButton => true,
             _ => false
         };
 
@@ -126,11 +109,9 @@ namespace Game.Tutorial
 
         /// <summary>
         /// Ждёт ли шаг именно этого события. По нему партия понимает, когда выдать контракт
-        /// на доски и когда начать опрашивать утечку накала. Шаг, который не ждёт ничего,
-        /// не ждёт и <see cref="TutorialTrigger.None"/>: он гаснет по времени.
+        /// на доски, а карточка — рисовать ли ей кнопку «Дальше».
         /// </summary>
-        public bool Waits(TutorialTrigger trigger) =>
-            IsRunning && trigger != TutorialTrigger.None && TriggerOf(Step) == trigger;
+        public bool Waits(TutorialTrigger trigger) => IsRunning && TriggerOf(Step) == trigger;
 
         /// <summary>Событие партии. Чужое для текущего шага только пересчитывает цель.</summary>
         public void Notify(TutorialTrigger trigger)
@@ -141,24 +122,10 @@ namespace Game.Tutorial
                 Refresh();
         }
 
-        /// <summary>Последний шаг ничего не ждёт: он гаснет сам.</summary>
-        public void Tick(float deltaTime)
+        /// <summary>Игрок прочитал шаг, которому делать нечего, и нажал «Дальше».</summary>
+        public void Next()
         {
-            if (Step != TutorialStep.Sweep)
-                return;
-
-            remaining -= deltaTime;
-            if (remaining <= 0f)
-                Advance();
-        }
-
-        /// <summary>
-        /// Игрок пропустил шаг крестиком на подсказке: следующий встаёт на его место. Это не то
-        /// же, что <see cref="Skip"/>, — обучение продолжается, просто без этого урока.
-        /// </summary>
-        public void SkipStep()
-        {
-            if (IsRunning)
+            if (Waits(TutorialTrigger.Next))
                 Advance();
         }
 
@@ -184,24 +151,33 @@ namespace Game.Tutorial
                 case TutorialStep.OpenStone:
                 case TutorialStep.BuildRoad:
                 case TutorialStep.WatchDelivery:
-                    AimAt(StoneTile);
+                    AimAt(TutorialMap.StoneTile);
                     break;
                 case TutorialStep.Merge:
                     CollectMergeable(cells);
                     break;
                 case TutorialStep.Convert:
+                case TutorialStep.Contract:
                     CollectCrafted(cells);
                     break;
-                case TutorialStep.CraftBoard:
-                    AimAt(WoodTile);
+                case TutorialStep.OpenWood:
+                    AimAt(TutorialMap.WoodTile);
                     break;
+                case TutorialStep.CraftBoard:
+                    CollectMergeable(cells);
+                    break;
+                // Шаг про стену ничего не требует и потому подсвечивает саму стену; тапать
+                // по ней не надо — по ней и нельзя, гряда не открывается никогда.
                 case TutorialStep.Wall:
-                    foreach (var coord in WallTiles)
+                    foreach (var coord in TutorialMap.Ridge)
                         AimAt(coord);
 
                     break;
+                case TutorialStep.Bypass:
+                    AimAt(TutorialMap.BypassTile);
+                    break;
                 case TutorialStep.Bridge:
-                    AimAt(RiverTile);
+                    AimAt(TutorialMap.RiverTile);
                     break;
             }
 
@@ -221,18 +197,19 @@ namespace Game.Tutorial
             {
                 case TutorialStep.Merge:
                 case TutorialStep.Convert:
+                case TutorialStep.Contract:
+                case TutorialStep.CraftBoard:
                     allowed.AddRange(cells);
                     break;
-                case TutorialStep.Goal:
-                case TutorialStep.CraftBoard:
-                    CollectMergeable(allowed);
-                    break;
-                case TutorialStep.Contract:
-                    CollectCells(ResourceType.Board, allowed);
-                    break;
-                case TutorialStep.Wall:
+                // Шаги, которые просят ресурс, обязаны дать его сделать: дорога стоит щебня,
+                // мост — двух щебня и двух досок, а кнопка продажи приходит только с запасом
+                // сверх резерва. Открыты слияния, но не обмен: обменом этот запас и проедается.
+                case TutorialStep.OpenWood:
+                case TutorialStep.Bypass:
                 case TutorialStep.Bridge:
                 case TutorialStep.SellButton:
+                    CollectMergeable(allowed);
+                    break;
                 case TutorialStep.Heat:
                 case TutorialStep.Sweep:
                 case TutorialStep.Done:
@@ -251,7 +228,6 @@ namespace Game.Tutorial
         void Advance()
         {
             Step++;
-            remaining = LastStepSeconds;
 
             if (Step == TutorialStep.Done)
                 Finish();
@@ -279,20 +255,9 @@ namespace Game.Tutorial
         bool IsSatisfied(TutorialStep step) => step switch
         {
             TutorialStep.CraftBoard => storage.CountOf(ResourceType.Board) > 0,
-            TutorialStep.Wall => HasRevealedRiver(),
             TutorialStep.Bridge => HasBridge(),
             _ => true
         };
-
-        /// <summary>Игрок дошёл до реки, то есть обошёл гряду: гора не открывается никогда.</summary>
-        bool HasRevealedRiver()
-        {
-            foreach (var tile in map.Tiles.Values)
-                if (tile.HasRiver && tile.State == TileState.Revealed)
-                    return true;
-
-            return false;
-        }
 
         /// <summary>Дорога легла на речную плитку — это и есть мост.</summary>
         bool HasBridge()
@@ -350,23 +315,22 @@ namespace Game.Tutorial
             TutorialStep.WatchDelivery => TutorialTrigger.ResourceLanded,
             TutorialStep.Merge => TutorialTrigger.Merged,
             TutorialStep.Convert => TutorialTrigger.Converted,
-            // Бар двигает не отдельное действие, а следующий виток цикла: шаг закрывается
-            // тем же слиянием, с которого цикл и начинается.
-            TutorialStep.Goal => TutorialTrigger.Merged,
             TutorialStep.Contract => TutorialTrigger.ContractClosed,
+            // Плитку открывают и связывают дорогой одним шагом: урок здесь — сама плитка,
+            // а открытие с дорогой игрок уже прошёл на камне.
+            TutorialStep.OpenWood or TutorialStep.Bypass => TutorialTrigger.RoadBuilt,
             TutorialStep.CraftBoard => TutorialTrigger.Merged,
-            TutorialStep.Wall => TutorialTrigger.TileRevealed,
             TutorialStep.Bridge => TutorialTrigger.RoadBuilt,
             TutorialStep.SellButton => TutorialTrigger.Sold,
-            TutorialStep.Heat => TutorialTrigger.HeatLeaked,
-            _ => TutorialTrigger.None
+            // Читалки: бар, стена, накал и чистый склад. Их закрывает «Дальше».
+            _ => TutorialTrigger.Next
         };
 
         static TutorialAim AimOf(TutorialStep step) => step switch
         {
-            TutorialStep.Merge or TutorialStep.Convert => TutorialAim.Cells,
+            TutorialStep.Merge or TutorialStep.Convert or TutorialStep.Contract
+                or TutorialStep.CraftBoard => TutorialAim.Cells,
             TutorialStep.Goal => TutorialAim.Ceiling,
-            TutorialStep.Contract => TutorialAim.Contract,
             TutorialStep.SellButton => TutorialAim.SellButton,
             TutorialStep.Heat or TutorialStep.Sweep => TutorialAim.Storage,
             _ => TutorialAim.Tiles
