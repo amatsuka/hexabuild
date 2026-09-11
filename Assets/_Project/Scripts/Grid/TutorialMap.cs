@@ -25,17 +25,32 @@ namespace Game.Grid
         /// <summary>Второй сосед, с лесом: из него доски на первый мост.</summary>
         public static readonly HexCoord WoodTile = new(0, 1);
 
-        /// <summary>Единственный проход сквозь гряду: он же цель шага про обход.</summary>
+        /// <summary>
+        /// Обход. Лагуна второго ряда заворачивает игрока влево, гряда третьего оставляет один
+        /// проход — обе плитки открываются одним шагом, другого пути всё равно нет.
+        /// </summary>
         public static readonly HexCoord BypassTile = new(-2, 2);
 
-        /// <summary>Единственная переправа через реку. Скала, значит мост будет каменной аркой.</summary>
-        public static readonly HexCoord RiverTile = new(-2, 3);
+        public static readonly HexCoord PassTile = new(-2, 3);
 
-        /// <summary>Гряда во втором ряду: стена прямо перед игроком, обход от неё слева.</summary>
-        public static readonly HexCoord[] Ridge = { new(-1, 2), new(0, 2) };
+        /// <summary>Брод через реку четвёртого ряда. Скала, значит мост будет каменной аркой.</summary>
+        public static readonly HexCoord RiverTile = new(-2, 4);
 
-        /// <summary>Русло третьего ряда. Течёт слева направо, проходима в нём одна плитка.</summary>
-        static readonly HexCoord[] River = { new(-3, 3), new(-2, 3), new(-1, 3), new(0, 3) };
+        /// <summary>Гряда третьего ряда: стена по обе стороны от прохода.</summary>
+        public static readonly HexCoord[] Ridge = { new(-3, 3), new(-1, 3) };
+
+        /// <summary>Лагуна второго ряда: вторая стена игры и устье притока.</summary>
+        public static readonly HexCoord[] Lagoon = { new(-1, 2), new(0, 2) };
+
+        /// <summary>
+        /// Река. Главное русло идёт поперёк четвёртого ряда, приток сворачивает вниз и впадает
+        /// в лагуну у самой Метрополии: одна полоска поперёк поля читалась обрубком, а вилка
+        /// делает из неё водную систему.
+        /// </summary>
+        static readonly HexCoord[] MainStream =
+            { new(-4, 4), new(-3, 4), new(-2, 4), new(-1, 4), new(0, 4) };
+
+        static readonly HexCoord[] Tributary = { new(0, 4), new(0, 3), new(0, 2), new(-1, 2) };
 
         /// <summary>
         /// Запас камня и дерева у Метрополии. Эти два месторождения — топливо всего обучения,
@@ -56,6 +71,7 @@ namespace Game.Grid
         const float DepositChance = 0.85f;
 
         /// <summary>Отметки высоты в середине своей полосы биома: биом и рельеф идут из одного числа.</summary>
+        const float WaterLevel = 0.17f;
         const float MeadowLevel = 0.43f;
         const float ForestLevel = 0.55f;
         const float RocksLevel = 0.62f;
@@ -111,16 +127,35 @@ namespace Game.Grid
             if (coord == BypassTile)
                 return BiomeType.Meadow;
 
-            foreach (var ridge in Ridge)
-                if (coord == ridge)
-                    return BiomeType.Mountains;
+            // Проход сквозь гряду и брод через реку — скалы: обе плитки проходимы, но видно,
+            // что идут они между стен.
+            if (coord == PassTile || coord == RiverTile)
+                return BiomeType.Rocks;
 
-            // Третий ряд — русло: проходима в нём только переправа, остальное гряда.
-            if (coord.R == 3)
-                return coord == RiverTile ? BiomeType.Rocks : BiomeType.Mountains;
+            if (Holds(Lagoon, coord) || Holds(MainStream, coord) || Holds(Tributary, coord))
+                return BiomeType.Water;
 
-            return coord.Hash01(DepositSalt) < 0.3f ? BiomeType.Meadow : BiomeType.Forest;
+            if (Holds(Ridge, coord))
+                return BiomeType.Mountains;
+
+            // За рекой — свободное поле: лес с луговыми проплешинами и редкой горой, чтобы
+            // карта не выглядела ровным ковром.
+            var roll = coord.Hash01(DepositSalt);
+            if (roll < 0.12f)
+                return BiomeType.Mountains;
+
+            return roll < 0.4f ? BiomeType.Meadow : BiomeType.Forest;
         }
+
+        static bool Holds(HexCoord[] coords, HexCoord coord)
+        {
+            foreach (var known in coords)
+                if (known == coord)
+                    return true;
+
+            return false;
+        }
+
 
         /// <summary>
         /// Месторождения. У соседей Метрополии — ровно по одному и большому: три одинаковых
@@ -135,7 +170,7 @@ namespace Game.Grid
             if (coord == WoodTile)
                 return new[] { new Deposit(ResourceType.Wood, NeighborReserve) };
 
-            if (coord == HexCoord.Zero || hasRiver || !TileData.IsPassableBiome(biome) || coord.R < 4)
+            if (coord == HexCoord.Zero || hasRiver || !TileData.IsPassableBiome(biome) || coord.R < 5)
                 return null;
 
             // За рекой — обычное поле: тип по хэшу координаты, то есть карта та же при каждом запуске.
@@ -151,6 +186,7 @@ namespace Game.Grid
         {
             var band = biome switch
             {
+                BiomeType.Water => WaterLevel,
                 BiomeType.Mountains => MountainLevel,
                 BiomeType.Rocks => RocksLevel,
                 BiomeType.Forest => ForestLevel,
@@ -172,28 +208,44 @@ namespace Game.Grid
             var down = new Dictionary<HexCoord, int>();
             var flow = new Dictionary<HexCoord, int>();
 
-            for (var i = 0; i < River.Length; i++)
+            Carve(biomes, MainStream, masks, down, flow);
+            Carve(biomes, Tributary, masks, down, flow);
+            return (masks, down, flow);
+        }
+
+        /// <summary>
+        /// Один поток. Приток начинается на плитке главного русла и там же складывает свой расход
+        /// с чужим: на развилке лента обязана быть шире каждого из рукавов.
+        /// </summary>
+        static void Carve(
+            IReadOnlyDictionary<HexCoord, BiomeType> biomes,
+            HexCoord[] course,
+            Dictionary<HexCoord, int> masks,
+            Dictionary<HexCoord, int> down,
+            Dictionary<HexCoord, int> flow)
+        {
+            for (var i = 0; i < course.Length; i++)
             {
-                if (!biomes.ContainsKey(River[i]))
+                if (!biomes.ContainsKey(course[i]))
                     continue;
 
-                masks.TryAdd(River[i], 0);
-                flow[River[i]] = i + 1;
+                masks.TryAdd(course[i], 0);
+                flow[course[i]] = flow.GetValueOrDefault(course[i]) + i + 1;
 
-                if (i + 1 >= River.Length || !biomes.ContainsKey(River[i + 1]))
+                if (i + 1 >= course.Length || !biomes.ContainsKey(course[i + 1]))
                     continue;
 
-                var direction = DirectionTo(River[i], River[i + 1]);
+                var direction = DirectionTo(course[i], course[i + 1]);
                 if (direction < 0)
                     continue;
 
-                masks[River[i]] = masks.GetValueOrDefault(River[i]) | (1 << direction);
-                down[River[i]] = down.GetValueOrDefault(River[i]) | (1 << direction);
-                masks[River[i + 1]] = masks.GetValueOrDefault(River[i + 1]) | (1 << Opposite(direction));
+                masks[course[i]] = masks.GetValueOrDefault(course[i]) | (1 << direction);
+                down[course[i]] = down.GetValueOrDefault(course[i]) | (1 << direction);
+                masks[course[i + 1]] = masks.GetValueOrDefault(course[i + 1]) | (1 << Opposite(direction));
             }
-
-            return (masks, down, flow);
         }
+
+
 
         /// <summary>Индекс направления от одной плитки к соседней. −1 — плитки не соседи.</summary>
         static int DirectionTo(HexCoord from, HexCoord to)

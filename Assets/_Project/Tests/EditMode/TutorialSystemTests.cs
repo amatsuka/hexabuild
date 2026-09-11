@@ -94,7 +94,16 @@ namespace Game.Tests.EditMode
             }
 
             Assert.IsTrue(map.TryGetTile(TutorialMap.BypassTile, out var bypass));
-            Assert.IsTrue(bypass.IsPassable, "прохода сквозь гряду нет");
+            Assert.IsTrue(bypass.IsPassable, "обход вдоль лагуны закрыт");
+
+            Assert.IsTrue(map.TryGetTile(TutorialMap.PassTile, out var pass));
+            Assert.IsTrue(pass.IsPassable, "прохода сквозь гряду нет");
+
+            foreach (var coord in TutorialMap.Lagoon)
+            {
+                Assert.IsTrue(map.TryGetTile(coord, out var water));
+                Assert.IsFalse(water.IsPassable, $"лагуна {coord} проходима: она вторая стена игры");
+            }
 
             Assert.IsTrue(map.TryGetTile(TutorialMap.RiverTile, out var river));
             Assert.IsTrue(river.HasRiver && river.IsPassable, "переправа не переправа");
@@ -107,19 +116,17 @@ namespace Game.Tests.EditMode
         [Test]
         public void Ridge_HasExactlyOneWayThrough()
         {
-            var ways = 0;
-            foreach (var tile in map.Tiles.Values)
-                if (tile.Coord.R == 2 && tile.IsPassable)
-                    ways++;
+            // Каждый ряд коридора пропускает ровно одну плитку: обход вдоль лагуны, проход
+            // в гряде и брод через реку. Два пути где угодно — и подсветка теряет смысл.
+            foreach (var row in new[] { 2, 3, 4 })
+            {
+                var ways = 0;
+                foreach (var tile in map.Tiles.Values)
+                    if (tile.Coord.R == row && tile.IsPassable)
+                        ways++;
 
-            Assert.AreEqual(1, ways, "во втором ряду проходима не одна плитка");
-
-            var crossings = 0;
-            foreach (var tile in map.Tiles.Values)
-                if (tile.Coord.R == 3 && tile.IsPassable)
-                    crossings++;
-
-            Assert.AreEqual(1, crossings, "через реку ведёт не одна переправа");
+                Assert.AreEqual(1, ways, $"в ряду {row} проходима не одна плитка");
+            }
         }
 
         /// <summary>Всё проходимое поле достижимо: запертых кусков рукотворная карта не оставляет.</summary>
@@ -198,7 +205,9 @@ namespace Game.Tests.EditMode
             AssertOnlyTileOpen(tutorial, TutorialMap.WoodTile);
 
             Walk(tutorial, TutorialStep.Bypass);
-            AssertOnlyTileOpen(tutorial, TutorialMap.BypassTile);
+            CollectionAssert.AreEquivalent(
+                new[] { TutorialMap.BypassTile, TutorialMap.PassTile }, tutorial.TargetTiles,
+                "обход ведёт двумя плитками, подсвечены не они");
 
             Walk(tutorial, TutorialStep.Bridge);
             AssertOnlyTileOpen(tutorial, TutorialMap.RiverTile);
@@ -211,7 +220,8 @@ namespace Game.Tests.EditMode
             var tutorial = NewTutorial();
             Walk(tutorial, TutorialStep.Wall);
 
-            Assert.AreEqual(TutorialMap.Ridge.Length, tutorial.TargetTiles.Count);
+            Assert.AreEqual(TutorialMap.Ridge.Length + TutorialMap.Lagoon.Length, tutorial.TargetTiles.Count,
+                "шаг про стены обязан назвать обе: и гряду, и лагуну");
 
             foreach (var tile in map.Tiles.Values)
                 Assert.IsFalse(tutorial.AllowsTile(tile.Coord), $"плитка {tile.Coord} открыта на шаге-читалке");
@@ -381,6 +391,9 @@ namespace Game.Tests.EditMode
             {
                 case TutorialStep.CraftBoard:
                     storage.TryStore(ResourceType.Board);
+                    break;
+                case TutorialStep.Bypass:
+                    roads.Build(TutorialMap.PassTile);
                     break;
                 case TutorialStep.Bridge:
                     roads.Build(TutorialMap.RiverTile);

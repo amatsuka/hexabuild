@@ -86,15 +86,32 @@ namespace Game.Tests.EditMode
             }
         }
 
-        /// <summary>Первый уровень заменяет вырезанное обучение: воды на нём нет, контракт длинный.</summary>
+        /// <summary>
+        /// Первый уровень — учебный, и контракт на нём самый длинный: игрок только знакомится
+        /// с заказом Метрополии.
+        ///
+        /// Требование «воды на первом уровне нет» снято решением человека 11.09.2026 вместе
+        /// со стадией M36. Оно шло с M25, где первый уровень заменял вырезанное обучение и не
+        /// должен был показывать вторую стену сразу; теперь обучение вернулось и показывает
+        /// обе стены намеренно — лагуна второго ряда и есть то, что заворачивает игрока к обходу.
+        /// </summary>
         [Test]
-        public void FirstLevel_HasNoWater_AndTheLongestContract()
+        public void FirstLevel_IsHandMade_AndKeepsTheLongestContract()
         {
             var first = campaign[0];
-            var map = MapGenerator.Generate(config.MapGenerationSettingsFor(first.Seed, first));
+            Assert.IsTrue(first.HandMadeMap, "учебный уровень обязан идти по рукотворной карте");
 
+            var map = MapGenerator.Generate(config.MapGenerationSettingsFor(first.Seed, first));
+            var water = 0;
+            var mountains = 0;
             foreach (var tile in map.Tiles.Values)
-                Assert.AreNotEqual(BiomeType.Water, tile.Biome, $"вода на первом уровне: {tile.Coord}");
+            {
+                if (tile.Biome == BiomeType.Water) water++;
+                if (tile.Biome == BiomeType.Mountains) mountains++;
+            }
+
+            Assert.Greater(water, 0, "на учебной карте нет воды: показывать вторую стену нечем");
+            Assert.Greater(mountains, 0, "на учебной карте нет гор: показывать первую стену нечем");
 
             for (var i = 1; i < campaign.Count; i++)
                 Assert.GreaterOrEqual(config.ContractSecondsFor(first), config.ContractSecondsFor(campaign[i]),

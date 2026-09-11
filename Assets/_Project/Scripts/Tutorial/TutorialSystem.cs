@@ -92,7 +92,9 @@ namespace Game.Tutorial
             TutorialStep.OpenStone or TutorialStep.BuildRoad or TutorialStep.WatchDelivery =>
                 coord == TutorialMap.StoneTile,
             TutorialStep.OpenWood => coord == TutorialMap.WoodTile,
-            TutorialStep.Bypass => coord == TutorialMap.BypassTile,
+            // Обход идёт двумя плитками: вокруг лагуны и сквозь проход в гряде. Открыты обе —
+            // другого пути всё равно нет, а дробить это на два шага значит повторить один урок.
+            TutorialStep.Bypass => coord == TutorialMap.BypassTile || coord == TutorialMap.PassTile,
             TutorialStep.Bridge => coord == TutorialMap.RiverTile,
             // Хвост обучения уже отпускает: мост построен, дальше игрок открывает поле сам.
             >= TutorialStep.SellButton => true,
@@ -172,13 +174,19 @@ namespace Game.Tutorial
                     break;
                 // Шаг про стену ничего не требует и потому подсвечивает саму стену; тапать
                 // по ней не надо — по ней и нельзя, гряда не открывается никогда.
+                // Шаг про стены подсвечивает обе: и гряду, и лагуну. Тапать по ним не надо —
+                // по ним и нельзя, ни гора, ни вода не открываются.
                 case TutorialStep.Wall:
                     foreach (var coord in TutorialMap.Ridge)
+                        AimAt(coord);
+
+                    foreach (var coord in TutorialMap.Lagoon)
                         AimAt(coord);
 
                     break;
                 case TutorialStep.Bypass:
                     AimAt(TutorialMap.BypassTile);
+                    AimAt(TutorialMap.PassTile);
                     break;
                 case TutorialStep.Bridge:
                     AimAt(TutorialMap.RiverTile);
@@ -259,6 +267,8 @@ namespace Game.Tutorial
         bool IsSatisfied(TutorialStep step) => step switch
         {
             TutorialStep.CraftBoard => storage.CountOf(ResourceType.Board) > 0,
+            // Обход закрыт не первой дорогой, а той, что дошла до прохода в гряде.
+            TutorialStep.Bypass => roads.HasRoad(TutorialMap.PassTile),
             TutorialStep.Bridge => HasBridge(),
             _ => true
         };
