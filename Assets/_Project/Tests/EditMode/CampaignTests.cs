@@ -87,19 +87,18 @@ namespace Game.Tests.EditMode
         }
 
         /// <summary>
-        /// Первый уровень — учебный, и контракт на нём самый длинный: игрок только знакомится
-        /// с заказом Метрополии.
+        /// Первый уровень собран руками, и контракт на нём самый длинный: игрок только
+        /// знакомится с заказом Метрополии.
         ///
-        /// Требование «воды на первом уровне нет» (M25) стадию M36 пережило, но смысл потеряло:
-        /// уровень стал учебным и рукотворным, а стену ему показывают горы и река. Проверяем
-        /// теперь то, на чём стоит сценарий, — горы, по которым учат обходу, и русло, на котором
-        /// учат мосту.
+        /// Требование «воды на первом уровне нет» (M25) смысл потеряло: карта стала
+        /// рукотворной, а стену ей держат горы и река. Проверяем теперь их — обход гор
+        /// и переправу через русло игрок встречает в первые же минуты.
         /// </summary>
         [Test]
         public void FirstLevel_IsHandMade_AndKeepsTheLongestContract()
         {
             var first = campaign[0];
-            Assert.IsTrue(first.HandMadeMap, "учебный уровень обязан идти по рукотворной карте");
+            Assert.IsTrue(first.HandMadeMap, "первый уровень обязан идти по рукотворной карте");
 
             var map = MapGenerator.Generate(config.MapGenerationSettingsFor(first.Seed, first));
             var rivers = 0;
@@ -110,8 +109,8 @@ namespace Game.Tests.EditMode
                 if (tile.Biome == BiomeType.Mountains) mountains++;
             }
 
-            Assert.Greater(rivers, 0, "на учебной карте нет русла: учить мосту негде");
-            Assert.Greater(mountains, 0, "на учебной карте нет гор: показывать стену нечем");
+            Assert.Greater(rivers, 0, "на первой карте нет русла: переправу строить негде");
+            Assert.Greater(mountains, 0, "на первой карте нет гор: обходить нечего");
 
             for (var i = 1; i < campaign.Count; i++)
                 Assert.GreaterOrEqual(config.ContractSecondsFor(first), config.ContractSecondsFor(campaign[i]),
@@ -222,14 +221,6 @@ namespace Game.Tests.EditMode
             CampaignProgress.Submit(0, 100, 1, levels);
             Assert.AreEqual(2, CampaignProgress.StarsAt(0));
             Assert.AreEqual(500, CampaignProgress.BestAt(0));
-
-            // Обучение живёт в тех же ключах и ставится один раз на всю кампанию.
-            Assert.IsFalse(CampaignProgress.TutorialDone, "обучение не должно считаться пройденным до партии");
-            CampaignProgress.CompleteTutorial();
-            Assert.IsTrue(CampaignProgress.TutorialDone);
-
-            CampaignProgress.Clear(levels);
-            Assert.IsFalse(CampaignProgress.TutorialDone, "сброс кампании возвращает и обучение");
         }
 
         [Test]

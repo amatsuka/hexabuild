@@ -55,18 +55,6 @@ namespace Game.UI
         /// <summary>Плашка премии за чистый склад: те же две строки, но без иконки — иконки у неё нет.</summary>
         const float SweepWidth = 260f;
 
-        /// <summary>
-        /// Подсказка обучения: две строки текста и крестик «пропустить шаг» в правом верхнем
-        /// углу. Ширина — потолок; высота считается по самому тексту, как у отказа.
-        /// </summary>
-        const float HintWidth = 520f;
-        const float HintFontSize = 26f;
-
-        /// <summary>Кнопка «Дальше» на карточке: ею закрываются шаги, которым делать нечего.</summary>
-        const float NextWidth = 200f;
-        const float NextHeight = 52f;
-        const float NextFontSize = 26f;
-
         /// <summary>Сколько живёт попап, который никто не закрывает: прибавка, награда, отказ.</summary>
         const float ShowSeconds = 2f;
 
@@ -97,22 +85,6 @@ namespace Game.UI
         Popup asking;
 
         Action confirmed;
-
-        /// <summary>
-        /// Подсказка обучения: она тоже одна и тоже не гаснет сама, но живёт вне списка живых —
-        /// прибавки и отказы не должны вытеснять её ни числом, ни общей привязкой.
-        /// </summary>
-        Popup hint;
-
-        /// <summary>«Дальше» на подсказке: единственное место самой карточки, ловящее тап.</summary>
-        UiButton next;
-
-        /// <summary>
-        /// Плашки прибавки, премии и вехи молчат. Ставится на время обучения: волна продажи
-        /// выбрасывает их пачкой, и вместо одной подсказки на экране каша. Отказы не глушатся —
-        /// они и есть ответ на действие, а не празднование.
-        /// </summary>
-        public bool Quiet { get; set; }
 
         /// <summary>
         /// Висит ли сейчас ценник: пока висит, клик принадлежит ему, а разбирает клик
@@ -172,7 +144,7 @@ namespace Game.UI
         /// </summary>
         public void ShowGain(int points, ResourceType source, in Anchor anchor)
         {
-            if (!anchor.Exists || Quiet)
+            if (!anchor.Exists)
                 return;
 
             var popup = Push(anchor, GainWidth);
@@ -212,7 +184,7 @@ namespace Game.UI
         /// </summary>
         public void ShowSweep(int points, in Anchor anchor)
         {
-            if (!anchor.Exists || Quiet)
+            if (!anchor.Exists)
                 return;
 
             var popup = Push(anchor, SweepWidth);
@@ -240,7 +212,7 @@ namespace Game.UI
         /// </summary>
         public void ShowMilestone(float share, int gravel, in Anchor anchor)
         {
-            if (!anchor.Exists || Quiet)
+            if (!anchor.Exists)
                 return;
 
             var popup = Push(anchor, MilestoneWidth);
@@ -323,81 +295,11 @@ namespace Game.UI
                 Remove(asking);
         }
 
-        /// <summary>
-        /// Подсказка обучения: та же карточка над той же целью, но без срока жизни — она ждёт,
-        /// пока игрок сделает шаг. Своего слоя обучению не нужно: попап и есть «сообщение,
-        /// привязанное к объекту», а два одинаковых на вид слоя разошлись бы на первой же правке.
-        /// <paramref name="proceed"/> вешает на карточку кнопку «Дальше» — ею закрываются шаги,
-        /// которым делать нечего. У шага с действием её нет: он ждёт самого действия.
-        /// </summary>
-        public void ShowHint(string text, in Anchor anchor, Action proceed, float lift, bool below)
-        {
-            HideHint();
-
-            if (!anchor.Exists)
-                return;
-
-            var popup = NewCard(anchor, HintWidth, theme.Hint);
-            popup.Lift = lift;
-            popup.Below = below;
-
-            var textWidth = HintWidth - Padding * 2f;
-
-            var label = UiText.Label("Text", popup.Rect, theme, HintFontSize, theme.Text, TextAlignmentOptions.Center);
-            Place(label.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -Padding * 0.7f),
-                new Vector2(textWidth, MinHeight));
-            label.text = text;
-
-            // Высота — по тексту, как у отказа: подсказки бывают и в строку, и в три.
-            label.ForceMeshUpdate();
-            var textHeight = label.preferredHeight;
-            label.rectTransform.sizeDelta = new Vector2(textWidth, textHeight);
-
-            var height = textHeight + Padding * 1.4f + (proceed != null ? NextHeight + Padding * 0.6f : 0f);
-            popup.Rect.sizeDelta = new Vector2(HintWidth, Mathf.Max(MinHeight, height));
-
-            if (proceed != null)
-            {
-                next = UiButton.Create(
-                    "Next", popup.Rect, theme, theme.ButtonSecondary, "Дальше", NextFontSize, proceed);
-                Place(next.Rect, new Vector2(0.5f, 0f), new Vector2(0f, Padding * 0.5f),
-                    new Vector2(NextWidth, NextHeight));
-            }
-
-            hint = popup;
-            Show(popup, false);
-        }
-
-        /// <summary>Подсказки больше нет: шаг закрылся, обучение кончилось или партия встала.</summary>
-        public void HideHint()
-        {
-            if (hint == null)
-                return;
-
-            next = null;
-
-            if (hint.Rect != null)
-                Destroy(hint.Rect.gameObject);
-
-            hint = null;
-        }
-
-        /// <summary>Палец лёг на «Дальше»: дальше нажатие разбирать не надо.</summary>
-        public bool TryHintPress(Vector2 screenPosition) => next != null && next.TryPress(screenPosition);
-
-        /// <summary>Палец снят. Ненажатая кнопка молчит, поэтому звать можно всегда.</summary>
-        public void ReleaseHintPress() => next?.Release();
-
-        /// <summary>Клик попал в «Дальше»: шаг прочитан, обучение идёт к следующему.</summary>
-        public bool TryHintClick(Vector2 screenPosition) => next != null && next.TryClick(screenPosition);
-
         /// <summary>Партия кончилась: над полем не остаётся ничего, финальный экран сам по себе.</summary>
         public void Clear()
         {
             for (var i = live.Count - 1; i >= 0; i--)
                 Remove(live[i]);
-
-            HideHint();
         }
 
         /// <summary>
@@ -408,9 +310,6 @@ namespace Game.UI
         {
             for (var i = 0; i < live.Count; i++)
                 Place(live[i]);
-
-            if (hint != null)
-                Place(hint);
         }
 
         void Place(Popup popup)
@@ -419,15 +318,12 @@ namespace Game.UI
             if (rect == null)
                 return;
 
-            rect.position = popup.Below
-                ? popup.Where.BottomEdge(FieldCamera)
-                : popup.Where.TopEdge(FieldCamera);
+            rect.position = popup.Where.TopEdge(FieldCamera);
 
             // Сдвиг — в единицах канваса, а не в пикселях экрана: `position` их уже развёл
             // масштабом канваса, и складывать одно с другим нельзя.
             var half = rect.rect.size * 0.5f;
-            var step = new Vector2(0f, half.y + AnchorGap + popup.Lift);
-            var raised = popup.Below ? rect.anchoredPosition - step : rect.anchoredPosition + step;
+            var raised = rect.anchoredPosition + new Vector2(0f, half.y + AnchorGap);
 
             // Попап не уходит за кромку кадра: над плиткой у верхнего края экрана он иначе
             // наполовину срезается.
@@ -454,15 +350,10 @@ namespace Game.UI
             return popup;
         }
 
-        /// <summary>
-        /// Пустая карточка на месте объекта. Списком живых она не учитывается: подсказка
-        /// обучения не гаснет по сроку и не должна вытесняться прибавками и отказами.
-        /// </summary>
-        Popup NewCard(in Anchor anchor, float width) => NewCard(anchor, width, theme.Card);
-
-        Popup NewCard(in Anchor anchor, float width, in UiPanelStyle style)
+        /// <summary>Пустая карточка на месте объекта.</summary>
+        Popup NewCard(in Anchor anchor, float width)
         {
-            var card = UiPanel.Create("Popup", transform, theme, style).rectTransform;
+            var card = UiPanel.Create("Popup", transform, theme, theme.Card).rectTransform;
             card.anchorMin = card.anchorMax = card.pivot = new Vector2(0.5f, 0.5f);
             card.sizeDelta = new Vector2(width, MinHeight);
 
@@ -601,21 +492,6 @@ namespace Game.UI
                 return screenPoint;
             }
 
-            /// <summary>
-            /// Нижняя кромка объекта в пикселях экрана: под ней встают подсказки, которым нельзя
-            /// вставать над целью, — карточки HUD прижаты к верху кадра, и попап над ними кламп
-            /// кадра всё равно опустил бы им на голову. У точки поля кромки нет: она и есть точка,
-            /// и место над плиткой задаёт сам вызывающий, сдвигая точку в мировых координатах.
-            /// </summary>
-            public Vector3 BottomEdge(Camera fieldCamera)
-            {
-                if (onField)
-                    return TopEdge(fieldCamera);
-
-                card.GetWorldCorners(Corners);
-                return (Corners[0] + Corners[3]) * 0.5f;
-            }
-
             /// <summary>Тот же объект: попап на нём заменяется, а не копится стопкой.</summary>
             public bool SameAs(in Anchor other) =>
                 onField == other.onField && card == other.card
@@ -628,12 +504,6 @@ namespace Game.UI
             public RectTransform Rect;
             public CanvasGroup Fade;
             public Anchor Where;
-
-            /// <summary>Насколько выше обычного стоит попап: подсказке нужно обойти саму цель.</summary>
-            public float Lift;
-
-            /// <summary>Попап стоит под целью, а не над ней.</summary>
-            public bool Below;
         }
     }
 }

@@ -229,12 +229,6 @@ namespace Game.UI
         /// </summary>
         public PopupView Popups => popups;
 
-        /// <summary>Карточка бара с потолком партии: над ней встаёт подсказка про цель партии.</summary>
-        public RectTransform CeilingCard => ceilingCard;
-
-        /// <summary>Карточка контракта: над ней встаёт подсказка про заказ Метрополии.</summary>
-        public RectTransform ContractCard => contractCard;
-
         /// <summary>
         /// Сданный по контракту ресурс летит из своей клетки склада в карточку: без этого
         /// прогресс менялся сам по себе, и связь между кликом на складе и полосой контракта

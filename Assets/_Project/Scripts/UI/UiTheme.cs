@@ -56,10 +56,6 @@ namespace Game.UI
         [SerializeField] Color slotEmptyBottom = new(0.03f, 0.12f, 0.22f, 0.30f);
         [SerializeField] Color slotFilledTop = new(0.44f, 0.72f, 0.92f, 0.34f);
         [SerializeField] Color slotFilledBottom = new(0.10f, 0.32f, 0.52f, 0.42f);
-        [Header("Подсказка обучения")]
-        [Tooltip("Заливка карточки подсказки. Непрозрачная намеренно: сквозь неё ничего не просвечивает")]
-        [SerializeField] Color hintTop = new(0.13f, 0.26f, 0.38f, 1f);
-        [SerializeField] Color hintBottom = new(0.05f, 0.12f, 0.22f, 1f);
 
         [SerializeField] Color slotEdge = new(0.72f, 0.90f, 1f, 0.55f);
         [SerializeField] float slotRadius = 18f;
@@ -181,25 +177,6 @@ namespace Game.UI
         /// становится кругом.
         /// </summary>
         public UiPanelStyle RoundButton(float diameter) => Button(secondaryTop, secondaryBottom, diameter * 0.5f);
-
-        /// <summary>
-        /// Кнопка без карточки: подпись и прямоугольник, который ловит тап. Крестик «пропустить
-        /// шаг» стоит на самой подсказке, и вторая карточка поверх карточки читалась бы вложенной
-        /// панелью, а не значком.
-        /// </summary>
-        public UiPanelStyle Ghost => new(
-            Color.clear, Color.clear, Color.clear, Color.clear, radius, 0f, 0f, 0f, 0f,
-            highlightSpread, 0f, 0f, 0f, 0f, lightDirection);
-
-        /// <summary>
-        /// Карточка подсказки обучения: та же карточка, но **непрозрачная**. Стеклом она быть
-        /// не может — подсказка висит дольше любого другого попапа и стоит вплотную к тому, о чём
-        /// говорит: сквозь стекло в ней просвечивали то число накала, то прибавка за проданное,
-        /// то само поле, и три полупрозрачных слоя смешивались в кашу.
-        /// </summary>
-        public UiPanelStyle Hint => new(
-            hintTop, hintBottom, edge, glow, radius, edgeWidth, glowSize, glowOffset, highlight,
-            highlightSpread, sheen, darken, backLight, spec, lightDirection);
 
         /// <summary>
         /// Плашка рекорда: та же карточка, что и весь интерфейс, но с золотой кромкой. Раньше

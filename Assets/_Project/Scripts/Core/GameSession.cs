@@ -5,7 +5,6 @@ using Game.Grid;
 using Game.Merge;
 using Game.Roads;
 using Game.Storage;
-using Game.Tutorial;
 using Game.UI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -106,12 +105,6 @@ namespace Game.Core
         ContractSystem contracts;
         GameEndSystem end;
 
-        /// <summary>Обучение этой партии. Пусто — оно уже пройдено или партия не первая в кампании.</summary>
-        TutorialSystem tutorial;
-
-        /// <summary>Лицо обучения: у него своя кнопка «Пропустить» над складом, и тап ей отдаёт партия.</summary>
-        TutorialView tutorialView;
-
         void Awake()
         {
             // Уровень кампании выбран в меню и лежит статикой: он переопределяет рычаги
@@ -169,27 +162,6 @@ namespace Game.Core
             hudView.Bind(state, contracts, storageView, ceiling, StarShares());
             gameOverView.Bind(storageView, production, contracts);
             pauseView.Bind(storageView);
-
-            BuildTutorial(map, storage);
-        }
-
-        /// <summary>
-        /// Обучение поднимается только на первом уровне кампании и только пока не пройдено.
-        /// Подписки у него без отписки — по той же причине, что и у сгорания накала: оно живёт
-        /// ровно партию и уходит вместе с ней.
-        /// </summary>
-        void BuildTutorial(HexMap map, StorageGrid storage)
-        {
-            if (!TutorialSystem.ShouldRun)
-                return;
-
-            tutorial = new TutorialSystem(map, storage, state.Roads, mergeRules);
-            tutorialView = TutorialView.Create(tutorial, hudView, storageView, views);
-
-            // Цель шага ездит по складу вместе с ресурсами: подсветка обязана ходить за ней.
-            storage.Changed += tutorial.Refresh;
-            contracts.Completed += _ => tutorial.Notify(TutorialTrigger.ContractClosed);
-            tutorial.Finished += CampaignProgress.CompleteTutorial;
         }
 
         /// <summary>
@@ -328,10 +300,8 @@ namespace Game.Core
             RefreshProgress();
 
             // Первый контракт партии идёт без паузы (3.8). Дальше система выдаёт их сама,
-            // отмолчав между ними случайную паузу. В обучении первый контракт придерживается
-            // до своего шага и выдаётся на доски: три доски лежат на складе со старта.
-            if (tutorial == null)
-                contracts.Issue();
+            // отмолчав между ними случайную паузу.
+            contracts.Issue();
 
             // Шестерёнка появляется только когда партия реально началась — не на экране меню,
             // где `pauseView.Bind` уже отработал, но ей ещё нечего показывать.
@@ -354,67 +324,17 @@ namespace Game.Core
             // пропасть с экрана, а не остаться висеть под карточкой.
             var playing = !end.HasEnded && !pauseView.IsOpen;
             storageView.ShowSellButton(
-                playing && selling == null && sale.CanSell && !SaleHeld, sale.Everything);
-
-            // «Пропустить» стоит над кнопкой продажи и пропадает там же, где она: на паузе
-            // и после конца партии над складом не должно висеть ничего.
-            tutorialView?.ShowSkip(playing);
+                playing && selling == null && sale.CanSell, sale.Everything);
 
             if (end.HasEnded || pauseView.IsOpen)
                 return;
 
-            // Во время обучения добыча ждёт места на складе. Шаги, которые ничего на складе
-            // не разрешают, иначе засыпают его доверху за полминуты, и ресурсы начинают
-            // сыпаться мимо — игрок видит поток потерь, ничего не сделав не так.
-            if (!StorageIsTight)
-                production.Tick(Time.deltaTime);
+            production.Tick(Time.deltaTime);
             deliveries.Tick(Time.deltaTime);
             contracts.Tick(Time.deltaTime);
             state.Multiplier.Tick(Time.deltaTime);
             sale.Tick(Time.deltaTime);
             end.Tick();
-
-            if (tutorial != null)
-                TickTutorial();
-        }
-
-        /// <summary>Обучение придерживает кнопку продажи до своего шага про неё.</summary>
-        bool SaleHeld => tutorial != null && tutorial.HoldsSale;
-
-        /// <summary>
-        /// Сколько клеток склада обучение держит свободными. Одной мало: доставка уже в пути
-        /// займёт её раньше, чем игрок дочитает подсказку.
-        /// </summary>
-        const int TutorialHeadroom = 4;
-
-        /// <summary>Склад почти полон, и партию ведёт обучение: добыче пора подождать.</summary>
-        bool StorageIsTight =>
-            tutorial != null && tutorial.IsRunning
-            && state.Storage.Count >= state.Storage.Capacity - TutorialHeadroom;
-
-        /// <summary>
-        /// Пока идёт обучение, игрок делает только то, чем закрывается его шаг: остальное поле
-        /// и склад затенены и тапа не принимают. Вне обучения открыто всё, как и было.
-        /// </summary>
-        bool AllowsTile(HexCoord coord) => tutorial == null || !tutorial.IsRunning || tutorial.AllowsTile(coord);
-
-        bool AllowsCell(int cell) => tutorial == null || !tutorial.IsRunning || tutorial.AllowsCell(cell);
-
-        /// <summary>
-        /// Что партия делает для обучения каждый кадр. Первое: плашки прибавки во время
-        /// обучения молчат — волна продажи выбрасывает их пачкой, и вместо одной подсказки
-        /// на экране каша. Молчат не все: шаг про обмен и шаг про контракт этими же плашками
-        /// и учат. Второе: контракт на доски обучение заказывает само и заказывает заново,
-        /// если игрок дал ему истечь, — иначе шаг повис бы навсегда.
-        /// </summary>
-        void TickTutorial()
-        {
-            hudView.Popups.Quiet = tutorial.IsRunning
-                && tutorial.Step != TutorialStep.Convert
-                && tutorial.Step != TutorialStep.Contract;
-
-            if (tutorial.Waits(TutorialTrigger.ContractClosed) && !contracts.IsActive)
-                contracts.Issue(ResourceType.Board);
         }
 
         void SpawnTiles(HexMap map)
@@ -502,22 +422,13 @@ namespace Game.Core
             if (pauseView.HandlePress(screenPosition))
                 return;
 
-            // Крестик на подсказке пропускает шаг, кнопка над складом — всё обучение. Обе
-            // разбираются до склада: они стоят над его панелью, как и кнопка продажи.
-            if (hudView.Popups.TryHintPress(screenPosition))
-                return;
-
-            if (tutorialView != null && tutorialView.TrySkipPress(screenPosition))
-                return;
-
             if (storageView.TrySellPress(screenPosition))
                 return;
 
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
-                // Пустая клетка не отзывается: по ней и клик ничего не делает. Закрытая
-                // обучением — тоже: прижиматься тому, что всё равно не сработает, незачем.
-                if (!state.Storage[cell].HasValue || !AllowsCell(cell))
+                // Пустая клетка не отзывается: по ней и клик ничего не делает.
+                if (!state.Storage[cell].HasValue)
                     return;
 
                 pressedCell = cell;
@@ -529,7 +440,7 @@ namespace Game.Core
                 return;
 
             var pressedCoord = TileUnderPointer(screenPosition);
-            if (AllowsTile(pressedCoord) && views.TryGetValue(pressedCoord, out var view))
+            if (views.TryGetValue(pressedCoord, out var view))
             {
                 pressedTile = view;
                 view.Press();
@@ -545,8 +456,6 @@ namespace Game.Core
         {
             gameOverView.ReleasePress();
             pauseView.ReleasePress();
-            hudView.Popups.ReleaseHintPress();
-            tutorialView?.ReleaseSkipPress();
             storageView.ReleaseSellPress();
 
             if (pressedCell >= 0)
@@ -580,15 +489,6 @@ namespace Game.Core
             if (pauseView.HandleClick(screenPosition))
                 return;
 
-            // Два места обучения, ловящие тап: крестик на подсказке пропускает шаг, кнопка
-            // над складом снимает обучение целиком. Ценнику открытия клик достаётся только
-            // после них — обе лежат поверх поля.
-            if (hudView.Popups.TryHintClick(screenPosition))
-                return;
-
-            if (tutorialView != null && tutorialView.TrySkipClick(screenPosition))
-                return;
-
             // Пока висит ценник открытия, клик принадлежит ему. Согласие — второй тап по той
             // же плитке: гекс под пальцем большой, а прицел в кнопку на темпе партии стоит
             // дороже самого открытия. Всё прочее снимает ценник, ничего не выполняя, — и
@@ -614,7 +514,7 @@ namespace Game.Core
             if (storageView.TryGetCellIndex(screenPosition, out var cell))
             {
                 var content = state.Storage[cell];
-                if (!content.HasValue || !AllowsCell(cell))
+                if (!content.HasValue)
                     return;
 
                 refusalAnchor = PopupView.Anchor.On(storageView.CellRect(cell));
@@ -645,7 +545,7 @@ namespace Game.Core
         /// </summary>
         void OnFieldClicked(HexCoord coord)
         {
-            if (!state.Map.TryGetTile(coord, out var tile) || !AllowsTile(coord))
+            if (!state.Map.TryGetTile(coord, out var tile))
                 return;
 
             refusalAnchor = TileAnchor(coord);
@@ -758,15 +658,6 @@ namespace Game.Core
         {
             if (views.TryGetValue(tile.Coord, out var view))
                 view.Apply(tile);
-
-            // Открытая плитка закрывает шаг обучения, любая другая правка поля — только двигает цель.
-            if (tutorial == null)
-                return;
-
-            if (tile.State == TileState.Revealed && !tile.IsMetropolis)
-                tutorial.Notify(TutorialTrigger.TileRevealed);
-            else
-                tutorial.Refresh();
         }
 
         /// <summary>
@@ -783,7 +674,6 @@ namespace Game.Core
             }
 
             roadView.Show(state.Roads, GroundAt);
-            tutorial?.Notify(TutorialTrigger.RoadBuilt);
         }
 
         /// <summary>
@@ -828,8 +718,6 @@ namespace Game.Core
             // секунд и из удара превратился бы в тик метронома.
             if (hitstop != null && report.Outcome.Consumed >= mergeRules.LargeCount)
                 hitstop.Play();
-
-            tutorial?.Notify(TutorialTrigger.Merged);
         }
 
         /// <summary>
@@ -862,7 +750,6 @@ namespace Game.Core
                 hudView.PlayContractDelivery(storageView.CellPoint(cell), type);
 
             contracts.Count(type);
-            tutorial?.Notify(TutorialTrigger.Converted);
         }
 
         /// <summary>
@@ -899,7 +786,6 @@ namespace Game.Core
                 return;
 
             sale.Begin();
-            tutorial?.Notify(TutorialTrigger.Sold);
             selling = StartCoroutine(SellWave());
         }
 
@@ -937,11 +823,7 @@ namespace Game.Core
             mover.HopTo(storageView.CellWorldPoint(cell, Camera.main), () => OnResourceLanded(cell));
         }
 
-        /// <summary>Кружок долетел: клетка склада проявляется, обучение засчитывает доставку.</summary>
-        void OnResourceLanded(int cell)
-        {
-            storageView.ReleaseCell(cell);
-            tutorial?.Notify(TutorialTrigger.ResourceLanded);
-        }
+        /// <summary>Кружок долетел: клетка склада проявляется.</summary>
+        void OnResourceLanded(int cell) => storageView.ReleaseCell(cell);
     }
 }

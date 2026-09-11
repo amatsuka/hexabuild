@@ -83,16 +83,7 @@ namespace Game.Economy
             if (craftedTypes.Count == 0)
                 return;
 
-            Issue(craftedTypes[random.Next(craftedTypes.Count)]);
-        }
-
-        /// <summary>
-        /// Контракт на заданный крафт. Его заказывает обучение: первый контракт первого уровня
-        /// идёт на доски, три доски лежат на складе со старта, и заказ закрывается тремя тапами.
-        /// </summary>
-        public void Issue(ResourceType type)
-        {
-            Type = type;
+            Type = craftedTypes[random.Next(craftedTypes.Count)];
             Delivered = 0;
             SecondsLeft = seconds;
             SecondsToNext = 0f;

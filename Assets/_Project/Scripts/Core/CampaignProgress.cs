@@ -14,20 +14,6 @@ namespace Game.Core
         const string UnlockedKey = "HexColony.Campaign.Unlocked";
         const string StarsKey = "HexColony.Campaign.Stars.";
         const string BestKey = "HexColony.Campaign.Best.";
-        const string TutorialKey = "HexColony.Campaign.Tutorial";
-
-        /// <summary>
-        /// Обучение уже пройдено. Флаг ставится последним шагом сценария или кнопкой
-        /// «Пропустить», но не первым шагом: брошенное на середине обучение показывается снова.
-        /// </summary>
-        public static bool TutorialDone => PlayerPrefs.GetInt(TutorialKey, 0) != 0;
-
-        /// <summary>Обучение доиграно или снято игроком: второй раз оно не придёт.</summary>
-        public static void CompleteTutorial()
-        {
-            PlayerPrefs.SetInt(TutorialKey, 1);
-            PlayerPrefs.Save();
-        }
 
         /// <summary>Индекс последнего открытого уровня. Первый открыт всегда.</summary>
         public static int Unlocked => Mathf.Max(0, PlayerPrefs.GetInt(UnlockedKey, 0));
@@ -62,7 +48,6 @@ namespace Game.Core
         public static void Clear(int levels)
         {
             PlayerPrefs.DeleteKey(UnlockedKey);
-            PlayerPrefs.DeleteKey(TutorialKey);
             for (var i = 0; i < levels; i++)
             {
                 PlayerPrefs.DeleteKey(StarsKey + i);

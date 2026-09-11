@@ -113,13 +113,6 @@ namespace Game.Storage
         [SerializeField] float sweepCellSeconds = 0.3f;
 
 
-        [Header("Подсветка обучения")]
-        [Tooltip("Насколько ободок цели притухает между вспышками")]
-        [SerializeField, Range(0f, 1f)] float highlightFloor = 0.25f;
-        [SerializeField] float highlightSpeed = 3.2f;
-        [Tooltip("Плёнка поверх клетки, закрытой обучением: тап по ней не проходит")]
-        [SerializeField] Color blockedVeil = new(0.02f, 0.04f, 0.08f, 0.62f);
-
         [Header("Анимация слияния")]
         [SerializeField] float flySeconds = 0.28f;
         [SerializeField] float popSeconds = 0.18f;
@@ -137,14 +130,9 @@ namespace Game.Storage
 
         readonly HashSet<int> pendingCells = new();
 
-        /// <summary>Клетки, на которые указывает обучение. Пусто — подсветки нет.</summary>
-        readonly List<int> highlightedCells = new();
-
         UiPanelGraphic panel;
         RectTransform[] cells;
         UiPanelGraphic[] cellPanels;
-        UiPanelGraphic[] cellRings;
-        UiPanelGraphic[] cellVeils;
         ResourceIcon[] icons;
         StorageGrid grid;
         ScoreMultiplier multiplier;
@@ -223,94 +211,6 @@ namespace Game.Storage
                 theme,
                 endOfGame ? theme.ButtonPrimary : theme.ButtonSecondary,
                 endOfGame ? "Забрать всё" : "Продать всё");
-        }
-
-        /// <summary>Прямоугольник кнопки: над ним встаёт подсказка обучения про резерв.</summary>
-        public RectTransform SellRect => sellButton?.Rect;
-
-        /// <summary>
-        /// Палитра склада: по ней обучение красит свою кнопку «Пропустить». Она стоит над
-        /// складом и обязана выглядеть его частью, а не гостьей с чужого экрана.
-        /// </summary>
-        public UiTheme Theme => theme;
-
-        /// <summary>Панель склада целиком: над ней встают подсказки обучения про склад.</summary>
-        public RectTransform PanelRect => panel != null ? panel.rectTransform : (RectTransform)transform;
-
-        /// <summary>
-        /// Клетки, на которые указывает обучение: над ними горит ободок. Масштабом клетки
-        /// подсветку не сделать — его уже занимают слияние, удар по клетке и пружина нажатия.
-        /// </summary>
-        public void Highlight(IReadOnlyList<int> indices)
-        {
-            if (cellRings == null)
-                return;
-
-            foreach (var index in highlightedCells)
-                cellRings[index].gameObject.SetActive(false);
-
-            highlightedCells.Clear();
-            highlightedCells.AddRange(indices);
-
-            foreach (var index in highlightedCells)
-                Ring(index).gameObject.SetActive(true);
-        }
-
-        /// <summary>
-        /// Обучение закрыло часть склада: недоступные клетки гасятся плёнкой поверх. Цветом самой
-        /// клетки этого не сказать — её цвет уже ведут тревога, волна премии и нажатие.
-        /// </summary>
-        public void Restrict(IReadOnlyList<int> allowedCells, bool active)
-        {
-            if (cellVeils == null)
-                return;
-
-            for (var index = 0; index < cellVeils.Length; index++)
-            {
-                var blocked = active && !Holds(allowedCells, index);
-
-                if (blocked)
-                    Veil(index).gameObject.SetActive(true);
-                else if (cellVeils[index] != null)
-                    cellVeils[index].gameObject.SetActive(false);
-            }
-        }
-
-        static bool Holds(IReadOnlyList<int> cells, int index)
-        {
-            if (cells == null)
-                return false;
-
-            for (var i = 0; i < cells.Count; i++)
-                if (cells[i] == index)
-                    return true;
-
-            return false;
-        }
-
-        UiPanelGraphic Veil(int index)
-        {
-            if (cellVeils[index] != null)
-                return cellVeils[index];
-
-            var veil = UiPanel.Create($"Veil {index}", cells[index], theme, theme.Flash);
-            veil.rectTransform.Stretch();
-            veil.color = blockedVeil;
-            return cellVeils[index] = veil;
-        }
-
-        /// <summary>
-        /// Ободок клетки заводится по требованию и остаётся её ребёнком: так он едет вместе
-        /// с клеткой на всех её анимациях и не считает своё место сам.
-        /// </summary>
-        UiPanelGraphic Ring(int index)
-        {
-            if (cellRings[index] != null)
-                return cellRings[index];
-
-            var ring = UiPanel.Create($"Highlight {index}", cells[index], theme, theme.Ring(cellSize));
-            ring.rectTransform.Stretch();
-            return cellRings[index] = ring;
         }
 
         public bool TrySellPress(Vector2 screenPosition) =>
@@ -720,21 +620,7 @@ namespace Game.Storage
             TickSweepWave();
             TickAlarm();
             TickBurn();
-            TickHighlight();
             PlaceFactor();
-        }
-
-        /// <summary>Ободки подсвеченных клеток дышат прозрачностью: в канвасе альфа работает.</summary>
-        void TickHighlight()
-        {
-            if (highlightedCells.Count == 0)
-                return;
-
-            var pulse = Mathf.Lerp(
-                highlightFloor, 1f, (Mathf.Sin(Time.time * highlightSpeed) + 1f) * 0.5f);
-
-            foreach (var index in highlightedCells)
-                cellRings[index].color = new Color(1f, 1f, 1f, pulse);
         }
 
         /// <summary>
@@ -983,8 +869,6 @@ namespace Game.Storage
 
             cells = new RectTransform[grid.Capacity];
             cellPanels = new UiPanelGraphic[grid.Capacity];
-            cellRings = new UiPanelGraphic[grid.Capacity];
-            cellVeils = new UiPanelGraphic[grid.Capacity];
             icons = new ResourceIcon[grid.Capacity];
             for (var i = 0; i < cells.Length; i++)
             {

@@ -74,13 +74,6 @@ namespace Game.Grid
         /// <summary>Огранка стоит перед телом модельки. Моделька плоская, поэтому это её локальный z.</summary>
         const float AccentDepth = -0.005f;
 
-        /// <summary>Насколько ободок подсветки поднят над крышкой: он лежит на ней, а не в ней.</summary>
-        const float HighlightLift = 0.02f;
-
-        /// <summary>Дымка и обесцвечивание плитки, закрытой обучением. Берутся поверх её собственных.</summary>
-        const float BlockedFog = 0.55f;
-        const float BlockedFade = 0.5f;
-
         const int DecorCountSalt = 11;
 
         /// <summary>Соли выбора модели горы и её разворота: гряда не должна выглядеть штамповкой.</summary>
@@ -224,14 +217,8 @@ namespace Game.Grid
         MeshRenderer mountain;
         MeshRenderer meshRenderer;
         MeshRenderer spark;
-        MeshRenderer highlight;
         MaterialPropertyBlock propertyBlock;
 
-        /// <summary>Чем плитка нарисована в последний раз: по нему её перекрашивает затенение.</summary>
-        TileData shown;
-
-        /// <summary>Плитка вне шага обучения: она затенена и тапа не принимает.</summary>
-        bool dimmed;
         float surfaceHeight;
 
         /// <summary>Сколько секунд идёт цикл добычи на этой плитке: по нему накаляется стек.</summary>
@@ -286,8 +273,7 @@ namespace Game.Grid
         {
             // Гора не прячется туманом: она не секрет, а стена, и игрок должен видеть её сразу,
             // иначе он раз за разом тратит клики на плитку, которая всё равно не откроется.
-            var state = Dimmed(tile.IsPassable ? StateOf(tile.State) : Vector2.zero);
-            shown = tile;
+            var state = tile.IsPassable ? StateOf(tile.State) : Vector2.zero;
 
             var opened = shownState.HasValue && shownState.Value != TileState.Revealed
                 && tile.State == TileState.Revealed;
@@ -395,47 +381,6 @@ namespace Game.Grid
 
         /// <summary>Отказ: плитка коротко дрожит поперёк. Текст попапа сам по себе не отклик.</summary>
         public void Refuse() => PressPulse.ShakeSideways(this, refusalShake);
-
-        /// <summary>
-        /// Плитка вне текущего шага обучения гасится дымкой: тапа она не принимает, и по кадру
-        /// должно быть видно, что не принимает. Поверх собственного состояния, а не вместо него —
-        /// скрытая плитка и так в дымке, и затенение не должно её высветлять.
-        /// </summary>
-        public void SetDimmed(bool value)
-        {
-            if (dimmed == value)
-                return;
-
-            dimmed = value;
-
-            if (shown != null)
-                Apply(shown);
-        }
-
-        Vector2 Dimmed(Vector2 state) => dimmed
-            ? new Vector2(Mathf.Max(state.x, BlockedFog), Mathf.Max(state.y, BlockedFade))
-            : state;
-
-        /// <summary>
-        /// Ободок подсветки цели обучения. Прозрачный цвет прячет его; дышит подсветка
-        /// яркостью, а не альфой — материал поля непрозрачный, и альфа в нём ничего не значит.
-        /// </summary>
-        public void SetHighlight(Color color)
-        {
-            if (color.a <= 0f)
-            {
-                if (highlight != null)
-                    highlight.gameObject.SetActive(false);
-
-                return;
-            }
-
-            highlight ??= CreatePart(
-                transform, "Highlight", ShapeMeshes.HexRing, new Vector3(0f, HighlightLift, 0f), Vector3.one);
-
-            highlight.gameObject.SetActive(true);
-            SetColor(highlight, color);
-        }
 
         /// <summary>
         /// Плитка только что открылась: она подскакивает и садится обратно, месторождения
