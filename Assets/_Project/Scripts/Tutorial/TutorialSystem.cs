@@ -193,6 +193,14 @@ namespace Game.Tutorial
             }
 
             CollectAllowed();
+
+            // Слияние открыто на любом шаге начиная с того, который ему учит. Это не послабление,
+            // а условие проходимости: добыча во время обучения ждёт места на складе, и шаг,
+            // который ждёт ресурс, а разрешает только его же клетки, запирает сам себя —
+            // склад забит камнем, брёвнам некуда прийти, а разгрести камень нечем.
+            if (Step >= TutorialStep.Merge)
+                CollectMergeable(allowed);
+
             Changed?.Invoke();
         }
 
@@ -324,7 +332,7 @@ namespace Game.Tutorial
         void CollectCells(ResourceType type, List<int> into)
         {
             for (var index = 0; index < storage.Capacity; index++)
-                if (storage[index] == type)
+                if (storage[index] == type && !into.Contains(index))
                     into.Add(index);
         }
 

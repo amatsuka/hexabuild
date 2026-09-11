@@ -313,6 +313,31 @@ namespace Game.Tests.EditMode
                 "щебень открыт на шаге про контракт: контракт просит не его");
         }
 
+        /// <summary>
+        /// Забитый камнем склад обязан разгребаться на любом шаге. Добыча во время обучения ждёт
+        /// места, и шаг про доски, разрешающий только брёвна, запирал сам себя: склад полон камня,
+        /// брёвнам некуда прийти, а разгрести камень нечем. Слияние открыто с того шага, который
+        /// ему и учит.
+        /// </summary>
+        [Test]
+        public void FullStorage_CanAlwaysBeMerged()
+        {
+            var tutorial = NewTutorial();
+            Walk(tutorial, TutorialStep.CraftBoard);
+
+            // Склад под завязку камнем, брёвен меньше, чем нужно на слияние.
+            while (storage.Count < storage.Capacity - 1)
+                storage.TryStore(ResourceType.Stone);
+
+            storage.TryStore(ResourceType.Wood);
+            tutorial.Refresh();
+
+            Assert.Less(storage.CountOf(ResourceType.Wood), rules.SmallCount, "брёвен для теста слишком много");
+            CollectionAssert.IsEmpty(tutorial.TargetCells, "брёвен не набралось — подсвечивать нечего");
+            Assert.IsTrue(tutorial.AllowsCell(storage.IndexOf(ResourceType.Stone)),
+                "камень не разгрести: шаг заперт, брёвнам некуда прийти");
+        }
+
         /// <summary>Кнопка продажи не приходит до своего шага и не держится после обучения.</summary>
         [Test]
         public void Sale_IsHeldUntilItsOwnStep()
