@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Game.Audio;
 using Game.Economy;
 using Game.Grid;
 using Game.Merge;
@@ -162,6 +163,11 @@ namespace Game.Core
             hudView.Bind(state, contracts, storageView, ceiling, StarShares());
             gameOverView.Bind(storageView, production, contracts);
             pauseView.Bind(storageView);
+
+            // Звук партии слушает системы сам: ни один обработчик выше о нём не знает, и в
+            // сцене под него нет ни объекта, ни ссылки в инспекторе.
+            gameObject.AddComponent<AudioDirector>()
+                .Bind(state, production, deliveries, merges, contracts, milestones, end);
         }
 
         /// <summary>

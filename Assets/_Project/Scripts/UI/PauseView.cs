@@ -160,7 +160,14 @@ namespace Game.UI
         /// </summary>
         public void Open() => SetOpen(true);
 
-        void SetOpen(bool open) => cardRoot.SetActive(open);
+        void SetOpen(bool open)
+        {
+            if (cardRoot.activeSelf == open)
+                return;
+
+            cardRoot.SetActive(open);
+            Game.Audio.GameAudio.Play(open ? "sfx_pause_open" : "sfx_pause_close", 0.6f);
+        }
 
         void Close() => SetOpen(false);
 

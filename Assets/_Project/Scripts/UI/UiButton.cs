@@ -1,4 +1,5 @@
 using System;
+using Game.Audio;
 using TMPro;
 using UnityEngine;
 
@@ -15,19 +16,26 @@ namespace Game.UI
         readonly UiPanelGraphic card;
         readonly TextMeshProUGUI caption;
         readonly Action clicked;
+        readonly string clickSound;
 
-        UiButton(UiPanelGraphic card, TextMeshProUGUI caption, Action clicked)
+        UiButton(UiPanelGraphic card, TextMeshProUGUI caption, Action clicked, string clickSound)
         {
             this.card = card;
             this.caption = caption;
             this.clicked = clicked;
+            this.clickSound = clickSound;
         }
 
         public RectTransform Rect => card.rectTransform;
 
+        /// <summary>
+        /// Звук клика по умолчанию берётся из стиля: главная кнопка отзывается плотнее
+        /// обычной. Клавиатуре сида и «Назад» он задаётся явно — цвет у них общий, а звучат
+        /// они разным.
+        /// </summary>
         public static UiButton Create(
             string name, Transform parent, UiTheme theme, in UiPanelStyle style,
-            string caption, float fontSize, Action clicked)
+            string caption, float fontSize, Action clicked, string clickSound = null)
         {
             var card = UiPanel.Create(name, parent, theme, style);
 
@@ -36,7 +44,8 @@ namespace Game.UI
                 .Stretch(16f, 16f, 8f, 8f);
             label.text = caption;
 
-            return new UiButton(card, label, clicked);
+            clickSound ??= style.Equals(theme.ButtonPrimary) ? "sfx_ui_click_primary" : "sfx_ui_click";
+            return new UiButton(card, label, clicked, clickSound);
         }
 
         /// <summary>Кнопка на экране или её нет вовсе: спрятанная не ловит ни нажатий, ни кликов.</summary>
@@ -63,6 +72,7 @@ namespace Game.UI
                 return false;
 
             PressPulse.HoldCard(card);
+            GameAudio.Play("sfx_ui_press", 0.3f);
             return true;
         }
 
@@ -75,6 +85,7 @@ namespace Game.UI
             if (!Visible || !Contains(screenPosition))
                 return false;
 
+            GameAudio.Play(clickSound, 0.6f);
             clicked();
             return true;
         }

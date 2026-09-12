@@ -121,6 +121,9 @@ namespace Game.UI
         UiPanelGraphic ceilingFill;
         TextMeshProUGUI ceilingPercent;
         TextMeshProUGUI ceilingRecord;
+
+        /// <summary>Бар уже в золоте: переход через потолок звучит один раз за партию.</summary>
+        bool ceilingGold;
         StarGraphic[] ceilingStars;
         float[] starShares;
 
@@ -626,6 +629,13 @@ namespace Game.UI
             ceilingPercent.text = HudFormat.Percent(share);
 
             var record = share >= 1f;
+
+            // Переход через потолок — момент, а не состояние: бар уходит в золото один раз
+            // за партию, и слышно это тоже один раз.
+            if (record && !ceilingGold)
+                Game.Audio.GameAudio.Play("sfx_bar_gold", 0.8f);
+
+            ceilingGold = record;
             ceilingRecord.enabled = record;
             ceilingPercent.color = record ? theme.Gold : theme.Text;
 

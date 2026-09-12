@@ -272,6 +272,7 @@ namespace Game.UI
             asking = popup;
             confirmed = accepted;
             Show(popup, false);
+            Game.Audio.GameAudio.Play("sfx_tile_popup_open", 0.5f);
         }
 
         /// <summary>
@@ -284,15 +285,18 @@ namespace Game.UI
                 return;
 
             var accepted = confirmed;
-            CancelAsk();
+            Remove(asking);
             accepted?.Invoke();
         }
 
         /// <summary>Подтверждение снято: попап уходит, ничего не выполнив.</summary>
         public void CancelAsk()
         {
-            if (asking != null)
-                Remove(asking);
+            if (asking == null)
+                return;
+
+            Remove(asking);
+            Game.Audio.GameAudio.Play("sfx_tile_popup_dismiss", 0.4f);
         }
 
         /// <summary>Партия кончилась: над полем не остаётся ничего, финальный экран сам по себе.</summary>

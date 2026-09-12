@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using Game.Audio;
 using Game.Core;
 using Game.Economy;
 using Game.Storage;
@@ -116,9 +118,39 @@ namespace Game.UI
             BuildButtons(level != null);
 
             gameObject.SetActive(true);
+            StartCoroutine(PlayEndAudio(stars, final.IsPerfect, level != null ? levelRecord : isRecord));
 
             if (level != null)
                 CampaignProgress.Submit(CampaignSession.Index, final.Total, stars, CampaignSession.Count);
+        }
+
+        /// <summary>
+        /// Экран появляется целиком и сразу, а звучит по порядку: затемнение, итог партии,
+        /// звёзды по одной, корона с конфетти и рекорд последним. Всё разом слилось бы в шум,
+        /// а так экран читается сверху вниз — ровно теми паузами, которыми игрок его смотрит.
+        /// </summary>
+        IEnumerator PlayEndAudio(int stars, bool perfect, bool isRecord)
+        {
+            GameAudio.Play("sfx_screen_dim", 0.6f);
+            GameAudio.Play(perfect ? "mus_gameover_win_stinger" : "mus_gameover_dead_stinger", 0.8f);
+
+            yield return new WaitForSeconds(0.7f);
+
+            for (var i = 0; i < stars; i++)
+            {
+                GameAudio.Play($"sfx_star_{i + 1}", 0.8f);
+                yield return new WaitForSeconds(0.35f);
+            }
+
+            if (perfect)
+            {
+                GameAudio.Play("sfx_crown", 0.9f);
+                GameAudio.Play("sfx_confetti", 0.6f);
+                yield return new WaitForSeconds(0.5f);
+            }
+
+            if (isRecord)
+                GameAudio.Play("sfx_record", 0.9f);
         }
 
         /// <summary>

@@ -273,7 +273,7 @@ namespace Game.UI
                     // размер остальных цифр не годится, иначе она уходит в перенос строки.
                     var fontSize = label.Length > 1 ? 26f : 44f;
                     var button = UiButton.Create($"Key {label}", root, theme, theme.ButtonSecondary, label, fontSize,
-                        KeyAction(label));
+                        KeyAction(label), label == "Назад" ? "sfx_ui_back" : "sfx_ui_keypad");
                     Place(button.Rect, new Vector2(0.5f, 0.5f), new Vector2((col - 1) * colOffset, rowY),
                         new Vector2(KeySize, KeySize));
                     buttons.Add(button);
@@ -325,7 +325,8 @@ namespace Game.UI
                 buttons.Add(button);
             }
 
-            var back = UiButton.Create("Back", root, theme, theme.ButtonSecondary, "Назад", 36f, CloseLevels);
+            var back = UiButton.Create(
+                "Back", root, theme, theme.ButtonSecondary, "Назад", 36f, CloseLevels, "sfx_ui_back");
             Place(back.Rect, new Vector2(0.5f, 0.5f), new Vector2(0f, top - rows * step - 30f),
                 new Vector2(KeypadWidth, StartButtonHeight));
             buttons.Add(back);
@@ -425,6 +426,7 @@ namespace Game.UI
         /// </summary>
         void BeginGame()
         {
+            Game.Audio.GameAudio.Play("sfx_level_start", 0.8f);
             gameObject.SetActive(false);
             gameRoot.SetActive(true);
         }
