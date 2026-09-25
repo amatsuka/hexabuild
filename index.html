@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <!-- viewport-fit=cover пускает страницу под вырез: полосы безопасной зоны отдаёт `env()` ниже. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0b1018">
+  <title>Hex Colony</title>
+  <!-- SDK Яндекс Игр. Площадка и её dev-прокси отдают его с корня; вне площадки файла нет,
+       `YaGames` не появится, и игра идёт без SDK — мост в `HexColony.jslib` это умеет. -->
+  <script src="/sdk.js"></script>
+  <style>
+    :root { --bg: #0b1018; }
+
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: var(--bg);
+      overflow: hidden; overscroll-behavior: none; touch-action: none;
+      -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
+      /* Длинный тап по полю ничего не выделяет и не зовёт меню (требование площадки). */
+      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    /* Рамка кадра. Высота идёт от `dvh`, а на живой странице её перебивает `visualViewport`:
+       динамическая панель Safari меняет высоту окна, а `100vh` про это не знает. */
+    #frame {
+      position: fixed; left: 0; top: 0; width: 100%;
+      height: 100vh; height: 100dvh;
+      box-sizing: border-box;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right)
+               env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    #unity-canvas {
+      display: block; width: 100%; height: 100%;
+      background: var(--bg); outline: none;
+    }
+
+    /* Кнопка полного экрана в левом нижнем углу: справа внизу висит шестерёнка паузы,
+       по центру — склад. Гаснет до касания, чтобы не спорить с интерфейсом игры. */
+    #fullscreen {
+      position: absolute; left: calc(env(safe-area-inset-left) + 12px);
+      bottom: calc(env(safe-area-inset-bottom) + 12px);
+      width: 40px; height: 40px; padding: 0;
+      border: 0; border-radius: 10px;
+      background: rgba(12, 18, 28, 0.45);
+      color: rgba(226, 234, 246, 0.55);
+      opacity: 0.45; cursor: pointer; transition: opacity 0.15s;
+      display: none;
+    }
+    #fullscreen:hover, #fullscreen:focus-visible { opacity: 1; }
+    #fullscreen svg { width: 20px; height: 20px; display: block; margin: auto; }
+
+    /* Загрузка: полоса на том же фоне, что и игра, без логотипа и футера. */
+    #loader {
+      position: absolute; inset: 0; display: flex;
+      align-items: center; justify-content: center; background: var(--bg);
+    }
+    #loader.hidden { display: none; }
+    #bar { width: min(60%, 320px); height: 6px; border-radius: 3px; background: rgba(226, 234, 246, 0.12); }
+    #bar > div { width: 0; height: 100%; border-radius: 3px; background: #e0a355; transition: width 0.2s; }
+    #error {
+      position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      padding: 24px; color: #e2eaf6; font-size: 14px; line-height: 1.5; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="frame">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="loader"><div id="bar"><div></div></div></div>
+    <div id="error"></div>
+    <button id="fullscreen" title="Во весь экран" aria-label="Во весь экран">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
+      </svg>
+    </button>
+  </div>
+
+  <script>
+    var frame = document.querySelector("#frame");
+    var canvas = document.querySelector("#unity-canvas");
+    var loader = document.querySelector("#loader");
+    var fill = document.querySelector("#bar > div");
+    var fullscreenButton = document.querySelector("#fullscreen");
+    var instance = null;
+
+    // Резиновый кадр. `visualViewport` — единственное, что в мобильном Safari знает про
+    // свёрнутую и развёрнутую панель браузера; `dvh` в CSS остаётся запасным путём.
+    function fit() {
+      var height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      frame.style.height = height + "px";
+    }
+    fit();
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", fit);
+      window.visualViewport.addEventListener("scroll", fit);
+    }
+
+    // Кнопка появляется, только если браузер умеет полный экран: на iPhone Safari его нет
+    // вовсе, и мёртвая кнопка там была бы враньём.
+    if (document.fullscreenEnabled) {
+      fullscreenButton.style.display = "block";
+      fullscreenButton.addEventListener("click", function () {
+        if (document.fullscreenElement)
+          document.exitFullscreen();
+        else if (instance)
+          instance.SetFullscreen(1);
+      });
+    }
+
+    function fail(message) {
+      loader.classList.add("hidden");
+      var box = document.querySelector("#error");
+      box.style.display = "flex";
+      box.textContent = message;
+    }
+
+    document.addEventListener("contextmenu", function (event) { event.preventDefault(); });
+
+    // SDK поднимается до Unity: к моменту, когда встанет меню и C# позовёт `LoadingAPI.ready`,
+    // `window.ysdk` уже должен лежать. Пауза площадки (реклама, смена вкладки) уходит в игру
+    // объекту `Platform`; до старта Unity её принимать некому, и терять там нечего.
+    function initSdk() {
+      if (!window.YaGames)
+        return Promise.resolve();
+
+      return YaGames.init().then(function (ysdk) {
+        window.ysdk = ysdk;
+        ysdk.on("game_api_pause", function () { if (instance) instance.SendMessage("Platform", "OnPlatformPause", "1"); });
+        ysdk.on("game_api_resume", function () { if (instance) instance.SendMessage("Platform", "OnPlatformPause", "0"); });
+      }).catch(function (error) { console.error("YaGames.init", error); });
+    }
+
+    var script = document.createElement("script");
+    script.src = "Build/Pages.loader.js";
+    var sdkReady = initSdk();
+    script.onload = function () { sdkReady.then(startUnity); };
+    function startUnity() {
+      createUnityInstance(canvas, {
+        arguments: [],
+        dataUrl: "Build/Pages.data.unityweb",
+        frameworkUrl: "Build/Pages.framework.js.unityweb",
+        codeUrl: "Build/Pages.wasm.unityweb",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "Hex Colony",
+        productVersion: "0.1.0",
+      }, function (progress) {
+        fill.style.width = (progress * 100) + "%";
+      }).then(function (unityInstance) {
+        instance = unityInstance;
+        loader.classList.add("hidden");
+        canvas.focus();
+      }).catch(function (message) {
+        fail(String(message));
+      });
+    }
+    // Язык таблицы игры сюда не доходит: сборка не загрузилась. Тот же выбор — ru или en.
+    script.onerror = function () {
+      var lang = window.ysdk ? window.ysdk.environment.i18n.lang : navigator.language.slice(0, 2);
+      fail(lang === "ru" ? "Не удалось загрузить сборку." : "Failed to load the game.");
+    };
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
